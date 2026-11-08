@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5", "pixeltable-pgserver>=0.6"]
+dev = ["pytest>=8", "pytest-asyncio>=1.4.1.post1", "ruff>=0.5", "pixeltable-pgserver>=0.6"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
