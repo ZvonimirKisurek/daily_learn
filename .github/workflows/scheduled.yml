@@ -9,6 +9,7 @@ on:
     - cron: "0 21 * * 0"     # weekly theme, Sunday night
     - cron: "15 3 * * 1"     # retention
     - cron: "30 4 * * 0"     # weekly progress backup (uploaded as an artifact: keep this repo PRIVATE)
+    - cron: "0 8 * * *"      # Bitcoin forecast (08:00 UTC = 09:00 CET / 10:00 CEST: adjust to your 09:00)
   workflow_dispatch:
     inputs:
       command:
@@ -52,6 +53,7 @@ jobs:
             "0 21 * * 0")  cmds=("generate-weekly") ;;
             "15 3 * * 1")  cmds=("prune") ;;
             "30 4 * * 0")  cmds=("export-progress --out /tmp/progress_export.json") ;;
+            "0 8 * * *")   cmds=("bitcoin") ;;
             manual)        cmds=("$INPUT_COMMAND") ;;
             *) echo "unknown schedule $SCHEDULE"; exit 1 ;;
           esac

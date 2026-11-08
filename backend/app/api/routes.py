@@ -12,7 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.api import queries
 from app.api.deps import Cfg, Conn, Pool, get_enqueue, get_llm, require_token
-from app.api.schemas import CompletionOut, NotesIn, NotesOut, FeedPage, QueueOut, SkillOut, SubmissionIn, SubmissionOut, TaskDetailOut, TodayOut
+from app.api.schemas import BitcoinLatestOut, CompletionOut, NotesIn, NotesOut, FeedPage, QueueOut, SkillOut, SubmissionIn, SubmissionOut, TaskDetailOut, TodayOut
 from app.curriculum.errors import LLMBudgetExceeded, LLMError
 from app.curriculum.evaluation import evaluate
 from app.ingestion.models import Category
@@ -150,6 +150,28 @@ async def generate_briefing(conn: Conn, cfg: Cfg, enqueue: Annotated[Callable[[s
         # `enqueue` is blocking network I/O (a Redis connection). Calling it directly inside `async def` would
         # freeze the event loop - and every other request - while it waits. Offload blocking calls to a thread.
         await run_in_threadpool(enqueue, "app.tasks.generate_daily_briefing")
+    except Exception as exc:  # broker down
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "task queue unavailable") from exc
+    return QueueOut(queued=True)
+
+
+# ----------------------------------------------------------------------------------------------- Phase 11: Bitcoin
+@router.get("/bitcoin/latest", response_model=BitcoinLatestOut)
+async def bitcoin_latest(conn: Conn):
+    """Latest BTC price, the latest AI forecast (4 horizons with confidence + reasoning) and recent news.
+    Before the first run, `price` and `prediction` are null. That is a normal 200, not an error."""
+    return await queries.fetch_bitcoin_latest(conn)
+
+
+@router.post("/bitcoin/generate", response_model=QueueOut, status_code=status.HTTP_202_ACCEPTED)
+async def bitcoin_generate(conn: Conn, cfg: Cfg, enqueue: Annotated[Callable[..., None], Depends(get_enqueue)]):
+    """Manual trigger (the dashboard's Refresh button). Like /briefing/generate it only ENQUEUES: fetching feeds plus an
+    LLM call takes 15-60 s, far too long to hold an HTTP request. The UI polls /bitcoin/latest until a newer forecast
+    appears. A cooldown stops repeated clicks from paying for identical forecasts."""
+    if await queries.bitcoin_generated_recently(conn, cfg.bitcoin_regen_cooldown_minutes):
+        return QueueOut(queued=False, reason=f"a forecast was generated in the last {cfg.bitcoin_regen_cooldown_minutes} minutes")
+    try:
+        await run_in_threadpool(enqueue, "app.tasks.generate_bitcoin_daily_insight", trigger="manual")
     except Exception as exc:  # broker down
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "task queue unavailable") from exc
     return QueueOut(queued=True)

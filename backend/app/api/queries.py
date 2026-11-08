@@ -297,3 +297,45 @@ async def fetch_feed(
     } for r in rows]
     nxt = _encode(sort, rows[-1]["ts"] if sort == "recent" else rows[-1]["relevance"], rows[-1]["id"]) if more and rows else None
     return {"items": items, "next_cursor": nxt}
+
+
+# ----------------------------------------------------------------------------------------------- Phase 11: Bitcoin
+_BTC_LABELS = {"1d": "Tomorrow", "3d": "3 Days", "7d": "7 Days", "14d": "2 Weeks"}
+
+
+async def fetch_bitcoin_latest(conn: AsyncConnection, news_limit: int = 25) -> dict:
+    """Latest spot price, latest forecast reshaped into a `horizons` list (so the UI just maps over it), recent news."""
+    from app.bitcoin.technicals import HORIZONS
+
+    price = await (await conn.execute(
+        "select price_usd, source, fetched_at from bitcoin_prices order by fetched_at desc limit 1")).fetchone()
+    pred = await (await conn.execute("select * from bitcoin_predictions order by created_at desc limit 1")).fetchone()
+    news = await (await conn.execute(
+        """select id, source_name, title, url, summary, btc_relevant, published_at from bitcoin_news
+           order by published_at desc limit %s""", (news_limit,))).fetchall()
+    prediction = None
+    if pred:
+        current = float(pred["current_price"])
+        inputs = pred["inputs"] or {}
+        sigma = (inputs.get("technicals") or {}).get("one_sigma_move") or {}
+        made_on = pred["created_at"].date()
+        prediction = {
+            **{k: pred[k] for k in ("id", "created_at", "model", "trigger", "sentiment_score", "sentiment_summary", "technical_summary")},
+            "current_price": current,
+            "horizons": [{
+                "key": key, "label": _BTC_LABELS[key], "days": days, "target_date": made_on + timedelta(days=days),
+                "predicted_price": float(pred[f"predicted_price_{key}"]),
+                "change_pct": round((float(pred[f"predicted_price_{key}"]) / current - 1) * 100, 2),
+                "confidence": pred[f"confidence_{key}"], "reasoning": pred[f"reasoning_{key}"], "one_sigma_usd": sigma.get(key),
+            } for key, days in HORIZONS],
+            "technicals": inputs.get("technicals") or {},
+            "history": inputs.get("history") or [],
+            "cited_news": [{k: n[k] for k in ("ref", "title", "url", "source")} for n in inputs.get("news") or []],
+        }
+    return {"price": dict(price) | {"price_usd": float(price["price_usd"])} if price else None, "prediction": prediction, "news": news}
+
+
+async def bitcoin_generated_recently(conn: AsyncConnection, minutes: int) -> bool:
+    row = await (await conn.execute(
+        "select exists(select 1 from bitcoin_predictions where created_at > now() - make_interval(mins => %s)) as e", (minutes,))).fetchone()
+    return row["e"]

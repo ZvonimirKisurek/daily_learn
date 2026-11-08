@@ -82,7 +82,7 @@ def test_store_pipeline_dedups_semantically_and_skips_duplicate_vectors(db):
 
 @pytest.fixture
 async def client(db, monkeypatch):
-    monkeypatch.delenv("API_TOKEN", raising=False)
+    monkeypatch.setenv("API_TOKEN", "")  # an empty env var beats a token in a local .env file (delenv would not)
     get_settings.cache_clear()
     app = create_app()
     async with app.router.lifespan_context(app):

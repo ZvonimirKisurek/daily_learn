@@ -35,7 +35,6 @@ from pydantic import BaseModel, ValidationError
 
 from app.config import Settings
 from app.curriculum.errors import LLMBudgetExceeded, LLMError, LLMRefusal, LLMTruncated, LLMValidationFailed  # noqa: F401 (re-exported)
-from app.curriculum.schemas import GroundingContext
 from app.curriculum.usage import DbUsage
 
 log = logging.getLogger(__name__)
@@ -125,7 +124,7 @@ class StructuredLLM:
         return choice.message.content or ""
 
     # ------------------------------------------------------------------ mode 1: structured JSON (strict schema + Pydantic + repair)
-    def generate(self, *, system: str, user: str, output_model: type[T], grounding: GroundingContext,
+    def generate(self, *, system: str, user: str, output_model: type[T], grounding: object,
                  model: str | None = None, temperature: float | None = None) -> T:
         s = self._s
         model = model or s.llm_model

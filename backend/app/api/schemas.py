@@ -208,3 +208,70 @@ class SubmissionOut(BaseModel):
     briefing_completed: bool
     attempts_used: int
     attempts_max: int
+
+
+# ----------------------------------------------------------------------------------------------- Phase 11: Bitcoin
+BITCOIN_DISCLAIMER = ("AI-generated, experimental forecast for learning purposes. Not financial advice. Crypto prices are highly "
+                      "volatile and short-horizon forecasts are frequently wrong.")
+
+
+class BitcoinPriceOut(BaseModel):
+    price_usd: float
+    source: str
+    fetched_at: datetime
+
+
+class BitcoinNewsOut(BaseModel):
+    id: UUID
+    source_name: str
+    title: str
+    url: str
+    summary: str
+    btc_relevant: bool
+    published_at: datetime
+
+
+class BitcoinHorizonOut(BaseModel):
+    key: Literal["1d", "3d", "7d", "14d"]
+    label: str
+    days: int
+    target_date: date
+    predicted_price: float
+    change_pct: float = Field(description="forecast vs the price at prediction time, in percent")
+    confidence: int = Field(description="probability (0-100) that the forecast DIRECTION is right; 50 = coin flip")
+    reasoning: str = Field(description="cites headlines as [N#] (see cited_news) and indicators as [T]")
+    one_sigma_usd: float | None = Field(default=None, description="typical random-walk move over this horizon, for scale")
+
+
+class BitcoinCitedNewsOut(BaseModel):
+    ref: str
+    title: str
+    url: str
+    source: str
+
+
+class BitcoinHistoryPointOut(BaseModel):
+    date: date
+    close: float
+
+
+class BitcoinPredictionOut(BaseModel):
+    id: UUID
+    created_at: datetime
+    current_price: float
+    model: str
+    trigger: str
+    sentiment_score: int
+    sentiment_summary: str
+    technical_summary: str
+    horizons: list[BitcoinHorizonOut]
+    technicals: dict = Field(description="exactly the indicator values the model was given")
+    history: list[BitcoinHistoryPointOut]
+    cited_news: list[BitcoinCitedNewsOut]
+
+
+class BitcoinLatestOut(BaseModel):
+    price: BitcoinPriceOut | None
+    prediction: BitcoinPredictionOut | None
+    news: list[BitcoinNewsOut]
+    disclaimer: str = BITCOIN_DISCLAIMER

@@ -1,0 +1,31 @@
+# Bitcoin news sources (Phase 11). Starter set: the top 5 RSS feeds from the 200-source architecture.
+# To grow toward 200, append entries here. The ingester needs no code change for plain RSS/Atom feeds.
+#   slug     unique, lowercase-kebab
+#   name     shown in the UI and passed to the model as the article's source
+#   url      RSS/Atom URL (check it with: curl -sI <url>)
+#   weight   0-2, reserved for ranking (higher = preferred when the prompt is full)
+#   enabled  set false to pause a feed without deleting it
+#
+# Reuters was in the original top 5, but it stopped publishing public RSS feeds in 2020. Decrypt replaces it for now.
+# If you have a licensed Reuters feed, add it here.
+sources:
+  - slug: coindesk
+    name: CoinDesk
+    url: https://www.coindesk.com/arc/outboundfeeds/rss
+    weight: 1.2
+  - slug: cointelegraph
+    name: Cointelegraph
+    url: https://cointelegraph.com/rss
+    weight: 1.0
+  - slug: the-block
+    name: The Block
+    url: https://www.theblock.co/rss.xml
+    weight: 1.2
+  - slug: bitcoin-magazine
+    name: Bitcoin Magazine
+    url: https://bitcoinmagazine.com/feed
+    weight: 1.0
+  - slug: decrypt
+    name: Decrypt
+    url: https://decrypt.co/feed
+    weight: 0.9

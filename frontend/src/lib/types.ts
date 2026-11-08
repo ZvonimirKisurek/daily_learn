@@ -89,3 +89,35 @@ export interface FeedItem {
 
 export interface FeedPage { items: FeedItem[]; next_cursor: string | null }
 export interface FeedQuery { category?: Category; skill?: string; sort?: "recent" | "relevance"; min_strength?: "moderate" | "strong"; cursor?: string; limit?: number }
+
+// ------------------------------------------------------------------------------------------------ Phase 11: Bitcoin
+export type BitcoinHorizonKey = "1d" | "3d" | "7d" | "14d";
+export interface BitcoinPrice { price_usd: number; source: string; fetched_at: string }
+export interface BitcoinNews {
+  id: string; source_name: string; title: string; url: string; summary: string; btc_relevant: boolean; published_at: string;
+}
+export interface BitcoinHorizon {
+  key: BitcoinHorizonKey; label: string; days: number; target_date: string; predicted_price: number;
+  /** Forecast vs the price at prediction time, in percent. */
+  change_pct: number;
+  /** Probability (0-100) that the forecast DIRECTION is right. 50 = coin flip. */
+  confidence: number;
+  /** Cites headlines as [N#] (resolve via cited_news) and indicators as [T]. */
+  reasoning: string;
+  one_sigma_usd: number | null;
+}
+export interface BitcoinTechnicals {
+  current_price: number; change_1d_pct: number | null; change_7d_pct: number | null; change_30d_pct: number | null;
+  sma_7: number | null; sma_30: number | null; price_vs_sma7_pct: number | null; price_vs_sma30_pct: number | null;
+  rsi_14: number | null; daily_sigma: number; annualised_vol_pct: number; high_30d: number | null; low_30d: number | null;
+  one_sigma_move: Record<BitcoinHorizonKey, number>; days_of_history: number;
+}
+export interface BitcoinPrediction {
+  id: string; created_at: string; current_price: number; model: string; trigger: string;
+  sentiment_score: number; sentiment_summary: string; technical_summary: string;
+  horizons: BitcoinHorizon[];
+  technicals: Partial<BitcoinTechnicals>;
+  history: { date: string; close: number }[];
+  cited_news: { ref: string; title: string; url: string; source: string }[];
+}
+export interface BitcoinLatest { price: BitcoinPrice | null; prediction: BitcoinPrediction | null; news: BitcoinNews[]; disclaimer: string }

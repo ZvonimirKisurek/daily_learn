@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { ApiError, completeTask, getTask, queueBriefing, saveNotes, submitTask } from "@/lib/api";
+import { ApiError, completeTask, getTask, queueBitcoin, queueBriefing, saveNotes, submitTask } from "@/lib/api";
 import type { Completion, SubmissionResult } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -74,6 +74,21 @@ export async function loadNotebookAction(taskId: string): Promise<ActionResult<{
   try {
     const d = await getTask(taskId);
     return { ok: true, data: { title: d.reading?.chapter_title ?? d.hands_on?.title ?? "Notes", notes: d.notes } };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+/**
+ * Bitcoin dashboard "Refresh": enqueue a new forecast. Like the briefing, the work (feeds + LLM, 15-60 s) runs in the
+ * worker; the client then polls with router.refresh() until a newer prediction id appears. `queued: false` means the
+ * backend's cooldown declined (a forecast was just made) - we refresh so the page shows the latest data anyway.
+ */
+export async function generateBitcoinAction(): Promise<ActionResult<{ queued: boolean; reason: string | null }>> {
+  try {
+    const r = await queueBitcoin();
+    if (!r.queued) refresh();
+    return { ok: true, data: r };
   } catch (e) {
     return { ok: false, error: message(e) };
   }

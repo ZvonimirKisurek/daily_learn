@@ -32,5 +32,8 @@ app.conf.update(
         "weekly-theme-sunday-night": {"task": "app.tasks.generate_weekly_theme", "schedule": crontab(minute=0, hour=22, day_of_week="sun")},
         # 06:30 so the 06:00 ingestion run (which feeds the candidate pool) has finished.
         "daily-briefing-morning": {"task": "app.tasks.generate_daily_briefing", "schedule": crontab(minute=30, hour=6)},
+        # Phase 11: BTC price + news + AI forecast at 09:00 in `timezone` above (the TIMEZONE env var, default UTC).
+        # The 06:00 general ingestion has finished by then; the Bitcoin task fetches its own feeds anyway.
+        "bitcoin-daily-insight": {"task": "app.tasks.generate_bitcoin_daily_insight", "schedule": crontab(minute=0, hour=9)},
     },
 )

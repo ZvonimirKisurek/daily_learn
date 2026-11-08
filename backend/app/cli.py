@@ -66,6 +66,9 @@ def main() -> int:
         g.add_argument("--force", action="store_true", help="regenerate even if one exists")
         g.add_argument("--dry-run", action="store_true", help="print the exact prompt; no LLM call, nothing stored")
         g.add_argument("--date", help="YYYY-MM-DD (default: auto)")
+    btc = sub.add_parser("bitcoin", help="Phase 11: fetch BTC price + news and generate the AI forecast")
+    btc.add_argument("--ingest-only", action="store_true", help="fetch price + news only; no LLM call")
+    btc.add_argument("--dry-run", action="store_true", help="fetch data and print the exact prompt; no LLM call, nothing stored")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -101,6 +104,30 @@ def main() -> int:
             n = conn.execute("update skills set level = 0, updated_at = now()").rowcount
             h = conn.execute("delete from skill_history").rowcount
         print(f"{n} skills reset to 0; {h} history rows deleted")
+        return 0
+    if args.cmd == "bitcoin":
+        from app.bitcoin import ingest
+
+        if args.dry_run:
+            from app.bitcoin import technicals
+            from app.curriculum.prompts import BITCOIN_PREDICTION_SYSTEM, build_bitcoin_prompt
+
+            s = get_settings()
+            price, src = ingest.fetch_spot_price(s)
+            hist = ingest.fetch_daily_closes(s.bitcoin_history_days, s)
+            rows, errors = ingest.asyncio.run(ingest._fetch_all(ingest.load_sources(s), s))
+            rows.sort(key=lambda r: (not r["btc_relevant"], -r["published_at"].timestamp()))
+            news = [{**r, "ref": f"N{i}"} for i, r in enumerate(rows[: s.bitcoin_prompt_news], 1)]
+            print(f"# price {price:,.2f} from {src}; {len(hist)} daily closes; {len(rows)} headlines; failed sources: {errors or 'none'}\n")
+            print(BITCOIN_PREDICTION_SYSTEM, "\n\n----- user -----\n")
+            print(build_bitcoin_prompt(technicals.compute(hist, price).as_dict(), [(d.isoformat(), c) for d, c in technicals.with_spot(hist, price)[-7:]], news))
+            return 0
+        if args.ingest_only:
+            print(ingest.ingest_price(), ingest.ingest_news(), sep="\n")
+            return 0
+        from app.bitcoin.predictor import generate_prediction
+
+        print(generate_prediction(trigger="cli"))
         return 0
     if args.cmd == "prune":
         from app.maintenance import prune

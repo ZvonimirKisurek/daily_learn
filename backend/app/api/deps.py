@@ -82,7 +82,7 @@ async def require_token(settings: Cfg, authorization: Annotated[str | None, Head
 _inline_lock = threading.Lock()
 
 
-def _enqueue_inline(task_name: str) -> None:
+def _enqueue_inline(task_name: str, **_kwargs) -> None:
     """Run the job in a daemon thread of this process (TASK_BACKEND=inline; no Redis/Celery needed).
     Returns immediately, like a queue would; the lock stops a double-click from running two LLM jobs at once."""
     def run() -> None:
@@ -93,6 +93,12 @@ def _enqueue_inline(task_name: str) -> None:
                 from app.curriculum.generators import generate_daily_briefing as job
             elif task_name == "app.tasks.generate_weekly_theme":
                 from app.curriculum.generators import generate_weekly_theme as job
+            elif task_name == "app.tasks.generate_bitcoin_daily_insight":
+                from functools import partial
+
+                from app.bitcoin.predictor import generate_prediction
+
+                job = partial(generate_prediction, trigger="manual")
             else:
                 raise ValueError(f"unknown task {task_name}")
             job()
@@ -104,14 +110,14 @@ def _enqueue_inline(task_name: str) -> None:
     threading.Thread(target=run, name=f"inline-{task_name}", daemon=True).start()
 
 
-def _enqueue_celery(task_name: str) -> None:
+def _enqueue_celery(task_name: str, **kwargs) -> None:
     from app.celery_app import app as celery
 
     # Pre-flight: kombu retries a dead broker connection for a long time by default (~20s). Probe once with a
     # short timeout so a missing Redis surfaces as a quick 503, not a hung request.
     with celery.connection_for_write() as conn:
         conn.ensure_connection(max_retries=1, interval_start=0, interval_step=0.2, timeout=2)
-    celery.send_task(task_name, retry=False)
+    celery.send_task(task_name, kwargs=kwargs or None, retry=False)
 
 
 def get_llm(settings: Cfg):
@@ -121,6 +127,6 @@ def get_llm(settings: Cfg):
     return StructuredLLM(settings)
 
 
-def get_enqueue(settings: Cfg) -> Callable[[str], None]:
+def get_enqueue(settings: Cfg) -> Callable[..., None]:
     """The function the API uses to start background work, chosen by TASK_BACKEND."""
     return _enqueue_inline if settings.task_backend == "inline" else _enqueue_celery

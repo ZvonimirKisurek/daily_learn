@@ -73,6 +73,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-briefing", action="store_true", help="skip today's briefing to see the empty state")
+    ap.add_argument("--no-bitcoin", action="store_true", help="skip the Bitcoin forecast (otherwise: LIVE price + news, demo LLM)")
     ap.add_argument("--seed-skills", action="store_true", help="fake skill levels/history (default: everything starts at 0, as after the Phase 7 reset)")
     args = ap.parse_args()
 
@@ -137,8 +138,10 @@ def main():
         fail -> fix -> pass loop of the Hands-On workspace can be tried without an API key.
         """
         def generate(self, *, system, user, output_model, grounding, **_):
-            ids = sorted(grounding.article_ids, key=lambda x: (len(x), x))
             name = output_model.__name__
+            if name == "BitcoinPredictionOutput":
+                return output_model.model_validate(demo_bitcoin_dict(grounding), context=grounding)
+            ids = sorted(grounding.article_ids, key=lambda x: (len(x), x))
             if name == "WeeklyThemeOutput":
                 d = F.weekly_dict(ids, skills=tuple(sorted(grounding.required_focus or {"rag", "vector-db"})))
             elif name == "DailyPlanOutput":
@@ -157,7 +160,31 @@ def main():
             assert not problems, problems
             return text
 
+    def demo_bitcoin_dict(g) -> dict:
+        """A schema-valid forecast from the real inputs: a small drift sized at ~0.3 sigma per horizon."""
+        refs = sorted(g.news_ids, key=lambda x: int(x[1:]))[:3] or []
+        cite = (lambda i: f" [{refs[i % len(refs)]}]") if refs else (lambda i: "")
+        d = {"sentiment_summary": f"DEMO OUTPUT (no LLM was called). Headlines are mixed, with ETF flow and macro stories dominating{cite(0)}; "
+                                  f"few items carry clear directional information{cite(1)}.",
+             "sentiment_score": -12,
+             "technical_summary": "DEMO OUTPUT. Price trades below its 30-day average with RSI in the high 30s [T]; realised volatility is moderate, "
+                                  "so trend signals carry limited weight at short horizons.",
+        }
+        for i, (key, days, sign, conf) in enumerate((("1d", 1, 1, 52), ("3d", 3, -1, 54), ("7d", 7, 1, 56), ("14d", 14, 1, 58))):
+            move = sign * 0.3 * g.daily_sigma * days ** 0.5
+            d |= {f"predicted_price_{key}": round(g.current_price * (1 + move), 2), f"confidence_{key}": conf,
+                  f"reasoning_{key}": f"DEMO OUTPUT. The base rate dominates at {days} day(s): momentum is soft below SMA-30 [T], "
+                                      f"while recent headlines{cite(i)} offer no decisive catalyst, so only a small move is assumed."}
+        return d
+
     s = Settings(timezone="UTC", min_candidates=5)
+    if not args.no_bitcoin:
+        try:  # live CoinGecko/Coinbase + RSS; a network failure just leaves the Bitcoin page in its empty state
+            from app.bitcoin.predictor import generate_prediction
+
+            print("bitcoin:", generate_prediction(trigger="cli", llm=DemoLLM(), settings=s), flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"bitcoin demo skipped: {exc!r}", flush=True)
     if not args.no_briefing:
         generators.generate_daily_briefing(llm=DemoLLM(), embedder=None, settings=s)
     # optional fake history; by default skills start at 0 like a fresh learner

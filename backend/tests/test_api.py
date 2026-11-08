@@ -24,7 +24,7 @@ TODAY = datetime.now(timezone.utc).date()
 
 @pytest.fixture
 async def client(db, monkeypatch):
-    monkeypatch.delenv("API_TOKEN", raising=False)
+    monkeypatch.setenv("API_TOKEN", "")  # an empty env var beats a token in a local .env file (delenv would not)
     get_settings.cache_clear()
     app = create_app()
     app.dependency_overrides[get_llm] = lambda: FakeLLM()  # grading never touches OpenAI in tests

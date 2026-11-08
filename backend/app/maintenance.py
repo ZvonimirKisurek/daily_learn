@@ -26,4 +26,7 @@ def prune(settings: Settings | None = None) -> dict:
             "delete from articles where duplicate_of is not null and fetched_at < now() - make_interval(days => %s)",
             (s.duplicate_retention_days,)).rowcount
         runs = conn.execute("delete from ingestion_runs where started_at < now() - interval '30 days'").rowcount
-    return {"articles_deleted": old, "stale_duplicates_deleted": dups, "ingestion_runs_deleted": runs}
+        # Bitcoin news (Phase 11). Prices and predictions are kept: they are tiny and are the record you score accuracy against.
+        btc_news = conn.execute("delete from bitcoin_news where fetched_at < now() - make_interval(days => %s)",
+                                (s.bitcoin_news_retention_days,)).rowcount
+    return {"articles_deleted": old, "stale_duplicates_deleted": dups, "ingestion_runs_deleted": runs, "bitcoin_news_deleted": btc_news}
