@@ -1,0 +1,237 @@
+# The learning path: Duolingo-style levels from "What is AI?" to expert.
+#
+# How it works (app/curriculum/levels.py):
+#  * You are always on exactly ONE level. Each day's lesson (a 5-10 min reading + quiz, a 5-10 min hands-on exercise and
+#    the market essay) teaches the next topic of that level, at that level's difficulty.
+#  * A lesson counts only when ALL of it is done: the reading quiz passed, the hands-on graded as passed, the essay read.
+#    A topic whose lesson you did not finish comes back the next day.
+#  * After `topics` lessons the level exam unlocks. Pass it (>= pass_percent) to move to the next level. Fail it and
+#    you stay on the level (review lessons) until you pass.
+#  * The placement exam (placement.yaml) can skip whole tiers you already know. It only ever moves you up.
+pass_percent: 80          # level exams and reading quizzes
+exam_questions: 10        # questions per level exam
+exam_attempts_per_day: 3  # level-exam submissions per day (each attempt is a fresh LLM-written exam)
+tiers:
+  1: Beginner
+  2: Novice
+  3: Intermediate
+  4: Advanced
+  5: Proficient
+  6: Expert
+levels:
+  # ------------------------------------------------------------------ Tier 1: Beginner (no code needed, no maths)
+  - index: 1
+    tier: 1
+    skill: ai-foundations
+    title: "What is AI?"
+    summary: "What artificial intelligence, machine learning and deep learning are, how they differ, and where you already meet them every day."
+    topics:
+      - "AI, machine learning and deep learning: three nested circles"
+      - "Rules vs learning: why some problems need examples instead of hand-written code"
+      - "AI in everyday life: recommendations, spam filters, maps and chatbots"
+      - "What AI cannot do (yet): limits, mistakes and hype"
+  - index: 2
+    tier: 1
+    skill: ai-foundations
+    title: "Data: the fuel of AI"
+    summary: "What data looks like to a machine-learning system: examples, features and labels, and why data quality decides everything."
+    topics:
+      - "What data is: rows, columns, examples and features"
+      - "Labels and supervised learning: learning from answered examples"
+      - "Training data vs test data: why we hide some examples"
+      - "Garbage in, garbage out: data quality and bias"
+  - index: 3
+    tier: 1
+    skill: ai-foundations
+    title: "How machines learn"
+    summary: "The core loop of all machine learning in plain words: a model makes a guess, measures its mistake and adjusts."
+    topics:
+      - "A model is a function: inputs in, prediction out"
+      - "Measuring mistakes: the idea of a loss"
+      - "Learning means turning knobs to make the loss smaller"
+      - "Memorising vs understanding: overfitting in plain words"
+  - index: 4
+    tier: 1
+    skill: ai-foundations
+    title: "Python for AI"
+    summary: "Just enough Python, NumPy and pandas to load, inspect and plot a small dataset."
+    topics:
+      - "Running a Python script; lists and dictionaries"
+      - "NumPy arrays: computing on many numbers at once"
+      - "Loading and exploring a small table with pandas"
+      - "Plotting data to see patterns with matplotlib"
+  # ------------------------------------------------------------------ Tier 2: Novice (classical machine learning)
+  - index: 5
+    tier: 2
+    skill: classical-ml
+    title: "The maths you actually need"
+    summary: "Vectors, dot products, averages and slopes: the four ideas every later level uses, built from intuition."
+    topics:
+      - "Vectors: lists of numbers with a direction"
+      - "The dot product and what it measures"
+      - "Averages, spread and the normal distribution"
+      - "Slopes and derivatives as 'which way is downhill'"
+  - index: 6
+    tier: 2
+    skill: classical-ml
+    title: "Linear regression"
+    summary: "Your first real model: fit a line to data, measure its error and improve it with gradient descent."
+    topics:
+      - "Fitting a line to points"
+      - "Mean squared error"
+      - "Gradient descent step by step"
+      - "Linear regression with scikit-learn"
+  - index: 7
+    tier: 2
+    skill: classical-ml
+    title: "Classification"
+    summary: "Predicting categories instead of numbers, and measuring how good those predictions really are."
+    topics:
+      - "From numbers to categories: the classification problem"
+      - "Logistic regression and probabilities"
+      - "Accuracy, precision and recall"
+      - "The confusion matrix"
+  - index: 8
+    tier: 2
+    skill: classical-ml
+    title: "Trees and ensembles"
+    summary: "Decision trees and the ensembles built from them, still the strongest models for table-shaped data."
+    topics:
+      - "Decision trees: twenty questions for data"
+      - "Random forests: the wisdom of crowds"
+      - "Gradient boosting: learning from the previous model's mistakes"
+      - "Feature importance: what the model relies on"
+  - index: 9
+    tier: 2
+    skill: classical-ml
+    title: "Evaluating models honestly"
+    summary: "How to know whether a model will work on data it has never seen: splits, cross-validation and the bias-variance trade-off."
+    topics:
+      - "Train, validation and test splits"
+      - "Cross-validation"
+      - "Bias and variance"
+      - "Regularisation"
+  # ------------------------------------------------------------------ Tier 3: Intermediate (neural networks)
+  - index: 10
+    tier: 3
+    skill: pytorch
+    title: "Neural networks from scratch"
+    summary: "What a neural network is, built up from a single artificial neuron to a stack of layers."
+    topics:
+      - "The artificial neuron"
+      - "Layers and activation functions"
+      - "A forward pass by hand"
+      - "Why depth helps"
+  - index: 11
+    tier: 3
+    skill: pytorch
+    title: "Training neural networks"
+    summary: "How networks learn: backpropagation, PyTorch tensors and autograd, optimisers and a complete training loop."
+    topics:
+      - "Backpropagation intuition"
+      - "Tensors and autograd in PyTorch"
+      - "Optimisers: SGD and Adam"
+      - "A complete training loop"
+  - index: 12
+    tier: 3
+    skill: pytorch
+    title: "Deep learning in practice"
+    summary: "The practical craft: images and convolutions, fighting overfitting, hyperparameters and transfer learning."
+    topics:
+      - "Images and convolutional networks"
+      - "Overfitting in deep nets: dropout and early stopping"
+      - "Batch size, learning rate and other hyperparameters"
+      - "Transfer learning with pretrained models"
+  # ------------------------------------------------------------------ Tier 4: Advanced (modern AI and language models)
+  - index: 13
+    tier: 4
+    skill: vector-db
+    title: "Embeddings and similarity"
+    summary: "How text becomes vectors whose geometry captures meaning, and how to search by meaning."
+    topics:
+      - "Turning words and sentences into vectors"
+      - "Cosine similarity"
+      - "Semantic search in a few lines of code"
+      - "Visualising embedding space"
+  - index: 14
+    tier: 4
+    skill: llm-finetuning
+    title: "Transformers and LLMs"
+    summary: "What a large language model is made of: tokens, attention and next-token generation."
+    topics:
+      - "Tokens and tokenisation"
+      - "Attention: letting words look at each other"
+      - "How an LLM generates text one token at a time"
+      - "Pretraining, instruction tuning and chat models"
+  - index: 15
+    tier: 4
+    skill: rag
+    title: "Building with LLMs"
+    summary: "Using LLMs from code: prompts, sampling, structured output and keeping hallucinations in check."
+    topics:
+      - "Prompts: instructions, context and examples"
+      - "Temperature and sampling"
+      - "Structured output with JSON schemas"
+      - "Hallucinations and how to reduce them"
+  - index: 16
+    tier: 4
+    skill: rag
+    title: "Retrieval-augmented generation"
+    summary: "RAG: give an LLM the right documents at answer time so it answers from evidence, with citations."
+    topics:
+      - "Why LLMs need retrieval"
+      - "Chunking documents"
+      - "Retrieve, then generate"
+      - "Citations and grounding"
+  # ------------------------------------------------------------------ Tier 5: Proficient (building AI systems)
+  - index: 17
+    tier: 5
+    skill: vector-db
+    title: "Vector databases"
+    summary: "Similarity search at scale: approximate nearest neighbours, HNSW, pgvector and hybrid search."
+    topics:
+      - "Approximate nearest neighbour search"
+      - "HNSW and IVF indexes"
+      - "pgvector in Postgres"
+      - "Hybrid search: keywords plus vectors"
+  - index: 18
+    tier: 5
+    skill: llm-evals
+    title: "Evaluating AI systems"
+    summary: "Measuring whether an AI feature works: retrieval metrics, LLM-as-judge and golden test sets."
+    topics:
+      - "Why evaluation comes first"
+      - "Retrieval metrics: recall@k and MRR"
+      - "LLM-as-judge"
+      - "Building a golden test set"
+  - index: 19
+    tier: 5
+    skill: mlops
+    title: "MLOps: shipping models"
+    summary: "From notebook to production: tracking experiments, serving, monitoring and CI/CD for models."
+    topics:
+      - "Experiment tracking"
+      - "Serving a model behind an API"
+      - "Monitoring and data drift"
+      - "CI/CD for models"
+  # ------------------------------------------------------------------ Tier 6: Expert
+  - index: 20
+    tier: 6
+    skill: llm-finetuning
+    title: "Fine-tuning LLMs"
+    summary: "Adapting open models to a task with LoRA, and deciding with evidence when fine-tuning beats prompting or retrieval."
+    topics:
+      - "When to fine-tune vs prompt vs retrieve"
+      - "LoRA and parameter-efficient fine-tuning"
+      - "Preparing a fine-tuning dataset"
+      - "Evaluating a fine-tuned model"
+  - index: 21
+    tier: 6
+    skill: mlops
+    title: "Production AI at scale"
+    summary: "The frontier of practice: efficient inference, agents, safety, and keeping up with research."
+    topics:
+      - "Quantisation and efficient inference"
+      - "Agents and tool use"
+      - "Safety, red-teaming and guardrails"
+      - "Reading research papers and staying current"

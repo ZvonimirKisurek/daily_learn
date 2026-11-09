@@ -4,8 +4,9 @@ import { MissionBoard } from "@/components/mission/mission-board";
 import { PendingBriefing } from "@/components/mission/pending-briefing";
 import { CommandCenterSkeleton } from "@/components/mission/skeletons";
 import { WeeklyThemeCard } from "@/components/mission/weekly-theme-card";
+import { LevelCard } from "@/components/progress/level-card";
 import { SkillProgress } from "@/components/skills/skill-progress";
-import { attempt, getToday } from "@/lib/api";
+import { attempt, getProgress, getToday } from "@/lib/api";
 import { longDate } from "@/lib/utils";
 
 /**
@@ -25,12 +26,14 @@ export default function Page() {
 }
 
 async function CommandCenter() {
-  const [today, err] = await attempt(getToday());
-  if (!today) return <ApiProblem error={err} />;
+  const [data, err] = await attempt(Promise.all([getToday(), getProgress()])); // parallel, not sequential
+  if (!data) return <ApiProblem error={err} />;
+  const [today, progress] = data;
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
       <div className="space-y-8">
         <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{longDate(today.date)}</p>
+        <LevelCard progress={progress} />
         {today.state === "ready" && today.briefing ? <MissionBoard briefing={today.briefing} /> : <PendingBriefing />}
         {today.weekly_theme && <WeeklyThemeCard weekly={today.weekly_theme} today={today.date} />}
       </div>

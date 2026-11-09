@@ -10,6 +10,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from app.config import Settings
+from app.curriculum import levels as lv
 from app.curriculum.skills import apply_delta, compute_delta
 
 
@@ -21,6 +22,18 @@ class SubmissionRequired(Exception):
     """A hands-on task cannot be ticked off: it is completed only by a PASSING graded submission."""
 
 
+class QuizRequired(Exception):
+    """A reading with a quiz is completed only by PASSING the quiz, never by a tick."""
+
+
+class Locked(Exception):
+    """Duolingo-style order inside a lesson: reading quiz -> hands-on -> essay."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+
+
 class SubmissionRejected(Exception):
     def __init__(self, status: int, detail: str) -> None:
         super().__init__(detail)
@@ -28,7 +41,8 @@ class SubmissionRejected(Exception):
 
 
 TASK_COLS = ("id, kind, skill_slug, difficulty, title, completed_at, points_awarded, attempt_count, evaluation_score, "
-             "evaluation_passed, (reading_content is not null) as has_content")
+             "evaluation_passed, (reading_content is not null) as has_content, (quiz is not null) as has_quiz, quiz_attempts, "
+             "quiz_score, xp_awarded")
 
 
 # ----------------------------------------------------------------------------------------------- skills
@@ -60,13 +74,13 @@ async def _tasks(conn: AsyncConnection, briefing_id) -> list[dict]:
 
 
 async def fetch_today(conn: AsyncConnection, day: date) -> dict:
-    b = await (await conn.execute("select id, day, completed_at, payload, theme_id from daily_briefings where day=%s", (day,))).fetchone()
+    b = await (await conn.execute("select id, day, completed_at, payload, theme_id, level from daily_briefings where day=%s", (day,))).fetchone()
     week_start = day - timedelta(days=day.weekday())
     t = await (await conn.execute("select id, week_start, payload from weekly_themes where week_start=%s", (week_start,))).fetchone()
     return {
         "date": day,
         "state": "ready" if b else "pending",
-        "briefing": None if b is None else {"id": b["id"], "day": b["day"], "completed_at": b["completed_at"],
+        "briefing": None if b is None else {"id": b["id"], "day": b["day"], "completed_at": b["completed_at"], "level": b["level"],
                                             "payload": b["payload"], "tasks": await _tasks(conn, b["id"])},
         "weekly_theme": None if t is None else {"id": t["id"], "week_start": t["week_start"], "theme": t["payload"]},
         "skills": await fetch_skills(conn),
@@ -84,7 +98,8 @@ async def briefing_exists(conn: AsyncConnection, day: date) -> bool:
 
 
 # ----------------------------------------------------------------------------------------------- completion
-async def complete_task(conn: AsyncConnection, task_id: UUID, *, via_evaluation: bool = False) -> dict | None:
+async def complete_task(conn: AsyncConnection, task_id: UUID, *, via_evaluation: bool = False, via_quiz: bool = False,
+                        xp: int | None = None) -> dict | None:
     """Mark a task done and move its skill - atomically, idempotently, and safe under concurrency.
 
     * The conditional UPDATE (`completed_at is null`) is the idempotency guard. Two simultaneous requests
@@ -94,9 +109,19 @@ async def complete_task(conn: AsyncConnection, task_id: UUID, *, via_evaluation:
       on the same skill completed at the same instant must not overwrite each other's increment).
     * All of this runs in the request's transaction (Conn dependency): it commits together or not at all.
     """
-    kind_row = await (await conn.execute("select kind from daily_tasks where id=%s", (task_id,))).fetchone()
+    kind_row = await (await conn.execute(
+        """select t.kind, t.quiz is not null as has_quiz, t.completed_at is not null as done, b.level, b.id as briefing_id
+           from daily_tasks t join daily_briefings b on b.id = t.briefing_id where t.id=%s""", (task_id,))).fetchone()
     if kind_row is not None and kind_row["kind"] == "hands_on" and not via_evaluation:
         raise SubmissionRequired  # hands-on work is completed by a passing graded submission, never by a tick
+    if kind_row is not None and kind_row["kind"] == "reading" and kind_row["has_quiz"] and not via_quiz:
+        raise QuizRequired
+    if kind_row is not None and kind_row["kind"] == "insight" and kind_row["level"] is not None and not kind_row["done"]:
+        blocking = await (await conn.execute(
+            "select count(*) as n from daily_tasks where briefing_id=%s and kind <> 'insight' and completed_at is null",
+            (kind_row["briefing_id"],))).fetchone()
+        if blocking["n"]:
+            raise Locked("finish the reading quiz and the hands-on exercise first")
     task = await (await conn.execute(
         "update daily_tasks set completed_at=now() where id=%s and completed_at is null "
         "returning id, briefing_id, kind, skill_slug, difficulty", (task_id,))).fetchone()
@@ -115,18 +140,29 @@ async def complete_task(conn: AsyncConnection, task_id: UUID, *, via_evaluation:
     await conn.execute("update daily_tasks set points_awarded=%s where id=%s", (delta, task_id))
     await conn.execute("insert into skill_history (skill_id, level, delta, task_id) select id, %s, %s, %s from skills where slug=%s",
                        (new_level, delta, task_id, task["skill_slug"]))
+    gained = xp if xp is not None else (lv.XP_INSIGHT if task["kind"] == "insight" else lv.XP_QUIZ // 2)
+    await award_xp(conn, gained, f"{task['kind']} completed", task_id=task_id)
+    await conn.execute("update daily_tasks set xp_awarded=%s where id=%s", (gained, task_id))
     remaining = (await (await conn.execute(
         "select count(*) as n from daily_tasks where briefing_id=%s and completed_at is null", (task["briefing_id"],))).fetchone())["n"]
     if remaining == 0:
-        await conn.execute("update daily_briefings set completed_at=now() where id=%s", (task["briefing_id"],))
-    return await _completion(conn, task_id, task["skill_slug"], delta, new_level, remaining == 0, False)
+        b = await (await conn.execute("update daily_briefings set completed_at=now() where id=%s returning level", (task["briefing_id"],))).fetchone()
+        if b["level"] is not None:  # a finished lesson on the learning path
+            await award_xp(conn, lv.XP_LESSON_BONUS, "lesson finished", task_id=task_id)
+            gained += lv.XP_LESSON_BONUS
+    return await _completion(conn, task_id, task["skill_slug"], delta, new_level, remaining == 0, False, gained)
 
 
-async def _completion(conn, task_id, slug, delta, level, briefing_done, already) -> dict:
+async def award_xp(conn: AsyncConnection, amount: int, reason: str, *, task_id=None, exam_id=None) -> None:
+    if amount:
+        await conn.execute("insert into xp_events (amount, reason, task_id, exam_id) values (%s,%s,%s,%s)", (amount, reason, task_id, exam_id))
+
+
+async def _completion(conn, task_id, slug, delta, level, briefing_done, already, xp: int = 0) -> dict:
     task = await (await conn.execute(f"select {TASK_COLS} from daily_tasks where id=%s", (task_id,))).fetchone()
     return {"task": {**task, "completed": task["completed_at"] is not None},
             "skill": {"slug": slug, "level": round(level, 3), "delta": delta},
-            "briefing_completed": briefing_done, "already_completed": already}
+            "briefing_completed": briefing_done, "already_completed": already, "xp": xp}
 
 
 # ----------------------------------------------------------------------------------------------- task detail + grading
@@ -134,20 +170,32 @@ async def get_task_detail(conn: AsyncConnection, task_id: UUID, max_attempts: in
     row = await (await conn.execute(
         """select t.id, t.kind, t.skill_slug, t.difficulty, t.title, t.completed_at, t.points_awarded, t.attempt_count,
                   t.evaluation_score, t.evaluation_passed, (t.reading_content is not null) as has_content,
-                  t.reading_content, t.notes, t.user_submission, t.evaluation_result, b.day, b.payload
+                  t.reading_content, t.notes, t.user_submission, t.evaluation_result, t.quiz, t.quiz_attempts, t.quiz_score,
+                  t.xp_awarded, b.day, b.payload, b.level
            from daily_tasks t join daily_briefings b on b.id = t.briefing_id where t.id = %s""", (task_id,))).fetchone()
     if row is None:
         return None
     payload, kind = row["payload"], row["kind"]
     task = {k: row[k] for k in ("id", "kind", "skill_slug", "difficulty", "title", "completed_at", "points_awarded", "attempt_count",
-                                "evaluation_score", "evaluation_passed", "has_content")}
+                                "evaluation_score", "evaluation_passed", "has_content", "quiz_attempts", "quiz_score", "xp_awarded")}
+    task["has_quiz"] = row["quiz"] is not None
     task["completed"] = row["completed_at"] is not None
+    locked = None
+    if row["level"] is not None and kind != "reading" and not task["completed"]:
+        open_ = await (await conn.execute(
+            """select array_agg(kind) as k from daily_tasks where briefing_id = (select briefing_id from daily_tasks where id=%s)
+               and completed_at is null and kind <> %s""", (task_id, kind))).fetchone()
+        need = [k for k in (open_["k"] or []) if (k == "reading") or (kind == "insight" and k == "hands_on")]
+        if need:
+            locked = "Pass the reading quiz first." if "reading" in need else "Pass the hands-on exercise first."
     return {
         "task": task, "day": row["day"], "attempts_max": max_attempts, "attempts_used": row["attempt_count"],
         "reading": {**payload["morning_reading"], "content": row["reading_content"]} if kind == "reading" else None,
         "hands_on": payload["hands_on_task"] if kind == "hands_on" else None,
         "insight": payload["market_insight"] if kind == "insight" else None,
         "notes": row["notes"], "submission": row["user_submission"], "evaluation": row["evaluation_result"],
+        "quiz": lv.public_questions(row["quiz"]) if row["quiz"] and kind == "reading" else None,
+        "lesson": payload.get("lesson"), "locked": locked,
     }
 
 
@@ -174,6 +222,12 @@ async def begin_submission(conn: AsyncConnection, task_id: UUID, submission: str
         raise SubmissionRejected(409, "only hands-on tasks with a rubric can be submitted")
     if row["completed_at"] is not None:
         raise SubmissionRejected(409, "you already passed this task")
+    reading_open = await (await conn.execute(
+        """select 1 from daily_tasks r join daily_briefings b on b.id = r.briefing_id
+           where r.briefing_id = (select briefing_id from daily_tasks where id=%s) and b.level is not null
+             and r.kind = 'reading' and r.completed_at is null""", (task_id,))).fetchone()
+    if reading_open:
+        raise SubmissionRejected(409, "pass the reading quiz first: the hands-on exercise unlocks after it")
     if len(submission) > max_chars:
         raise SubmissionRejected(413, f"submission is {len(submission):,} characters; the limit is {max_chars:,}")
     if row["attempt_count"] >= max_attempts:
@@ -196,13 +250,15 @@ async def finish_submission(conn: AsyncConnection, task_id: UUID, evaluation: di
                ai_evaluation_feedback = %(f)s, evaluated_at = now()
            where id = %(id)s and (completed_at is null or %(p)s)""",
         {"r": Jsonb(evaluation), "s": evaluation["score"], "p": evaluation["passed"], "f": evaluation["feedback_markdown"], "id": task_id})
-    completion = await complete_task(conn, task_id, via_evaluation=True) if evaluation["passed"] else None
+    completion = (await complete_task(conn, task_id, via_evaluation=True, xp=lv.hands_on_xp(evaluation["score"]))
+                  if evaluation["passed"] else None)
     task = await (await conn.execute(f"select {TASK_COLS} from daily_tasks where id=%s", (task_id,))).fetchone()
     done = await (await conn.execute(
         "select b.completed_at is not null as d from daily_tasks t join daily_briefings b on b.id=t.briefing_id where t.id=%s", (task_id,))).fetchone()
     return {"task": {**task, "completed": task["completed_at"] is not None}, "evaluation": evaluation, "passed": evaluation["passed"],
             "skill": completion["skill"] if completion and not completion["already_completed"] else None,
-            "briefing_completed": done["d"], "attempts_used": task["attempt_count"], "attempts_max": max_attempts}
+            "briefing_completed": done["d"], "attempts_used": task["attempt_count"], "attempts_max": max_attempts,
+            "xp": completion["xp"] if completion and not completion["already_completed"] else 0}
 
 
 async def briefing_exists(conn: AsyncConnection, day: date) -> bool:
@@ -230,7 +286,7 @@ def _strength(sim: float, s: Settings) -> str:
 
 async def fetch_feed(
     conn: AsyncConnection, settings: Settings, *, category: str | None, skill: str | None, sort: str,
-    limit: int, cursor: str | None, days: int, min_strength: str | None = None,
+    limit: int, cursor: str | None, days: int, min_strength: str | None = None, level_vec=None,
 ) -> dict:
     """Keyset-paginated feed of canonical (de-duplicated) articles.
 
@@ -248,6 +304,10 @@ async def fetch_feed(
     the pages (duplicates/skips). Keyset resumes strictly after the last (sort_key, id) seen - stable and fast.
     """
     key = "ts" if sort == "recent" else "relevance"
+    # "For you": rank by closeness to what you are learning NOW (your level's query vector), not to your skill gaps.
+    for_you = sort == "for_you" and level_vec is not None
+    relevance_sql = ("coalesce((1 - (a.embedding <=> %(lvec)s))::double precision, 0)" if for_you
+                     else "coalesce(best.sim * (0.5 + 0.5 * best.gap), 0)::double precision")
     params: dict = {"since": datetime.now(timezone.utc) - timedelta(days=days), "limit": limit + 1}
     inner = ["a.duplicate_of is null", "coalesce(a.published_at, a.fetched_at) >= %(since)s"]
     outer = []
@@ -270,7 +330,7 @@ async def fetch_feed(
                coalesce(a.published_at, a.fetched_at) as ts,
                s.slug as source_slug, s.name as source_name, s.category,
                best.slug as best_skill, best.name as best_skill_name, best.sim::double precision as similarity,
-               coalesce(best.sim * (0.5 + 0.5 * best.gap), 0)::double precision as relevance,
+               {relevance_sql} as relevance,
                array(select distinct s2.name from articles d join sources s2 on s2.id = d.source_id
                      where d.duplicate_of = a.id order by s2.name) as also_covered_by
         from articles a join sources s on s.id = a.source_id
@@ -284,6 +344,8 @@ async def fetch_feed(
       ) f
       {'where ' + ' and '.join(outer) if outer else ''}
       order by {key} desc, id desc limit %(limit)s"""
+    if for_you:
+        params["lvec"] = level_vec
     rows = await (await conn.execute(sql, params)).fetchall()
     more = len(rows) > limit
     rows = rows[:limit]
@@ -359,3 +421,192 @@ async def bitcoin_generated_recently(conn: AsyncConnection, minutes: int) -> boo
     row = await (await conn.execute(
         "select exists(select 1 from bitcoin_predictions where created_at > now() - make_interval(mins => %s)) as e", (minutes,))).fetchone()
     return row["e"]
+
+
+# ----------------------------------------------------------------------------------------------- learning path
+async def submit_quiz(conn: AsyncConnection, task_id: UUID, answers: list[int], pass_percent: int) -> dict:
+    """Grade the reading quiz. Pass (>= pass_percent) completes the reading, which unlocks the hands-on exercise.
+    A failed attempt says WHICH answers were wrong but not the right options: the fix is in the chapter, not in guessing."""
+    row = await (await conn.execute(
+        "select kind, quiz, quiz_attempts, completed_at from daily_tasks where id=%s for update", (task_id,))).fetchone()
+    if row is None:
+        raise SubmissionRejected(404, "task not found")
+    if row["kind"] != "reading" or not row["quiz"]:
+        raise SubmissionRejected(409, "this task has no quiz")
+    if row["completed_at"] is not None:
+        raise SubmissionRejected(409, "you already passed this quiz")
+    questions = row["quiz"]
+    try:
+        correct, results = lv.grade_choices(questions, answers, reveal=False)
+    except ValueError as exc:
+        raise SubmissionRejected(422, str(exc)) from None
+    mark = lv.pass_mark(len(questions), pass_percent)
+    passed = correct >= mark
+    if passed:
+        _, results = lv.grade_choices(questions, answers, reveal=True)
+    first_try = row["quiz_attempts"] == 0
+    await conn.execute("update daily_tasks set quiz_attempts = quiz_attempts + 1, quiz_score = %s where id = %s", (correct, task_id))
+    completion = None
+    if passed:
+        completion = await complete_task(conn, task_id, via_quiz=True, xp=lv.XP_QUIZ + (lv.XP_QUIZ_FIRST_TRY if first_try else 0))
+    return {"passed": passed, "correct": correct, "total": len(questions), "pass_mark": mark, "results": results,
+            "attempts": row["quiz_attempts"] + 1, "completion": completion}
+
+
+def _tz_day(col: str) -> str:
+    return f"({col} at time zone %(tz)s)::date"
+
+
+async def _level_state(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladder) -> dict:
+    p = await (await conn.execute("select current_level, placement_taken_at from learner_progress where id = 1")).fetchone()
+    if p is None:  # the migration inserts the row; recreate it if someone deleted it
+        await conn.execute("insert into learner_progress default values on conflict do nothing")
+        p = {"current_level": 1, "placement_taken_at": None}
+    level = lad.level(p["current_level"])
+    done = (await (await conn.execute(
+        "select count(*) as n from daily_briefings where level = %s and completed_at is not null", (level.index,))).fetchone())["n"]
+    attempts = (await (await conn.execute(
+        f"select count(*) as n from exams where kind = 'level' and level = %(l)s and submitted_at is not null and {_tz_day('submitted_at')} = %(d)s",
+        {"l": level.index, "tz": tz, "d": today})).fetchone())["n"]
+    completions = await (await conn.execute("select level, via, score, total, completed_at from level_completions")).fetchall()
+    return {"p": p, "level": level, "done": done, "attempts_today": attempts, "completions": {c["level"]: c for c in completions}}
+
+
+async def fetch_progress(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladder, cooldown_hours: int) -> dict:
+    st = await _level_state(conn, today, tz, lad)
+    level, done, comps = st["level"], st["done"], st["completions"]
+    graduated = level.index == lad.levels[-1].index and level.index in comps
+    xp = await (await conn.execute(
+        f"select coalesce(sum(amount), 0) as total, coalesce(sum(amount) filter (where {_tz_day('at')} = %(d)s), 0) as today from xp_events",
+        {"tz": tz, "d": today})).fetchone()
+    days = await (await conn.execute(
+        "select day from daily_briefings where completed_at is not null and day > %s", (today - timedelta(days=400),))).fetchall()
+    last = await (await conn.execute(
+        """select correct, total, passed, submitted_at from exams where kind = 'level' and level = %s and submitted_at is not null
+           order by submitted_at desc limit 1""", (level.index,))).fetchone()
+    open_exam = await (await conn.execute(
+        """select id from exams where kind = 'level' and level = %s and submitted_at is null
+           and created_at > now() - make_interval(hours => %s) order by created_at desc limit 1""", (level.index, cooldown_hours))).fetchone()
+    placement_today = (await (await conn.execute(
+        f"select exists(select 1 from exams where kind = 'placement' and submitted_at is not null and {_tz_day('submitted_at')} = %(d)s) as e",
+        {"tz": tz, "d": today})).fetchone())["e"]
+
+    def status(i: int) -> str:
+        return "completed" if i in comps else "current" if i == level.index else "locked"
+
+    return {
+        "level": {**level.model_dump(), "tier_name": lad.tier_name(level.tier), "lessons_required": level.lessons_required},
+        "levels_total": len(lad.levels), "lessons_done": done, "graduated": graduated,
+        "exam": {"unlocked": done >= level.lessons_required and not graduated, "attempts_today": st["attempts_today"],
+                 "attempts_max": lad.exam_attempts_per_day, "pass_percent": lad.pass_percent, "questions": lad.exam_questions,
+                 "last": dict(last) if last else None, "open_exam_id": open_exam["id"] if open_exam else None},
+        "xp_total": int(xp["total"]), "xp_today": int(xp["today"]),
+        "streak_days": lv.streak([d["day"] for d in days], today),
+        "knowledge_score": lv.knowledge_score(len(comps), len(lad.levels)),
+        "placement": {"taken": st["p"]["placement_taken_at"] is not None, "available_today": not placement_today},
+        "path": [{**x.model_dump(), "tier_name": lad.tier_name(x.tier), "status": status(x.index),
+                  "via": comps[x.index]["via"] if x.index in comps else None,
+                  "score": comps[x.index]["score"] if x.index in comps else None,
+                  "total": comps[x.index]["total"] if x.index in comps else None} for x in lad.levels],
+    }
+
+
+def _exam_out(row: dict, lad: lv.Ladder) -> dict:
+    total = row["total"]
+    return {"id": row["id"], "kind": row["kind"], "level": row["level"],
+            "level_title": lad.level(row["level"]).title if row["level"] else None,
+            "questions": lv.public_questions(row["questions"]), "total": total,
+            "pass_mark": lv.pass_mark(total, lad.pass_percent) if row["kind"] == "level" else None}
+
+
+async def prepare_exam(conn: AsyncConnection, kind: str, today: date, tz: str, lad: lv.Ladder, cooldown_hours: int,
+                       placement_questions: list[dict] | None = None) -> dict:
+    """Either an exam to serve now ({"exam": ...}) or, for a level exam that must be written by the LLM, what to write
+    ({"generate": level, "titles": [...]}). The slow LLM call happens OUTSIDE any transaction (see routes)."""
+    if kind == "placement":
+        st = await _level_state(conn, today, tz, lad)
+        taken_today = (await (await conn.execute(
+            f"select exists(select 1 from exams where kind='placement' and submitted_at is not null and {_tz_day('submitted_at')} = %(d)s) as e",
+            {"tz": tz, "d": today})).fetchone())["e"]
+        if taken_today:
+            raise SubmissionRejected(429, "you already took the placement exam today; try again tomorrow")
+        row = await (await conn.execute(
+            "insert into exams (kind, questions, total) values ('placement', %s, %s) returning *",
+            (Jsonb(placement_questions), len(placement_questions)))).fetchone()
+        return {"exam": _exam_out(row, lad) | {"current_level": st["level"].index}}
+    st = await _level_state(conn, today, tz, lad)
+    level, done = st["level"], st["done"]
+    if level.index == lad.levels[-1].index and level.index in st["completions"]:
+        raise SubmissionRejected(409, "you have completed the whole path")
+    if done < level.lessons_required:
+        raise SubmissionRejected(409, f"finish {level.lessons_required - done} more lesson(s) on this level to unlock its exam")
+    if st["attempts_today"] >= lad.exam_attempts_per_day:
+        raise SubmissionRejected(429, f"{lad.exam_attempts_per_day} exam attempts used today; review today's lesson and try again tomorrow")
+    row = await (await conn.execute(
+        """select * from exams where kind = 'level' and level = %s and submitted_at is null
+           and created_at > now() - make_interval(hours => %s) order by created_at desc limit 1""", (level.index, cooldown_hours))).fetchone()
+    if row:
+        return {"exam": _exam_out(row, lad)}
+    titles = await (await conn.execute(
+        """select t.title from daily_tasks t join daily_briefings b on b.id = t.briefing_id
+           where b.level = %s and t.kind = 'reading' order by b.day desc limit 8""", (level.index,))).fetchall()
+    return {"generate": level.index, "titles": [t["title"] for t in titles]}
+
+
+async def store_level_exam(conn: AsyncConnection, level: int, questions: list[dict], lad: lv.Ladder) -> dict:
+    row = await (await conn.execute(
+        "insert into exams (kind, level, questions, total) values ('level', %s, %s, %s) returning *",
+        (level, Jsonb(questions), len(questions)))).fetchone()
+    return _exam_out(row, lad)
+
+
+async def submit_exam(conn: AsyncConnection, exam_id: UUID, answers: list[int], lad: lv.Ladder, tier_pass: int) -> dict:
+    exam = await (await conn.execute("select * from exams where id = %s for update", (exam_id,))).fetchone()
+    if exam is None:
+        raise SubmissionRejected(404, "exam not found")
+    if exam["submitted_at"] is not None:
+        raise SubmissionRejected(409, "this exam was already submitted; start a new one")
+    questions = exam["questions"]
+    try:
+        correct, results = lv.grade_choices(questions, answers, reveal=True)
+    except ValueError as exc:
+        raise SubmissionRejected(422, str(exc)) from None
+    detailed = [{"question": q["question"], "options": q["options"], **r} for q, r in zip(questions, results)]
+    prog = await (await conn.execute("select current_level from learner_progress where id = 1 for update")).fetchone()
+    before = prog["current_level"] if prog else 1
+    after, xp, placement, passed = before, 0, None, None
+    if exam["kind"] == "placement":
+        placement = lv.place(questions, answers, tier_pass, lad)
+        after = max(before, placement["start_level"])
+        for i in range(1, placement["start_level"]):
+            await conn.execute("insert into level_completions (level, via) values (%s, 'placement') on conflict (level) do nothing", (i,))
+        await conn.execute("update learner_progress set current_level = %s, placement_taken_at = now(), updated_at = now() where id = 1", (after,))
+    else:
+        mark = lv.pass_mark(len(questions), lad.pass_percent)
+        passed = correct >= mark
+        if passed:
+            await conn.execute(
+                """insert into level_completions (level, via, score, total) values (%s, 'exam', %s, %s)
+                   on conflict (level) do update set via = 'exam', score = excluded.score, total = excluded.total, completed_at = now()""",
+                (exam["level"], correct, len(questions)))
+            after = max(before, min(exam["level"] + 1, lad.levels[-1].index))
+            await conn.execute("update learner_progress set current_level = %s, updated_at = now() where id = 1", (after,))
+            xp = lv.XP_EXAM_PASS + correct
+            await award_xp(conn, xp, f"level {exam['level']} exam passed", exam_id=exam_id)
+    await conn.execute(
+        "update exams set answers = %s, results = %s, correct = %s, passed = %s, submitted_at = now() where id = %s",
+        (Jsonb(answers), Jsonb(detailed), correct, passed, exam_id))
+    return {"id": exam_id, "kind": exam["kind"], "level": exam["level"], "correct": correct, "total": len(questions),
+            "passed": passed, "pass_mark": lv.pass_mark(len(questions), lad.pass_percent) if exam["kind"] == "level" else None,
+            "results": detailed, "previous_level": before, "new_level": after,
+            "new_level_title": lad.level(after).title, "xp": xp, "placement": placement}
+
+
+async def level_query_vector(conn: AsyncConnection, lad: lv.Ladder) -> tuple[dict, object | None]:
+    """The Intelligence Feed's "For you" query: the current level's own embedding, else its skill's embedding."""
+    p = await (await conn.execute("select current_level from learner_progress where id = 1")).fetchone()
+    level = lad.level(p["current_level"] if p else 1)
+    row = await (await conn.execute(
+        """select coalesce((select embedding from level_embeddings where level = %s),
+                           (select embedding from skills where slug = %s)) as v""", (level.index, level.skill))).fetchone()
+    return {"index": level.index, "title": level.title, "tier_name": lad.tier_name(level.tier), "skill": level.skill}, row["v"] if row else None

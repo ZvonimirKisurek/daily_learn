@@ -56,7 +56,18 @@ celery -A app.celery_app worker -l info & celery -A app.celery_app beat -l info
 - **Day 1, code tour, cost and security checks, weekly retrospective:** [`docs/RUNBOOK.md`](docs/RUNBOOK.md) (5b), [`docs/CODE_TOUR.md`](docs/CODE_TOUR.md), [`docs/SAFETY.md`](docs/SAFETY.md), [`docs/RETROSPECTIVE.md`](docs/RETROSPECTIVE.md)
 - **4-week roadmap that steers the weekly generator:** [`backend/curriculum/roadmap.yaml`](backend/curriculum/roadmap.yaml)
 
-## How the intelligence layer works (read this to learn the ML concepts)
+## Learning path (Duolingo-style levels, XP, quizzes, exams)
+Daily lessons follow a **21-level path from "What is AI?" to expert** ([`backend/curriculum/levels.yaml`](backend/curriculum/levels.yaml)), in six tiers: Beginner, Novice, Intermediate, Advanced, Proficient, Expert. The weekly theme is unchanged.
+
+- **One short lesson a day** on the next topic of your current level: a 5-10 minute reading, a 4-5 question **quiz you must pass** (80%) to unlock a 5-10 minute **hands-on exercise** (graded), then the market essay, written for your level. Steps unlock in that order.
+- A lesson counts only when all three are done. A topic you did not finish comes back the next day.
+- After a level's lessons, its **level exam** unlocks: 10 fresh LLM-written questions, pass with 80% to move up (3 attempts/day, every retry is a new exam). Fail and you keep getting review lessons on that level.
+- **Placement exam** (18 fixed questions, 3 per tier, [`placement.yaml`](backend/curriculum/placement.yaml)): skips the tiers you already know. It can only move you up.
+- **XP** (quiz 10, +5 first try; exercise 10 + 2 x score; essay 5; finished lesson +10; level exam +50), a **day streak**, and an **AI knowledge score** (0-100 = share of the path proven).
+- **Intelligence Feed "For you"** (the default sort) ranks stories by embedding similarity to your current level, not just your skill gaps.
+- All grading is deterministic code against answer keys stored server-side ([`app/curriculum/levels.py`](backend/app/curriculum/levels.py)); the LLM writes questions, never grades them. Apply migration `20261109000010_learning_path.sql`; regenerate today's lesson with `python -m app.cli generate-daily --force` to get the new format.
+
+ (read this to learn the ML concepts)
 
 ```
 skills ──embed──► query vectors ─┐

@@ -106,6 +106,9 @@ def main():
         for r in conn.execute("select slug from skills").fetchall():
             skill_vecs[r["slug"]] = unit(rng.normal(size=1536))
             conn.execute("update skills set embedding=%s where slug=%s", (skill_vecs[r["slug"]], r["slug"]))
+        from app.curriculum import levels as lv  # the feed's "For you" query vector per level (offline: the level's skill vector)
+        for level in lv.ladder().levels:
+            conn.execute("insert into level_embeddings (level, embedding) values (%s, %s) on conflict do nothing", (level.index, skill_vecs[level.skill]))
 
     specs = {}
     for a in ARTICLES:
@@ -145,7 +148,9 @@ def main():
             if name == "WeeklyThemeOutput":
                 d = F.weekly_dict(ids, skills=tuple(sorted(grounding.required_focus or {"rag", "vector-db"})))
             elif name == "DailyPlanOutput":
-                d = F.daily_dict(ids[0], skill="rag", evidence=ids[1:3] or [ids[0]])
+                d = F.daily_dict(ids[0], skill=grounding.required_skill or "rag", evidence=ids[1:3] or [ids[0]])
+            elif name == "LevelExamOutput":
+                d = {"questions": [{**q, "question": f"DEMO exam question {i + 1}: which statement is true?"} for i, q in enumerate(F.quiz_dict(10))]}
             elif name == "TaskEvaluationSchema":
                 good = "np.linalg.norm" in user or "norm(" in user
                 d = F.evaluation_dict(grounding.rubric.model_dump(), full=good)
@@ -155,7 +160,7 @@ def main():
 
         def generate_text(self, *, system, user, check, purpose, **_):
             found = sorted(set(re.findall(r"\bA\d+\b", user)), key=lambda x: (len(x), x))[:2] or ["A1"]
-            text = F.chapter_text(1900, cites=found) if purpose == "Chapter" else F.essay_text(560, cites=found)
+            text = F.chapter_text(800, cites=found) if purpose == "Chapter" else F.essay_text(560, cites=found)
             problems = check(text)
             assert not problems, problems
             return text

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, BookOpenText, ChevronDown, CircleCheck, Clock, FlaskConical, Lightbulb, Lock, PartyPopper, TriangleAlert } from "lucide-react";
+import { ArrowRight, BookOpenText, ChevronDown, CircleCheck, Clock, FlaskConical, GraduationCap, Lightbulb, ListChecks, Lock, PartyPopper, TriangleAlert, Zap } from "lucide-react";
 import { completeTaskAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,9 +13,9 @@ import { cn } from "@/lib/utils";
 import { GradedBadge, HandsOnSummary, InsightBody, ReadingSummary } from "./task-bodies";
 
 const META: Record<TaskKind, { label: string; icon: typeof BookOpenText; tone: string; glow: string }> = {
-  reading: { label: "Chapter", icon: BookOpenText, tone: "text-info", glow: "from-sky-400/20" },
-  hands_on: { label: "Hands-on lab", icon: FlaskConical, tone: "text-primary", glow: "from-emerald-400/20" },
-  insight: { label: "Market essay", icon: Lightbulb, tone: "text-warn", glow: "from-amber-400/20" },
+  reading: { label: "Step 1 · Read + quiz", icon: BookOpenText, tone: "text-info", glow: "from-sky-400/20" },
+  hands_on: { label: "Step 2 · Hands-on exercise", icon: FlaskConical, tone: "text-primary", glow: "from-emerald-400/20" },
+  insight: { label: "Step 3 · Market essay", icon: Lightbulb, tone: "text-warn", glow: "from-amber-400/20" },
 };
 
 const Difficulty = ({ n }: { n: number }) => (
@@ -35,7 +35,7 @@ const Difficulty = ({ n }: { n: number }) => (
  * Hands-on labs are different on purpose: they have NO checkbox. They are completed only by a PASSING graded submission
  * in the workspace, which is the only way that task can move your skill matrix.
  */
-export function MissionBoard({ briefing, heading = "Today's Mission", archived = false }: { briefing: Briefing; heading?: string; archived?: boolean }) {
+export function MissionBoard({ briefing, heading = "Today's Lesson", archived = false }: { briefing: Briefing; heading?: string; archived?: boolean }) {
   const [tasks, markDone] = useOptimistic(briefing.tasks, (current: Task[], id: string) =>
     current.map((t) => (t.id === id ? { ...t, completed: true } : t)),
   );
@@ -54,9 +54,19 @@ export function MissionBoard({ briefing, heading = "Today's Mission", archived =
       const res = await completeTaskAction(task.id);
       if (!res.ok) return setError(res.error);
       if (!res.data.already_completed)
-        setGain((g) => ({ ...g, [task.id]: `+${res.data.skill.delta.toFixed(2)} ${skillLabel(res.data.skill.slug)}` }));
+        setGain((g) => ({ ...g, [task.id]: `+${res.data.xp} XP · +${res.data.skill.delta.toFixed(2)} ${skillLabel(res.data.skill.slug)}` }));
     });
   }
+
+  // Lesson order on the learning path (legacy briefings, level === null, are not gated): quiz -> exercise -> essay.
+  const gated = briefing.level !== null;
+  const readingDone = tasks.some((t) => t.kind === "reading" && t.completed);
+  const handsOnDone = tasks.some((t) => t.kind === "hands_on" && t.completed);
+  const lockReason = (t: Task): string | null =>
+    !gated || t.completed ? null
+      : t.kind === "hands_on" && !readingDone ? "Unlocks when you pass the reading quiz"
+      : t.kind === "insight" && !(readingDone && handsOnDone) ? "Unlocks when the quiz and the exercise are passed" : null;
+  const lesson = p.lesson;
 
   const title = (t: Task) => (t.kind === "reading" ? p.morning_reading.chapter_title : t.kind === "hands_on" ? p.hands_on_task.title : p.market_insight.headline);
   const minutes = (t: Task) => (t.kind === "reading" ? p.morning_reading.estimated_minutes : t.kind === "hands_on" ? p.hands_on_task.estimated_minutes : null);
@@ -73,6 +83,14 @@ export function MissionBoard({ briefing, heading = "Today's Mission", archived =
         </div>
       </div>
 
+      {lesson && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <Badge variant="violet"><GraduationCap className="size-3" /> Level {lesson.level} · {lesson.title}</Badge>
+          <span className="text-muted-foreground">Lesson {lesson.lesson_number} of {lesson.lessons_required}: <span className="text-foreground">{lesson.topic}</span></span>
+          {lesson.review && <Badge variant="warn">review</Badge>}
+        </div>
+      )}
+
       {error && (
         <div role="alert" className="mb-3 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           <TriangleAlert className="size-4" /> Couldn&apos;t save that: {error}
@@ -85,18 +103,20 @@ export function MissionBoard({ briefing, heading = "Today's Mission", archived =
           const Icon = m.icon;
           const min = minutes(t);
           const isOpen = open === t.id;
+          const locked = lockReason(t);
+          const quizGate = t.kind === "reading" && t.has_quiz;
           return (
             <motion.li key={t.id} variants={{ hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } } }}
               whileHover={{ y: -2 }} className={cn("glass glass-hover relative overflow-hidden rounded-2xl", t.completed && "opacity-75")}>
               <div aria-hidden className={cn("pointer-events-none absolute -left-16 -top-16 size-48 rounded-full bg-gradient-to-br to-transparent blur-2xl", m.glow)} />
               <div className="relative flex items-start gap-4 p-5">
-                {t.kind === "hands_on" ? (
+                {t.kind === "hands_on" || quizGate ? (
                   <span className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border", t.completed ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground")}
-                    title={t.completed ? "Passed" : "Completed by passing the graded submission"}>
-                    {t.completed ? <CircleCheck className="size-3.5" strokeWidth={3} /> : <Lock className="size-3" />}
+                    title={t.completed ? "Passed" : quizGate ? "Completed by passing the quiz" : "Completed by passing the graded submission"}>
+                    {t.completed ? <CircleCheck className="size-3.5" strokeWidth={3} /> : locked ? <Lock className="size-3" /> : quizGate ? <ListChecks className="size-3" /> : <Lock className="size-3" />}
                   </span>
                 ) : (
-                  <Checkbox className="mt-0.5" checked={t.completed} disabled={t.completed} onCheckedChange={(v) => v === true && complete(t)} aria-label={`Mark "${title(t)}" complete`} />
+                  <Checkbox className="mt-0.5" checked={t.completed} disabled={t.completed || !!locked} onCheckedChange={(v) => v === true && complete(t)} aria-label={`Mark "${title(t)}" complete`} />
                 )}
                 <div className="min-w-0 flex-1">
                   <div className={cn("eyebrow mb-1.5 flex items-center gap-1.5 !text-[11px]", m.tone)}><Icon className="size-3.5" /> {m.label}</div>
@@ -107,12 +127,16 @@ export function MissionBoard({ briefing, heading = "Today's Mission", archived =
                     {min && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="size-3" />{min} min</span>}
                     {t.kind === "hands_on" && <GradedBadge />}
                     {t.kind === "hands_on" && t.attempt_count > 0 && !t.completed && <Badge variant="warn">last score {t.evaluation_score}/10 · attempt {t.attempt_count}</Badge>}
-                    {(gain[t.id] || (t.completed && t.points_awarded)) && <Badge variant="primary">{gain[t.id] ?? `+${t.points_awarded?.toFixed(2)} ${skillLabel(t.skill_slug)}`}</Badge>}
+                    {quizGate && !t.completed && t.quiz_attempts > 0 && <Badge variant="warn">quiz {t.quiz_score}/{p.morning_reading.quiz_questions} · try again</Badge>}
+                    {locked && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Lock className="size-3" />{locked}</span>}
+                    {(gain[t.id] || (t.completed && (t.xp_awarded || t.points_awarded))) && (
+                      <Badge variant="primary"><Zap className="size-3" />{gain[t.id] ?? (t.xp_awarded ? `+${t.xp_awarded} XP` : `+${t.points_awarded?.toFixed(2)} ${skillLabel(t.skill_slug)}`)}</Badge>
+                    )}
                   </div>
                 </div>
-                {t.kind !== "insight" && (
+                {t.kind !== "insight" && !locked && (
                   <Link href={t.kind === "reading" ? `/read/${t.id}` : `/practice/${t.id}`} className="mt-0.5 hidden shrink-0 items-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-sm font-medium text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/25 sm:inline-flex">
-                    {t.kind === "reading" ? (t.completed ? "Re-read" : "Read") : t.completed || archived ? "Review" : t.attempt_count > 0 ? "Continue" : "Start lab"} <ArrowRight className="size-3.5" />
+                    {t.kind === "reading" ? (t.completed ? "Re-read" : quizGate ? "Read + quiz" : "Read") : t.completed || archived ? "Review" : t.attempt_count > 0 ? "Continue" : "Start"} <ArrowRight className="size-3.5" />
                   </Link>
                 )}
                 <button onClick={() => setOpen(isOpen ? null : t.id)} aria-expanded={isOpen} aria-label={isOpen ? "Hide details" : "Show details"}
@@ -138,7 +162,7 @@ export function MissionBoard({ briefing, heading = "Today's Mission", archived =
 
       {done === tasks.length && !archived && (
         <motion.p initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="mt-5 flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-primary">
-          <PartyPopper className="size-4" /> Mission complete. See you tomorrow.
+          <PartyPopper className="size-4" /> {gated ? "Lesson complete: it counts toward your level exam. See you tomorrow." : "Mission complete. See you tomorrow."}
         </motion.p>
       )}
     </section>

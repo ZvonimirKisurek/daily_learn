@@ -119,94 +119,115 @@ ROADMAP_RULES = """\
   evidence and citations in seminar_overview and market_signals, (c) tune reading_hint/build_hint to current tooling.
   Never reorder or drop a milestone."""
 
+# --------------------------------------------------------------------------- the learner, for DAILY lessons
+# The weekly seminar keeps LEARNER_PROFILE above. Daily lessons follow the learning path (levels.yaml): they are short,
+# and they teach at the learner's CURRENT level, which <learner_level> states in every daily prompt.
+LESSON_PROFILE = """\
+A software engineer (mobile and backend: Kotlin, Swift, some Python, Postgres) who is a TOTAL BEGINNER in artificial
+intelligence and machine learning: assume ZERO ML knowledge, no ML vocabulary, and no maths beyond school level, except
+what earlier levels of the learning path (listed in <learner_level>) have already taught. They learn in short daily
+sessions: a 5-10 minute reading, a quiz on it, and a 5-10 minute hands-on exercise. Teach exactly at their current
+level; never skip ahead. Be warm and encouraging but never vague or condescending: they are intelligent and want to
+really understand. Environment: a laptop without a GPU, Python 3.11+."""
+
+LESSON_PEDAGOGY = """\
+# How you teach a short lesson
+- ONE idea per day, explained simply and concretely. Depth over breadth: it is fine to leave things for later levels.
+- Order: why it matters (a real situation) -> the idea in plain words with an everyday analogy -> one concrete worked
+  example with small numbers or real-life items -> a common misconception -> a 2-3 sentence recap.
+- Define every technical term the first time it appears, in plain words. Never use a concept from a later level of the
+  path; if one is unavoidable, explain it in one sentence and say a later level covers it.
+- Bridge from software engineering where it genuinely helps (functions, tests, caches), and say where the analogy breaks."""
+
 # --------------------------------------------------------------------------- stage 1: the daily plan
 DAILY_PLAN_SYSTEM = f"""\
-{PROFESSOR}
+You are a patient, expert teacher of AI and machine learning who has taught complete beginners and shipped real ML
+systems. Like the best language-learning apps, you turn a big subject into small daily steps that build on each other.
 
 # Your task
-Plan today's lesson for ONE learner: (1) the outline of a textbook chapter that will be written next, (2) a hands-on
-project with a grading rubric, and (3) the thesis of a short analytical essay. You are PLANNING; other steps write the
-chapter and the essay. Follow <todays_plan>: it fixes the skill and intensity. Continue from <recent_work>; never
-repeat a task the learner already did, and build on it when it was completed.
+Plan today's SHORT lesson for ONE learner. <todays_lesson> fixes the topic: the next topic of the learner's current level
+on the learning path. Produce (1) the outline of a 5-10 minute reading, (2) a quiz on that reading, (3) a 5-10 minute
+hands-on exercise with a grading rubric, and (4) the thesis of a short market essay. You are PLANNING; other steps write
+the reading and the essay. Continue from <recent_work>: never repeat a lesson the learner already finished; if
+<todays_lesson> says REVIEW, revisit the topic from a new angle with a new example and a slightly harder exercise.
 
 # Learner
-{LEARNER_PROFILE}
+{LESSON_PROFILE}
 
-{PEDAGOGY}
+{LESSON_PEDAGOGY}
 
-# The chapter outline (`reading`)
-- 7-10 sections whose target_words sum to at least 1,800 (the finished chapter must clear 1,500 words of prose).
-  Required arc: why this exists (motivation) -> intuition and analogy -> formal definition and mathematics -> a worked
-  numeric example -> implementation in Python/PyTorch/numpy -> common pitfalls and failure modes -> how it appears in
-  production (use the supplied articles as case studies) -> a final section titled 'Check Your Understanding'.
-- key_points says concretely what each section must establish (the concept, the formula, the example), not a topic label.
-- The chapter teaches the concept from scratch and stands alone: the learner will NOT open external blogs. The supplied
-  articles are inspiration and case studies; list the ones to use in inspiration_article_ids.
+# The reading (`reading`)
+- 3-6 sections whose target_words sum to 600-1,100 words (a 5-10 minute read); estimated_minutes 5-10.
+- key_points says concretely what each section must establish (the idea, the analogy, the example), not a topic label.
+- From level 5 on, include one tiny formula or one short Python snippet where it makes the idea concrete; before level 5
+  keep it maths-free (a snippet is fine only at level 4).
+- No quiz or 'Check Your Understanding' section: the quiz is separate (below).
+- The reading teaches the idea from scratch and stands alone. Use at most 1-3 supplied articles as real-world examples
+  and list them in inspiration_article_ids.
 
-# The hands-on project (`hands_on_task`): be brutally specific
-- 4-10 steps, numbered in order. Each step names the exact file to create or edit (relative to a project folder listed in
-  project_layout), says what goes in it, lists the exact terminal commands (copy-pasteable, including `pip install` lines
-  and how to run the script), and states expected_output.
-- Everything must run on a laptop CPU in the time budget, offline after installing packages, using only standard,
-  stable libraries and tiny or synthetic data (seed random generators). No paid services, no large downloads.
-- expected_output must describe what the learner can VERIFY: shapes, value ranges, invariants, orderings, qualitative
-  behaviour ("similarity of identical vectors is 1.0 (to 6 decimals)"). NEVER invent floating-point results you have not
-  computed; if a number depends on random data, say it will vary and what must hold regardless.
-- submission_instructions says exactly what to paste for grading: the full code AND the terminal output of running it.
-- `rubric`: 3-6 criteria that are OBSERVABLE in a pasted submission (correctness of the core computation, the required
-  output present and consistent with the code, a required test or check, code quality or explanation). At least one
-  criterion is must_pass (earning under half of its points fails the task); give the central correctness criterion
-  must_pass. max_points per criterion 2-5, summing to between 12 and 30; pass_score 6-8.
+# The quiz (`reading.quiz`)
+- 4-5 multiple-choice questions that check UNDERSTANDING of this reading (apply the idea to a new example, spot the
+  misconception), not trivia or trick questions. Every answer must follow from the reading's key_points.
+- Exactly 4 options each, exactly one correct, `answer` = its index. Wrong options are plausible beginner
+  misconceptions, similar in length to the right one. `explanation` says why the right option is right.
+
+# The hands-on exercise (`hands_on_task`): small, concrete, doable in 5-10 minutes
+- 2-5 steps; estimated_minutes 5-10. Levels 1-3: a thinking/writing exercise is ideal (classify real examples, explain
+  in your own words, spot the mistake, design a dataset on paper) written into one file such as `answers.md`, or a tiny
+  ready-made Python script the learner runs and changes one line of. From level 4 on: one small Python file using only
+  the standard library, numpy, pandas, matplotlib or scikit-learn, with tiny or synthetic data (seed random generators).
+- Each step names the file to create or edit and what goes in it, gives exact commands when code is run, and states
+  expected_output the learner can VERIFY (a property, a shape, an ordering). NEVER invent precise numeric results.
+- submission_instructions says exactly what to paste for grading (the answers, or the code AND its terminal output).
+- `rubric`: 2-4 criteria OBSERVABLE in the pasted submission. One central criterion is must_pass. max_points 2-5 per
+  criterion, pass_score 6-7. Grade understanding, not polish.
+- Both reading.skill_slug and hands_on_task.skill_slug are the skill given in <todays_lesson>.
 
 # The essay (`market_insight`)
-Choose the single most important industry or research trend visible in the supplied articles that relates to today's
-skill, state it as a falsifiable thesis, and list the articles that evidence it.
+Choose the most important industry or research trend in the supplied articles that a learner at THIS level can follow
+and that connects to today's topic or skill (or, failing that, to the AI basics they already know). State it as a
+falsifiable thesis and list the articles that evidence it.
 
 # Budget
-reading.estimated_minutes + hands_on_task.estimated_minutes must not exceed 135, and must fit the day's intensity.
+reading.estimated_minutes + hands_on_task.estimated_minutes must be at most 20.
 
 {GROUNDING_RULES}"""
 
-# --------------------------------------------------------------------------- stage 2: the chapter
-CHAPTER_CRITICAL = ("CRITICAL: This must be a comprehensive, long-form textbook chapter. Do NOT summarize. You MUST write at least "
-                    "1500 words. Expand on mathematical intuition, step-by-step code walkthroughs, and common pitfalls.")
-ESSAY_CRITICAL = "CRITICAL: You MUST cite at least two distinct articles using their [A#] tags in the body of the text."
+# --------------------------------------------------------------------------- stage 2: the reading
+CHAPTER_CRITICAL = ("CRITICAL: This is a SHORT daily lesson: 600-1,100 words of prose (a 5-10 minute read), at the learner's "
+                    "current level. Do not pad it and do not exceed 1,200 words.")
 
 CHAPTER_SYSTEM = f"""\
 {CHAPTER_CRITICAL}
 
-{PROFESSOR}
+You are a patient, expert teacher of AI and machine learning writing today's short lesson for a beginner.
 
 # Your task
-Write ONE chapter of a rigorous, self-contained textbook, following the supplied outline. This is the learner's only
-reading for the day: it must teach the concept completely, from scratch.
+Write ONE short lesson reading, following the supplied outline. It is the learner's only reading for the day: it must
+teach today's idea clearly and completely, at the level given in <learner_level>.
 
 # Learner
-{LEARNER_PROFILE}
+{LESSON_PROFILE}
 
-{PEDAGOGY}
+{LESSON_PEDAGOGY}
 
 # Format (checked by software; failing it means you must rewrite)
-- Output ONLY the chapter, in markdown. No preamble, no closing remarks, no level-1 heading (the title is shown
-  separately). Use `## ` headings for the outline's sections, in order; `###` sub-headings are allowed.
-- LENGTH: at least 1,500 words of prose, excluding code. Aim for 1,900-2,400. Meet each section's target_words.
-  Reach length through depth (derivations, a second worked example, edge cases, intuition), never through repetition.
-- MATHEMATICS: LaTeX with `$...$` inline and `$$...$$` for display. Never use `\\(` or `\\[`. After every formula say in
-  plain words what it means and give the intuition. Show at least one fully worked numeric example with small numbers
-  whose arithmetic you have checked.
-- CODE: at least two complete, runnable ```python examples (imports included, seeds set, short comments explaining WHY).
-  Use stable, mainstream APIs only (numpy, PyTorch, scikit-learn, the standard library). If you are not certain of a
-  function's exact signature, restructure the example so it does not depend on it. Shell commands go in ```bash blocks.
-  Every ```python block must be valid Python syntax (it will be parsed).
-- Bridge from software engineering with analogies the learner will recognise, and mark where an analogy breaks down.
-- Use the supplied articles as case studies: when you state something taken from them, cite it as [A3]. Cite only the
-  articles supplied. Never write URLs.
-- Finish with `## Check Your Understanding`: 4-6 numbered questions of rising difficulty (recall, apply, analyse). Do NOT
-  give the answers.
+- Output ONLY the reading, in markdown. No preamble, no closing remarks, no level-1 heading (the title is shown
+  separately). Use `## ` headings for the outline's sections, in order (at least 3).
+- LENGTH: 600-1,100 words of prose, excluding code. Meet each section's target_words roughly. Short paragraphs.
+- Do NOT include quiz questions or a 'Check Your Understanding' section, and never reveal the quiz. But make sure
+  everything needed to answer the questions in <quiz> is taught clearly.
+- MATHEMATICS only if the outline calls for it: LaTeX with `$...$` inline and `$$...$$` for display, never `\\(` or
+  `\\[`, and say in plain words what every formula means.
+- CODE only if the outline calls for it (required from level 5 on: at least one short ```python example). Every
+  ```python block must be complete, runnable and valid Python (it will be parsed); use only mainstream, stable APIs.
+- When you use a supplied article as a real-world example, cite it as [A3]. Cite only supplied articles. Never write URLs.
 
 {GROUNDING_RULES}
 
 {CHAPTER_CRITICAL}"""
+
+ESSAY_CRITICAL = "CRITICAL: You MUST cite at least two distinct articles using their [A#] tags in the body of the text."
 
 # --------------------------------------------------------------------------- stage 3: the market insight essay
 INSIGHT_SYSTEM = f"""\
@@ -219,7 +240,13 @@ Write an analytical essay of 500-700 words (hard limits: 450-800) on the supplie
 moving into machine learning engineering.
 
 # Learner
-{LEARNER_PROFILE}
+{LESSON_PROFILE}
+
+# Write for the learner's level
+<learner_level> says where the learner is on the path from "What is AI?" to expert. Explain every technical term the
+first time in plain words, prefer the concepts they have already learned, and connect the trend to what they are
+studying now (<essay_plan> names today's topic). A beginner should finish the essay understanding the trend AND why it
+matters for the skill they are building.
 
 # The essay must
 - Open with the thesis, then argue it: the evidence in the supplied articles (cite as [A3], at least two distinct
@@ -328,40 +355,85 @@ def build_weekly_prompt(week_start: date, today: date, skills: list[Skill], arti
     )
 
 
+def render_learner_level(lesson: dict) -> str:
+    """Where the learner is on the path. Every daily prompt carries it, so the reading, the exercise, the quiz and the
+    essay are all pitched at the same level. `lesson` is built by generators.current_lesson()."""
+    earlier = "\n".join(f"  - {_esc(t)}" for t in lesson["earlier_levels"]) or "  - (none: this is the very start)"
+    return (f'<learner_level level="{lesson["level"]}" of="{lesson["of"]}" tier="{_esc(lesson["tier_name"])}">\n'
+            f"current level: {lesson['level']}. {_esc(lesson['title'])} - {_esc(lesson['summary'])}\n"
+            f"levels already completed (the learner knows these):\n{earlier}\n</learner_level>")
+
+
+def render_todays_lesson(lesson: dict) -> str:
+    topics = "\n".join(f"  {i}. {_esc(t)}" for i, t in enumerate(lesson["topics"], 1))
+    kind = "REVIEW (every topic of this level has been done once; revisit it from a new angle, slightly harder)" if lesson["review"] else "NEW"
+    return (f"<todays_lesson>\ntopic: {_esc(lesson['topic'])}\nskill: {lesson['skill']}\ntype: {kind}\n"
+            f"lesson {lesson['lesson_number']} on this level (the level exam unlocks after {lesson['lessons_required']} finished lessons)\n"
+            f"this level's topics, in order:\n{topics}\n</todays_lesson>")
+
+
 def build_daily_plan_prompt(
-    day: date, theme: dict, plan_entry: dict, skills: list[Skill], articles: list[RankedArticle],
-    recent_work: list[dict], window_days: int,
+    day: date, lesson: dict, skills: list[Skill], articles: list[RankedArticle], recent_work: list[dict], window_days: int,
 ) -> str:
     recent = "\n".join(
         f"- {r['day']} {r['kind']}: {_esc(r['title'], 120)} ({'completed' if r['completed'] else 'not completed'})"
         for r in recent_work
     ) or "- (nothing yet)"
     return (
-        f"<today>{day:%Y-%m-%d (%A)}, ISO day {day.isoweekday()}</today>\n{_theme_block(theme)}\n"
-        f"<todays_plan>\nfocus: {_esc(plan_entry['focus'])}\nskill: {plan_entry['skill_slug']}\nintensity: {plan_entry['intensity']}\n"
-        f"reading_hint: {_esc(plan_entry['reading_hint'])}\nbuild_hint: {_esc(plan_entry['build_hint'])}\n</todays_plan>\n"
+        f"<today>{day:%Y-%m-%d (%A)}</today>\n{render_learner_level(lesson)}\n{render_todays_lesson(lesson)}\n"
         f"{render_skills(skills)}\n<recent_work>\n{recent}\n</recent_work>\n{render_articles(articles, window_days, summary_chars=300)}\n\n"
-        "Plan today's chapter, hands-on project (with rubric) and essay thesis."
+        "Plan today's short lesson: the reading outline with its quiz, the hands-on exercise (with rubric) and the essay thesis."
     )
 
 
-def build_chapter_prompt(plan: dict, theme: dict, plan_entry: dict, inspiration: list[RankedArticle], window_days: int) -> str:
+def build_chapter_prompt(plan: dict, lesson: dict, inspiration: list[RankedArticle], window_days: int) -> str:
     sections = "\n".join(
         f"{i}. {_esc(s['heading'])} (~{s['target_words']} words): {_esc(s['key_points'])}" for i, s in enumerate(plan["sections"], 1))
     goals = "\n".join(f"- {_esc(g)}" for g in plan["learning_goals"])
+    quiz = "\n".join(f"- {_esc(q['question'])}" for q in plan.get("quiz", []))
+    code = ("Include at least one short, runnable ```python example." if lesson["level"] >= 5
+            else "Code is optional at this level; keep it maths-free.")
     return (
-        f"{_theme_block(theme)}\n<chapter_plan>\ntitle: {_esc(plan['chapter_title'])}\nskill: {plan['skill_slug']}\n"
-        f"difficulty: {plan['difficulty']} of 3\nlearning_goals:\n{goals}\nsections:\n{sections}\n</chapter_plan>\n"
+        f"{render_learner_level(lesson)}\n<reading_plan>\ntitle: {_esc(plan['chapter_title'])}\nskill: {plan['skill_slug']}\n"
+        f"learning_goals:\n{goals}\nsections:\n{sections}\n</reading_plan>\n<quiz>\n{quiz}\n</quiz>\n"
         f"{render_articles(inspiration, window_days)}\n\n"
-        f"Write the complete chapter now, following every section of the plan.\n\n{CHAPTER_CRITICAL}"
+        f"Write the complete short lesson now, following every section of the plan. {code}\n\n{CHAPTER_CRITICAL}"
     )
 
 
-def build_insight_prompt(plan: dict, evidence: list[RankedArticle], window_days: int) -> str:
+def build_insight_prompt(plan: dict, evidence: list[RankedArticle], window_days: int, lesson: dict | None = None) -> str:
+    level = (f"{render_learner_level(lesson)}\n", f"\ntoday's topic: {_esc(lesson['topic'])}") if lesson else ("", "")
     return (
-        f"<essay_plan>\nheadline: {_esc(plan['headline'])}\nthesis: {_esc(plan['thesis'])}\nskill: {plan['skill_slug']}\n</essay_plan>\n"
+        f"{level[0]}<essay_plan>\nheadline: {_esc(plan['headline'])}\nthesis: {_esc(plan['thesis'])}\nskill: {plan['skill_slug']}{level[1]}\n</essay_plan>\n"
         f"{render_articles(evidence, window_days)}\n\nWrite the essay now.\n\n{ESSAY_CRITICAL}"
     )
+
+
+# --------------------------------------------------------------------------- the level exam
+LEVEL_EXAM_SYSTEM = f"""You are an expert examiner for a course that takes beginners from "What is AI?" to expert in AI and machine learning.
+
+# Your task
+Write the exam that decides whether the learner has mastered ONE level of the path and may move on. Passing needs 80%.
+
+# Learner
+{LESSON_PROFILE}
+
+# Rules
+- Exactly the requested number of multiple-choice questions, covering the level's topics evenly (in <exam_level>).
+- Test understanding and application at THIS level: apply the idea to a new example, predict what happens, choose the
+  right approach, spot the mistake. No trivia, no trick wording, nothing from later levels.
+- Exactly 4 options each, exactly one correct, `answer` = its index. Wrong options are plausible beginner misconceptions
+  of similar length to the right one. Never use "all of the above" or "none of the above".
+- `explanation` teaches: why the right answer is right and why the most tempting wrong one is wrong.
+- Every fact must be established knowledge you are certain of. Never write URLs."""
+
+
+def build_level_exam_prompt(level: dict, n_questions: int, recent_titles: list[str]) -> str:
+    topics = "\n".join(f"- {_esc(t)}" for t in level["topics"])
+    lessons = "\n".join(f"- {_esc(t, 120)}" for t in recent_titles) or "- (none recorded)"
+    return (f'<exam_level index="{level["index"]}" tier="{_esc(level["tier_name"])}">\ntitle: {_esc(level["title"])}\n'
+            f"summary: {_esc(level['summary'])}\ntopics:\n{topics}\n</exam_level>\n<lessons_studied>\n{lessons}\n</lessons_studied>\n\n"
+            f"Write the {n_questions}-question exam for this level now.")
 
 
 def build_evaluation_prompt(task: dict, rubric: dict, submission: str, max_chars: int) -> str:

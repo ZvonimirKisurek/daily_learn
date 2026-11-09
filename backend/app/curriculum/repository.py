@@ -72,23 +72,43 @@ def get_briefing(day: date) -> dict | None:
         return conn.execute("select * from daily_briefings where day=%s", (day,)).fetchone()
 
 
-def save_briefing(day: date, theme_id: str, payload: dict, tasks: list[dict], replace: bool = False) -> str:
+def save_briefing(day: date, theme_id: str, payload: dict, tasks: list[dict], replace: bool = False, level: int | None = None) -> str:
     """One transaction: the briefing row and its three task rows appear together or not at all."""
     with get_pool().connection() as conn:
         if replace:
             conn.execute("delete from daily_briefings where day=%s", (day,))  # cascades to daily_tasks
         bid = conn.execute(
-            "insert into daily_briefings (day, theme_id, payload) values (%s,%s,%s) returning id",
-            (day, theme_id, Jsonb(payload)),
+            "insert into daily_briefings (day, theme_id, payload, level) values (%s,%s,%s,%s) returning id",
+            (day, theme_id, Jsonb(payload), level),
         ).fetchone()["id"]
         for t in tasks:
             conn.execute(
-                """insert into daily_tasks (briefing_id, kind, skill_slug, difficulty, title, reading_content, evaluation_rubric)
-                   values (%s,%s,%s,%s,%s,%s,%s)""",
+                """insert into daily_tasks (briefing_id, kind, skill_slug, difficulty, title, reading_content, evaluation_rubric, quiz)
+                   values (%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (bid, t["kind"], t["skill_slug"], t["difficulty"], t["title"], t.get("reading_content"),
-                 Jsonb(t["evaluation_rubric"]) if t.get("evaluation_rubric") else None),
+                 Jsonb(t["evaluation_rubric"]) if t.get("evaluation_rubric") else None, Jsonb(t["quiz"]) if t.get("quiz") else None),
             )
     return str(bid)
+
+
+def learner_level() -> tuple[int, int]:
+    """(current level, lessons FULLY finished on it). Lessons count only when every task was done."""
+    with get_pool().connection() as conn:
+        row = conn.execute("select current_level from learner_progress where id = 1").fetchone()
+        level = row["current_level"] if row else 1
+        done = conn.execute("select count(*) as n from daily_briefings where level = %s and completed_at is not null", (level,)).fetchone()["n"]
+    return level, done
+
+
+def has_level_embedding(level: int) -> bool:
+    with get_pool().connection() as conn:
+        return conn.execute("select 1 from level_embeddings where level = %s", (level,)).fetchone() is not None
+
+
+def set_level_embedding(level: int, vec: list[float]) -> None:
+    with get_pool().connection() as conn:
+        conn.execute("insert into level_embeddings (level, embedding) values (%s, %s) on conflict (level) do update set embedding = excluded.embedding",
+                     (level, np.asarray(vec, dtype=np.float32)))
 
 
 def used_reading_ids(days: int = 30) -> set[str]:

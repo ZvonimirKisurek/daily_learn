@@ -1,8 +1,8 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { ApiError, completeTask, getTask, queueBitcoin, queueBriefing, saveNotes, submitTask } from "@/lib/api";
-import type { Completion, SubmissionResult } from "@/lib/types";
+import { ApiError, completeTask, getTask, queueBitcoin, queueBriefing, saveNotes, startExam, submitExam, submitQuiz, submitTask } from "@/lib/api";
+import type { Completion, Exam, ExamKind, ExamResult, QuizResult, SubmissionResult } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -21,6 +21,42 @@ export async function completeTaskAction(taskId: string): Promise<ActionResult<C
     const data = await completeTask(taskId);
     refresh();
     return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+const validAnswers = (a: unknown): a is number[] => Array.isArray(a) && a.length <= 40 && a.every((x) => Number.isInteger(x) && x >= 0 && x < 10);
+
+/** Reading quiz: passing completes the chapter and unlocks the hands-on exercise. */
+export async function submitQuizAction(taskId: string, answers: number[]): Promise<ActionResult<QuizResult>> {
+  if (!UUID.test(taskId)) return { ok: false, error: "Invalid task id" };
+  if (!validAnswers(answers)) return { ok: false, error: "Answer every question first." };
+  try {
+    const data = await submitQuiz(taskId, answers);
+    if (data.passed) refresh();
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+export async function startExamAction(kind: ExamKind): Promise<ActionResult<Exam>> {
+  if (kind !== "placement" && kind !== "level") return { ok: false, error: "Unknown exam" };
+  try {
+    return { ok: true, data: await startExam(kind) };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+export async function submitExamAction(examId: string, answers: number[]): Promise<ActionResult<ExamResult>> {
+  if (!UUID.test(examId)) return { ok: false, error: "Invalid exam id" };
+  if (!validAnswers(answers)) return { ok: false, error: "Answer every question first." };
+  try {
+    // No refresh(): it would re-render the exam page as "already taken" and wipe the result screen. Every other page
+    // fetches with cache: "no-store", so the new level shows up as soon as the learner navigates.
+    return { ok: true, data: await submitExam(examId, answers) };
   } catch (e) {
     return { ok: false, error: message(e) };
   }

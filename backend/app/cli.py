@@ -96,14 +96,19 @@ def main() -> int:
         return 0
     if args.cmd == "reset-progress":
         if not args.yes:
-            print("this sets every skill level to 0 and deletes skill_history. Re-run with --yes to confirm.")
+            print("this sets every skill level to 0, deletes skill_history and restarts the learning path at level 1 "
+                  "(XP, exams and level completions are cleared). Re-run with --yes to confirm.")
             return 2
         from app.db import get_pool
 
         with get_pool().connection() as conn:
             n = conn.execute("update skills set level = 0, updated_at = now()").rowcount
             h = conn.execute("delete from skill_history").rowcount
-        print(f"{n} skills reset to 0; {h} history rows deleted")
+            conn.execute("delete from xp_events")
+            conn.execute("delete from level_completions")
+            conn.execute("delete from exams")
+            conn.execute("update learner_progress set current_level = 1, placement_taken_at = null, updated_at = now()")
+        print(f"{n} skills reset to 0; {h} history rows deleted; learning path restarted at level 1")
         return 0
     if args.cmd == "bitcoin":
         from app.bitcoin import ingest

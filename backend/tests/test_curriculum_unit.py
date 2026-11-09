@@ -29,12 +29,19 @@ def _two(d, f1, f2):  # apply two mutations in one lambda
     (lambda d: d["reading"].update(inspiration_article_ids=["A99"]), "not one of the provided article ids"),
     (lambda d: d["hands_on_task"].update(skill_slug="cooking"), "not a known skill slug"),
     (lambda d: d["market_insight"].update(thesis="See https://evil.test"), "do not include URLs"),
-    (lambda d: d["hands_on_task"].update(steps=d["hands_on_task"]["steps"][:2]), "at least 4"),
-    (lambda d: _two(d, lambda x: x["hands_on_task"].update(estimated_minutes=90), lambda x: x["reading"].update(estimated_minutes=60)), "135 minutes"),
+    (lambda d: d["hands_on_task"].update(steps=d["hands_on_task"]["steps"][:1]), "at least 2"),
+    (lambda d: d["hands_on_task"].update(steps=d["hands_on_task"]["steps"] * 2), "2-5"),
+    (lambda d: d["hands_on_task"].update(estimated_minutes=30), "must be 5-10"),
+    (lambda d: d["reading"].update(estimated_minutes=25), "less than or equal to 10"),
     (lambda d: d["reading"].update(extra="field"), "Extra inputs"),
-    (lambda d: [s.update(target_words=120) for s in d["reading"]["sections"]], "at least 1800"),
+    (lambda d: [s.update(target_words=100) for s in d["reading"]["sections"]], "600-1100"),
+    (lambda d: [s.update(target_words=340) for s in d["reading"]["sections"]], "600-1100"),
+    (lambda d: d["reading"].update(quiz=d["reading"]["quiz"][:2]), "at least 4"),
+    (lambda d: d["reading"]["quiz"][0].update(answer=4), "less than or equal to 3"),
+    (lambda d: d["reading"]["quiz"][0].update(options=["a", "a", "b", "c"]), "must all be different"),
+    (lambda d: d["reading"]["quiz"][1].update(question=d["reading"]["quiz"][0]["question"]), "questions must all be different"),
     (lambda d: d["hands_on_task"]["rubric"]["criteria"][1].update(name="CORRECT cosine function"), "must be unique"),
-    (lambda d: [c.update(max_points=1) for c in d["hands_on_task"]["rubric"]["criteria"]], "at least 10"),
+    (lambda d: [c.update(max_points=1) for c in d["hands_on_task"]["rubric"]["criteria"]], "at least 6"),
 ])
 def test_daily_plan_rejections(mutate, needle):
     d = daily_dict("A1")
@@ -42,6 +49,13 @@ def test_daily_plan_rejections(mutate, needle):
     with pytest.raises(ValidationError) as e:
         DailyPlanOutput.model_validate(d, context=CTX)
     assert needle in str(e.value)
+
+
+def test_the_learners_level_fixes_the_lesson_skill():
+    ctx = GroundingContext(CTX.article_ids, CTX.skill_slugs, required_skill="pytorch")
+    with pytest.raises(ValidationError, match="must both be 'pytorch'"):
+        DailyPlanOutput.model_validate(daily_dict("A1", skill="rag"), context=ctx)
+    DailyPlanOutput.model_validate(daily_dict("A1", skill="pytorch"), context=ctx)
 
 
 def test_localhost_urls_are_allowed_in_commands_but_real_urls_are_not():
@@ -135,3 +149,22 @@ def test_prompt_escapes_injection_and_lists_ids():
     assert "&lt;/articles&gt;" in p and p.count("</articles>") == 1
     assert 'id="A1"' in p and "pytorch | Pytorch | 20 | 80 | 0.75" in p
     assert p.rstrip().endswith("the 7-day plan.")
+
+
+# ---------------------------------------------------------------- learning path
+def test_ladder_is_valid_and_streaks_and_topics_are_deterministic():
+    from datetime import date, timedelta
+    from app.curriculum import levels
+    lad = levels.ladder()
+    assert lad.levels[0].title == "What is AI?" and lad.tier_name(lad.levels[-1].tier) == "Expert"
+    assert {q.tier for q in levels.placement_bank().questions} == set(lad.tiers)
+    assert levels.lesson_topic(lad.level(1), 1) == (lad.level(1).topics[1], False)
+    assert levels.lesson_topic(lad.level(1), 4) == (lad.level(1).topics[0], True)      # all topics done: review until the exam is passed
+    t = date(2026, 11, 9)
+    assert levels.streak([t, t - timedelta(1), t - timedelta(2), t - timedelta(4)], t) == 3
+    assert levels.streak([t - timedelta(1)], t) == 1 and levels.streak([t - timedelta(2)], t) == 0
+    import random
+    q = {"question": "q", "options": ["right", "b", "c", "d"], "answer": 0, "explanation": "e"}
+    s = levels.shuffle_question(q, random.Random(3))
+    assert s["options"][s["answer"]] == "right" and sorted(s["options"]) == sorted(q["options"])
+    assert levels.pass_mark(10, 80) == 8 and levels.pass_mark(4, 80) == 4 and levels.pass_mark(5, 80) == 4

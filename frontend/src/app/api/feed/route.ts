@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const cursor = sp.get("cursor") ?? undefined;
   const minStrength = sp.get("min_strength") ?? undefined;
   if (category && !CATEGORIES.has(category)) return Response.json({ error: "bad category" }, { status: 400 });
-  if (sort && sort !== "recent" && sort !== "relevance") return Response.json({ error: "bad sort" }, { status: 400 });
+  if (sort && sort !== "recent" && sort !== "relevance" && sort !== "for_you") return Response.json({ error: "bad sort" }, { status: 400 });
   if (skill && !/^[a-z0-9-]{1,40}$/.test(skill)) return Response.json({ error: "bad skill" }, { status: 400 });
   if (minStrength && minStrength !== "moderate" && minStrength !== "strong") return Response.json({ error: "bad min_strength" }, { status: 400 });
   const q: FeedQuery = { category: category as Category | undefined, sort: sort as FeedQuery["sort"], min_strength: minStrength as FeedQuery["min_strength"], skill, cursor };

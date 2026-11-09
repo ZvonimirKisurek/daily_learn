@@ -96,25 +96,27 @@ def check_prose(text: str, *, min_words: int, max_words: int | None = None, arti
     return problems
 
 
-def check_chapter(md: str, *, min_words: int, article_ids=None) -> list[str]:
-    """A textbook chapter: enough prose, real structure, valid code, math, grounded citations, no links."""
+def check_chapter(md: str, *, min_words: int, max_words: int | None = None, min_python: int = 0, article_ids=None) -> list[str]:
+    """A short daily lesson reading: the right length (5-10 minutes), real structure, valid code where code is required,
+    grounded citations, no links, and no quiz baked into the text (the quiz is separate and graded)."""
     md = strip_h1(md)  # a stray `# Title` is removed, not failed (generate_text(clean=strip_h1) saves the cleaned text)
     problems = []
     n = count_words(md)
     if n < min_words:
-        problems.append(f"the chapter has {n} words of prose (code excluded); the minimum is {min_words}. "
-                        f"Add at least {min_words - n + 150} words: deepen the explanations, add a worked example, intuition and pitfalls, then return the COMPLETE chapter")
+        problems.append(f"the reading has {n} words of prose (code excluded); the minimum is {min_words}. "
+                        f"Add about {min_words - n + 80} words: a clearer example or analogy, then return the COMPLETE reading")
+    if max_words and n > max_words:
+        problems.append(f"the reading has {n} words of prose; the maximum is {max_words} (it must be a 5-10 minute read). "
+                        "Cut repetition and side topics, then return the COMPLETE reading")
     if len(re.findall(r"^```", md, re.M)) % 2:
         problems.append("a code fence is never closed (unbalanced ``` lines)")
-    if len(re.findall(r"^## \S", md, re.M)) < 6:
-        problems.append("use at least 6 sections, each starting with a '## ' heading")
-    if not re.search(r"^##\s+.*(check your understanding|self-test|exercises)", md, re.M | re.I):
-        problems.append("end with a '## Check Your Understanding' section containing 4-6 questions")
+    if len(re.findall(r"^## \S", md, re.M)) < 3:
+        problems.append("use at least 3 sections, each starting with a '## ' heading")
+    if re.search(r"^##\s+.*(check your understanding|quiz|self-test)", md, re.M | re.I):
+        problems.append("remove the quiz/'Check Your Understanding' section: the quiz is shown separately")
     langs = [lang.strip().lower() for lang, _ in _FENCE.findall(md)]
-    if sum(1 for lang in langs if lang in ("python", "py", "python3")) < 2:
-        problems.append("include at least 2 fenced ```python code examples that are complete enough to run")
-    if not _MATH.search(strip_code(md)):
-        problems.append("include the key mathematics: inline $...$ and display $$...$$ LaTeX with an intuition for each formula")
+    if sum(1 for lang in langs if lang in ("python", "py", "python3")) < min_python:
+        problems.append(f"include at least {min_python} short fenced ```python example(s) that run as written")
     if external_urls(md):
         problems.append("contains URLs; never write links (cite supplied articles as [A3])")
     problems += citation_problems(md, article_ids, min_citations=1 if article_ids else 0)

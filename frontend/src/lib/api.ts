@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { BitcoinLatest, Completion, FeedPage, FeedQuery, Skill, SubmissionResult, TaskDetail, Today } from "./types";
+import type { BitcoinLatest, Completion, Exam, ExamKind, ExamResult, FeedPage, FeedQuery, Progress, QuizResult, Skill, SubmissionResult, TaskDetail, Today } from "./types";
 
 /**
  * Server-side client for the FastAPI backend.
@@ -53,6 +53,14 @@ export const getTask = (id: string) => request<TaskDetail>(`/api/tasks/${id}`);
 /** Grading is an LLM call that can take 10-60 s, so this one request gets a long timeout. */
 export const submitTask = (id: string, submission: string) =>
   request<SubmissionResult>(`/api/tasks/${id}/submit`, { method: "POST", body: JSON.stringify({ submission }) }, 150_000);
+/** Learning path: level, XP, streak, knowledge score, exam status and every level's status. */
+export const getProgress = () => request<Progress>("/api/progress");
+export const submitQuiz = (id: string, answers: number[]) =>
+  request<QuizResult>(`/api/tasks/${id}/quiz`, { method: "POST", body: JSON.stringify({ answers }) });
+/** A level exam may be written by the LLM on the spot (10-40 s): long timeout. */
+export const startExam = (kind: ExamKind) => request<Exam>("/api/exams/start", { method: "POST", body: JSON.stringify({ kind }) }, 150_000);
+export const submitExam = (id: string, answers: number[]) =>
+  request<ExamResult>(`/api/exams/${id}/submit`, { method: "POST", body: JSON.stringify({ answers }) });
 export const saveNotes = (id: string, notes: string) =>
   request<{ notes: string; updated_at: string | null }>(`/api/tasks/${id}/notes`, { method: "PUT", body: JSON.stringify({ notes }) });
 /** Phase 11: latest BTC price, the latest AI forecast (4 horizons) and recent crypto news. */

@@ -24,7 +24,7 @@ export default function FeedPage({ searchParams }: { searchParams: SearchParams 
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Intelligence Feed</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          De-duplicated articles from 130+ sources, ranked against your skill gaps with embeddings.
+          De-duplicated articles from 130+ sources. &quot;For you&quot; ranks them, with embeddings, against what you are learning on your current level.
         </p>
       </div>
       <Suspense fallback={<FeedSkeleton />}>
@@ -44,10 +44,10 @@ async function FeedContent({ searchParams }: { searchParams: SearchParams }) {
   const params = {
     category: category && CATEGORIES.includes(category) ? category : undefined,
     skill: skill && /^[a-z0-9-]{1,40}$/.test(skill) ? skill : undefined,
-    sort: sort === "relevance" ? "relevance" : undefined,
+    sort: sort === "relevance" || sort === "recent" ? sort : undefined,  // no sort = "For you" (matched to your level)
     match: match === "moderate" || match === "strong" ? match : undefined,
   };
-  const q: FeedQuery = { category: params.category as Category | undefined, skill: params.skill, sort: params.sort as FeedQuery["sort"], min_strength: params.match as FeedQuery["min_strength"] };
+  const q: FeedQuery = { category: params.category as Category | undefined, skill: params.skill, sort: (params.sort ?? "for_you") as FeedQuery["sort"], min_strength: params.match as FeedQuery["min_strength"] };
 
   const [data, err] = await attempt(Promise.all([getFeed(q), getSkills()])); // parallel, not sequential
   if (!data) return <ApiProblem error={err} />;
@@ -55,10 +55,17 @@ async function FeedContent({ searchParams }: { searchParams: SearchParams }) {
   // The client-side "Load more" calls our /api/feed proxy, which speaks API names: `match` becomes `min_strength`.
   const qp = new URLSearchParams(Object.entries(params).filter(([k, v]) => v && k !== "match") as [string, string][]);
   if (params.match) qp.set("min_strength", params.match);
+  if (!params.sort) qp.set("sort", "for_you");
   const query = qp.toString();
   return (
     <>
-      <FeedFilters params={params} skills={skills} />
+      {page.for_level && (
+        <p className="rounded-xl border border-violet/25 bg-violet/5 px-4 py-2.5 text-sm">
+          <span className="text-violet">Matched to Level {page.for_level.index} · {page.for_level.title}</span>
+          <span className="text-muted-foreground"> ({page.for_level.tier_name}): the closest stories to what you are learning now come first. Unfamiliar terms? They are coming on later levels.</span>
+        </p>
+      )}
+      <FeedFilters params={params} skills={skills} levelTitle={page.for_level ? `Level ${page.for_level.index}` : undefined} />
       <FeedList key={query} initial={page} query={query} />
     </>
   );

@@ -10,15 +10,16 @@ accidental double-fires never create duplicates or burn tokens. `force=True` reg
 from __future__ import annotations
 
 import logging
+import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from app.config import Settings, get_settings
-from app.curriculum import content_checks as cc, prompts, repository, roadmap as roadmap_mod
+from app.curriculum import content_checks as cc, levels, prompts, repository, roadmap as roadmap_mod
 from app.curriculum.llm import StructuredLLM
 from app.curriculum.ranking import rank_articles
-from app.curriculum.schemas import DailyPlanOutput, GroundingContext, WeeklyThemeOutput
+from app.curriculum.schemas import DailyPlanOutput, GroundingContext, LevelExamOutput, WeeklyThemeOutput
 from app.curriculum.types import RankedArticle, Skill
 
 log = logging.getLogger(__name__)
@@ -109,10 +110,38 @@ def generate_weekly_theme(
     return {"id": theme_id, "week_start": week_start.isoformat(), "payload": payload, "cached": False}
 
 
+def current_lesson(repo=repository, lad: levels.Ladder | None = None) -> dict:
+    """Today's place on the learning path: the current level and the topic of its next unfinished lesson.
+    A topic advances only when a lesson is FULLY finished, so a skipped or half-done day comes back."""
+    lad = lad or levels.ladder()
+    index, done = repo.learner_level()
+    lv = lad.level(index)
+    topic, review = levels.lesson_topic(lv, done)
+    return {"level": lv.index, "of": len(lad.levels), "tier": lv.tier, "tier_name": lad.tier_name(lv.tier), "title": lv.title,
+            "summary": lv.summary, "skill": lv.skill, "topics": lv.topics, "topic": topic, "review": review,
+            "lesson_number": done + 1, "lessons_required": lv.lessons_required,
+            "earlier_levels": [f"{x.index}. {x.title}" for x in lad.levels if x.index < lv.index]}
+
+
+def ensure_level_embedding(lesson: dict, embedder, repo=repository, settings: Settings | None = None) -> None:
+    """Embed the current level once: it is the query vector of the Intelligence Feed's "For you" sort. Best effort: the
+    feed falls back to the level's skill vector, so a failure here must never block the lesson."""
+    try:
+        if repo.has_level_embedding(lesson["level"]):
+            return
+        embedder = embedder or _default_embedder(settings or get_settings())
+        text = f"{lesson['title']} ({lesson['tier_name']} level): {lesson['summary']} Topics: {'; '.join(lesson['topics'])}"
+        repo.set_level_embedding(lesson["level"], embedder.embed([text])[0])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("could not embed level %s for the feed: %r", lesson["level"], exc)
+
+
 def generate_daily_briefing(
     *, day: date | None = None, force: bool = False, dry_run: bool = False,
     llm: StructuredLLM | None = None, embedder=None, repo=repository, settings: Settings | None = None,
 ) -> dict:
+    """The daily lesson. The weekly theme is still generated and shown, but the LESSON follows the learning path: the
+    learner's current level fixes the topic, the skill and how simply everything is explained."""
     settings = settings or get_settings()
     day = day or local_now(settings).date()
     existing = repo.get_briefing(day)
@@ -127,39 +156,43 @@ def generate_daily_briefing(
         theme_row = repo.get_weekly_theme(week_start)
         if theme_row is None and dry_run:
             raise NotEnoughData("dry run needs a stored weekly theme; run generate-weekly first")
-    theme = theme_row["payload"]
-    plan_entry = next(d for d in theme["daily_plan"] if d["day"] == day.isoweekday())
 
+    lesson = current_lesson(repo)
     skills = ensure_skill_embeddings(repo.load_skills(), embedder, repo, settings)
     articles = _select(skills, settings, repo, exclude=repo.used_reading_ids(),
-                       boost={plan_entry["skill_slug"]: 1.3})  # bias retrieval toward today's skill
-    user = prompts.build_daily_plan_prompt(day, theme, plan_entry, skills, articles, repo.recent_work(day), settings.candidate_window_days)
+                       boost={lesson["skill"]: 1.3})  # bias retrieval toward the level's skill
+    user = prompts.build_daily_plan_prompt(day, lesson, skills, articles, repo.recent_work(day), settings.candidate_window_days)
     if dry_run:  # prints stage 1 (the plan); stages 2-3 are written from the plan's output
         return {"system": prompts.DAILY_PLAN_SYSTEM, "user": user, "articles": len(articles)}
+    ensure_level_embedding(lesson, embedder, repo, settings)
 
     llm = llm or StructuredLLM(settings)
     by_id = {a.short_id: a for a in articles}
     window = settings.candidate_window_days
 
-    # Stage 1 - PLAN (structured): chapter outline, hands-on project with rubric, essay thesis.
+    # Stage 1 - PLAN (structured): reading outline + quiz, hands-on exercise with rubric, essay thesis.
+    grounding = _grounding(articles, skills)
+    grounding = GroundingContext(grounding.article_ids, grounding.skill_slugs, required_skill=lesson["skill"])
     plan = llm.generate(system=prompts.DAILY_PLAN_SYSTEM, user=user, output_model=DailyPlanOutput,
-                        grounding=_grounding(articles, skills), temperature=settings.temp_daily)
+                        grounding=grounding, temperature=settings.temp_daily)
     reading, hands_on, insight = plan.reading, plan.hands_on_task, plan.market_insight
     inspiration = [by_id[i] for i in reading.inspiration_article_ids]
     evidence = [by_id[i] for i in insight.evidence_article_ids]
-    chapter_ids = frozenset(a.short_id for a in inspiration)  # the chapter may cite only the articles it was shown
+    chapter_ids = frozenset(a.short_id for a in inspiration)  # the reading may cite only the articles it was shown
     essay_ids = frozenset(a.short_id for a in evidence)
+    min_python = 1 if lesson["level"] >= 5 else 0
 
     # Stages 2 and 3 are independent given the plan, so they run concurrently (halves the latency).
     def write_chapter() -> str:
         return llm.generate_text(
-            system=prompts.CHAPTER_SYSTEM, user=prompts.build_chapter_prompt(reading.model_dump(), theme, plan_entry, inspiration, window),
-            check=lambda t: cc.check_chapter(t, min_words=settings.chapter_min_words, article_ids=chapter_ids),
+            system=prompts.CHAPTER_SYSTEM, user=prompts.build_chapter_prompt(reading.model_dump(), lesson, inspiration, window),
+            check=lambda t: cc.check_chapter(t, min_words=settings.chapter_min_words, max_words=settings.chapter_max_words,
+                                             min_python=min_python, article_ids=chapter_ids),
             purpose="Chapter", temperature=settings.temp_chapter, clean=cc.strip_h1)
 
     def write_essay() -> str:
         return llm.generate_text(
-            system=prompts.INSIGHT_SYSTEM, user=prompts.build_insight_prompt(insight.model_dump(), evidence, window),
+            system=prompts.INSIGHT_SYSTEM, user=prompts.build_insight_prompt(insight.model_dump(), evidence, window, lesson),
             check=lambda t: cc.check_essay(t, min_words=settings.essay_min_words, max_words=settings.essay_max_words, article_ids=essay_ids),
             purpose="Essay", temperature=settings.temp_chapter, max_tokens=settings.llm_max_tokens, clean=cc.strip_h1)
 
@@ -167,12 +200,15 @@ def generate_daily_briefing(
         chapter_f, essay_f = pool.submit(write_chapter), pool.submit(write_essay)
         chapter, essay = chapter_f.result(), essay_f.result()
 
+    rng = random.Random(f"{day}-{lesson['level']}")
+    quiz = [levels.shuffle_question(q.model_dump(), rng) for q in reading.quiz]  # answer key: stored server-side only
     payload = {
+        "lesson": {k: lesson[k] for k in ("level", "of", "tier", "tier_name", "title", "topic", "review", "lesson_number", "lessons_required")},
         "morning_reading": {
             "chapter_title": reading.chapter_title, "skill_slug": reading.skill_slug, "difficulty": reading.difficulty,
             "learning_goals": reading.learning_goals, "estimated_minutes": reading.estimated_minutes,
             "word_count": cc.count_words(chapter), "section_headings": [s.heading for s in reading.sections],
-            "inspiration": [_article_ref(a) for a in inspiration],
+            "inspiration": [_article_ref(a) for a in inspiration], "quiz_questions": len(quiz),
         },
         "hands_on_task": hands_on.model_dump(),
         "market_insight": {
@@ -182,15 +218,30 @@ def generate_daily_briefing(
     }
     tasks = [
         {"kind": "reading", "skill_slug": reading.skill_slug, "difficulty": reading.difficulty, "title": reading.chapter_title,
-         "reading_content": chapter},
+         "reading_content": chapter, "quiz": quiz},
         {"kind": "hands_on", "skill_slug": hands_on.skill_slug, "difficulty": hands_on.difficulty, "title": hands_on.title,
          "evaluation_rubric": hands_on.rubric.model_dump()},
         {"kind": "insight", "skill_slug": insight.skill_slug, "difficulty": 1, "title": insight.headline},
     ]
-    briefing_id = repo.save_briefing(day, str(theme_row["id"]), payload, tasks, replace=force)
-    log.info("daily briefing saved for %s (chapter %d words, essay %d words)", day, payload["morning_reading"]["word_count"],
-             payload["market_insight"]["word_count"])
+    briefing_id = repo.save_briefing(day, str(theme_row["id"]), payload, tasks, replace=force, level=lesson["level"])
+    log.info("daily lesson saved for %s: level %d, %r (reading %d words, essay %d words)", day, lesson["level"], lesson["topic"],
+             payload["morning_reading"]["word_count"], payload["market_insight"]["word_count"])
     return {"id": briefing_id, "day": day.isoformat(), "payload": payload, "cached": False}
+
+
+def generate_level_exam(level_index: int, recent_titles: list[str], *, llm, settings: Settings | None = None,
+                        lad: levels.Ladder | None = None) -> list[dict]:
+    """A fresh exam for one level, written by the LLM, validated, then SHUFFLED by code. Returns the full questions
+    (with the answer key) for the caller to store; the API only ever serves the questions."""
+    settings = settings or get_settings()
+    lad = lad or levels.ladder()
+    lv = lad.level(level_index)
+    out = llm.generate(
+        system=prompts.LEVEL_EXAM_SYSTEM,
+        user=prompts.build_level_exam_prompt({**lv.model_dump(), "tier_name": lad.tier_name(lv.tier)}, lad.exam_questions, recent_titles),
+        output_model=LevelExamOutput, grounding=GroundingContext(frozenset(), frozenset()), temperature=settings.temp_daily)
+    rng = random.Random()
+    return [levels.shuffle_question(q.model_dump(), rng) for q in out.questions]
 
 
 def _default_embedder(settings: Settings):

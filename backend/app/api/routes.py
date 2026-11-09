@@ -13,9 +13,12 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.api import queries
 from app.api.deps import Cfg, Conn, Pool, QueueUnavailable, get_enqueue, get_llm, require_token
-from app.api.schemas import BitcoinLatestOut, CompletionOut, NotesIn, NotesOut, FeedPage, QueueOut, SkillOut, SubmissionIn, SubmissionOut, TaskDetailOut, TodayOut
+from app.api.schemas import (AnswersIn, BitcoinLatestOut, CompletionOut, ExamOut, ExamResultOut, ExamStartIn, NotesIn, NotesOut, FeedPage,
+                             ProgressOut, QueueOut, QuizOut, SkillOut, SubmissionIn, SubmissionOut, TaskDetailOut, TodayOut)
+from app.curriculum import levels
 from app.curriculum.errors import LLMBudgetExceeded, LLMError
 from app.curriculum.evaluation import evaluate
+from app.curriculum.generators import generate_level_exam
 from app.ingestion.models import Category
 
 # Auth applies to the whole router; /health lives outside it.
@@ -56,6 +59,10 @@ async def complete_task(task_id: UUID, conn: Conn):
         result = await queries.complete_task(conn, task_id)
     except queries.SubmissionRequired:
         raise HTTPException(status.HTTP_409_CONFLICT, "hands-on tasks are completed by submitting your work for evaluation") from None
+    except queries.QuizRequired:
+        raise HTTPException(status.HTTP_409_CONFLICT, "this reading is completed by passing its quiz") from None
+    except queries.Locked as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, exc.detail) from None
     if result is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
     return result
@@ -119,6 +126,59 @@ async def _refund(pool, task_id: UUID) -> None:
         await queries.refund_attempt(conn, task_id)
 
 
+@router.post("/tasks/{task_id}/quiz", response_model=QuizOut)
+async def submit_quiz(task_id: UUID, body: AnswersIn, conn: Conn):
+    """Grade the reading quiz (deterministic: answer keys never leave the server). Passing completes the reading and
+    unlocks the hands-on exercise. Unlimited attempts, but a failed attempt does not reveal the right options."""
+    try:
+        return await queries.submit_quiz(conn, task_id, body.answers, levels.ladder().pass_percent)
+    except queries.SubmissionRejected as exc:
+        raise HTTPException(exc.status, exc.detail) from None
+
+
+# ----------------------------------------------------------------------------------------------- learning path
+@router.get("/progress", response_model=ProgressOut)
+async def progress(conn: Conn, cfg: Cfg):
+    """Level, XP, streak, knowledge score, exam status and the whole path (completed / current / locked)."""
+    return await queries.fetch_progress(conn, _today(cfg), cfg.timezone, levels.ladder(), cfg.exam_cooldown_hours)
+
+
+@router.post("/exams/start", response_model=ExamOut)
+async def start_exam(body: ExamStartIn, pool: Pool, cfg: Cfg, llm: Annotated[object, Depends(get_llm)]):
+    """Placement: a shuffled copy of the static question bank. Level: unlocks after the level's lessons are finished;
+    an unanswered exam is reused, otherwise the LLM writes a fresh one (10-40 s, outside any transaction)."""
+    lad, today = levels.ladder(), _today(cfg)
+    bank = None
+    if body.kind == "placement":
+        import random
+        rng = random.Random()
+        bank = [levels.shuffle_question(q.model_dump(), rng) for q in levels.placement_bank().questions]
+    try:
+        async with pool.connection() as conn:
+            prep = await queries.prepare_exam(conn, body.kind, today, cfg.timezone, lad, cfg.exam_cooldown_hours, bank)
+    except queries.SubmissionRejected as exc:
+        raise HTTPException(exc.status, exc.detail) from None
+    if "exam" in prep:
+        return prep["exam"]
+    try:
+        questions = await run_in_threadpool(generate_level_exam, prep["generate"], prep["titles"], llm=llm, settings=cfg, lad=lad)
+    except LLMBudgetExceeded as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"AI budget reached: {exc}") from None
+    except (LLMError, openai.OpenAIError) as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"could not write the exam ({exc.__class__.__name__}); try again") from None
+    async with pool.connection() as conn:
+        return await queries.store_level_exam(conn, prep["generate"], questions, lad)
+
+
+@router.post("/exams/{exam_id}/submit", response_model=ExamResultOut)
+async def submit_exam(exam_id: UUID, body: AnswersIn, conn: Conn):
+    """Grade an exam by its stored answer key. Placement can only move you UP; a passed level exam unlocks the next level."""
+    try:
+        return await queries.submit_exam(conn, exam_id, body.answers, levels.ladder(), levels.placement_bank().tier_pass)
+    except queries.SubmissionRejected as exc:
+        raise HTTPException(exc.status, exc.detail) from None
+
+
 @router.get("/skills", response_model=list[SkillOut])
 async def skills(conn: Conn):
     return await queries.fetch_skills(conn)
@@ -129,14 +189,19 @@ async def feed(
     conn: Conn, cfg: Cfg,
     category: Annotated[Category | None, Query(description="research | industry_news | engineering_blog | community | newsletter | researcher")] = None,
     skill: Annotated[str | None, Query(max_length=40, pattern=r"^[a-z0-9-]+$", description="only articles whose best-matching skill is this slug")] = None,
-    sort: Literal["recent", "relevance"] = "recent",
+    sort: Literal["recent", "relevance", "for_you"] = "recent",
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     cursor: Annotated[str | None, Query(max_length=200)] = None,
     days: Annotated[int, Query(ge=1, le=60)] = 14,
     min_strength: Annotated[Literal["moderate", "strong"] | None, Query(description="hide articles weaker than this skill-match bucket")] = None,
 ):
+    for_level, vec = (None, None)
+    if sort == "for_you":
+        for_level, vec = await queries.level_query_vector(conn, levels.ladder())
     try:
-        return await queries.fetch_feed(conn, cfg, category=category, skill=skill, sort=sort, limit=limit, cursor=cursor, days=days, min_strength=min_strength)
+        page = await queries.fetch_feed(conn, cfg, category=category, skill=skill, sort=sort, limit=limit, cursor=cursor, days=days,
+                                        min_strength=min_strength, level_vec=vec)
+        return {**page, "for_level": for_level if vec is not None else None}
     except queries.BadCursor as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 

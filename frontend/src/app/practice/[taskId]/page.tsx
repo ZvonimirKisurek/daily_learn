@@ -34,9 +34,14 @@ async function Content({ params }: { params: Promise<{ taskId: string }> }) {
         <header className="mb-8 max-w-3xl">
           <div className="eyebrow mb-3 flex items-center gap-2 !text-primary"><FlaskConical className="size-3.5" /> Hands-on lab · {skillLabel(spec.skill_slug)}</div>
           <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl"><span className="gradient-text">{spec.title}</span></h1>
-          <div className="mt-4 flex flex-wrap gap-2"><Badge variant="outline">{spec.estimated_minutes} min</Badge><Badge variant="outline">graded by AI review</Badge>{detail.task.completed && <Badge variant="primary">passed</Badge>}</div>
+          <div className="mt-4 flex flex-wrap gap-2"><Badge variant="outline">{spec.estimated_minutes} min</Badge><Badge variant="outline">graded by AI review</Badge>{detail.lesson && <Badge variant="violet">Level {detail.lesson.level} · {detail.lesson.title}</Badge>}{detail.task.completed && <Badge variant="primary">passed</Badge>}</div>
         </header>
       </Reveal>
+      {detail.locked && !detail.task.completed && (
+        <p role="status" className="mb-6 rounded-xl border border-warn/30 bg-warn/5 px-4 py-3 text-sm text-warn">
+          Locked: {detail.locked} You can read the exercise now; submitting unlocks after the quiz.
+        </p>
+      )}
       <div className="grid gap-8 lg:grid-cols-2">
         <SpecPanel spec={spec} />
         <div className="lg:sticky lg:top-20 lg:self-start"><Workspace detail={detail} /></div>

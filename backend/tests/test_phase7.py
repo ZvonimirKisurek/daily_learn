@@ -26,15 +26,16 @@ EVAL_CTX = GroundingContext(frozenset(), frozenset(), None, RUBRIC)
 
 # ------------------------------------------------------------------ content checks
 def test_a_good_chapter_and_essay_pass_every_check():
-    assert cc.check_chapter(chapter_text(), min_words=1500, article_ids=frozenset({"A1"})) == []
+    assert cc.check_chapter(chapter_text(), min_words=600, max_words=1250, min_python=1, article_ids=frozenset({"A1"})) == []
     assert cc.check_essay(essay_text(), min_words=450, max_words=800, article_ids=IDS) == []
 
 
 @pytest.mark.parametrize("mutate,needle", [
     (lambda t: t[:1500], "words of prose"),
-    (lambda t: t.replace("## Check Your Understanding", "## The end"), "Check Your Understanding"),
-    (lambda t: t.replace("```python", "```text"), "at least 2 fenced ```python"),
-    (lambda t: t.replace("$$", "").replace("$", ""), "mathematics"),
+    (lambda t: t + "\n\n" + prose(700), "maximum is 1250"),
+    (lambda t: t + "\n\n## Check Your Understanding\n\n1. Why?", "remove the quiz"),
+    (lambda t: t.replace("```python", "```text"), "at least 1 short fenced ```python"),
+    (lambda t: t.replace("## ", "### "), "at least 3 sections"),
     (lambda t: t + "\nSee https://blog.example.com/post", "URLs"),
     (lambda t: t + " [A9]", "unknown article ids"),
     (lambda t: t.replace("[A1]", ""), "at least 1 required"),
@@ -42,7 +43,7 @@ def test_a_good_chapter_and_essay_pass_every_check():
     (lambda t: t + "\n```python\nx = 1\n", "never closed"),
 ])
 def test_chapter_checks_catch_each_defect(mutate, needle):
-    problems = cc.check_chapter(mutate(chapter_text()), min_words=1500, article_ids=frozenset({"A1"}))
+    problems = cc.check_chapter(mutate(chapter_text()), min_words=600, max_words=1250, min_python=1, article_ids=frozenset({"A1"}))
     assert any(needle in p for p in problems), problems
 
 
@@ -50,7 +51,7 @@ def test_level_1_headings_are_stripped_not_failed_but_code_comments_survive():
     code = "```python\n# load the data\nx = 1\n```\n"
     out = cc.strip_h1("# Title\n\nbody\n# Another\n" + code)
     assert out == "body\n" + code.rstrip("\n") and "# load the data" in out and "Title" not in out
-    assert cc.check_chapter("# Title\n" + chapter_text(), min_words=1500, article_ids=frozenset({"A1"})) == []
+    assert cc.check_chapter("# Title\n" + chapter_text(), min_words=600, max_words=1250, article_ids=frozenset({"A1"})) == []
     assert cc.check_essay("# Title\n\n" + essay_text(), min_words=450, max_words=800, article_ids=IDS) == []
 
 
@@ -83,15 +84,15 @@ def test_localhost_is_not_an_external_url():
 
 # ------------------------------------------------------------------ text generation with measurement + repair
 def chapter_check(t):
-    return cc.check_chapter(t, min_words=1500, article_ids=frozenset({"A1"}))
+    return cc.check_chapter(t, min_words=600, max_words=1250, article_ids=frozenset({"A1"}))
 
 
 def test_short_chapter_is_expanded_after_the_exact_shortfall_is_reported():
     sent = []
-    short = chapter_text(words=700)
+    short = chapter_text(words=300)
     llm, _ = make_llm([completion(short), completion(chapter_text())], captured=sent, usage=NullUsage())
     out = llm.generate_text(system="S", user="U", check=chapter_check, purpose="Chapter", temperature=0.5)
-    assert cc.count_words(out) >= 1500 and len(sent) == 2
+    assert cc.count_words(out) >= 600 and len(sent) == 2
     feedback = sent[1]["messages"][-1]["content"]
     assert "words of prose" in feedback and "COMPLETE" in feedback                      # the exact problem, and "return everything"
     assert sent[1]["messages"][-2] == {"role": "assistant", "content": short}           # the model sees its own text
@@ -99,7 +100,7 @@ def test_short_chapter_is_expanded_after_the_exact_shortfall_is_reported():
 
 
 def test_text_generation_gives_up_after_max_repairs_and_never_returns_bad_text():
-    llm, sent = make_llm([completion(chapter_text(words=500))] * 3, usage=NullUsage(), llm_max_repairs=2)
+    llm, sent = make_llm([completion(chapter_text(words=200))] * 3, usage=NullUsage(), llm_max_repairs=2)
     with pytest.raises(LLMValidationFailed, match="Chapter still failing"):
         llm.generate_text(system="S", user="U", check=chapter_check, purpose="Chapter")
     assert len(sent) == 3
@@ -188,18 +189,22 @@ def test_chapter_prompt_shows_only_the_inspiration_articles_so_it_cannot_cite_ot
     import numpy as np
     from app.curriculum.types import Candidate, RankedArticle
     mk = lambda i: RankedArticle(f"A{i}", Candidate(f"id{i}", f"Title {i}", "s", "u", datetime.now(timezone.utc), "s", "Src", "research", 1.0, None, np.zeros(2)), 1.0, "rag", 0.3)  # noqa: E731
+    from tests.factories import lesson_dict, quiz_dict
     plan = {"chapter_title": "T", "skill_slug": "rag", "difficulty": 2, "learning_goals": ["g"],
-            "sections": [{"heading": "H", "key_points": "k", "target_words": 300}]}
-    theme = {"title": "t", "rationale": "r", "learning_objectives": ["o"], "core_questions": ["q"]}
-    p = prompts.build_chapter_prompt(plan, theme, {}, [mk(2)], 7)
+            "sections": [{"heading": "H", "key_points": "k", "target_words": 300}], "quiz": quiz_dict()}
+    p = prompts.build_chapter_prompt(plan, lesson_dict(3), [mk(2)], 7)
     assert 'id="A2"' in p and 'id="A1"' not in p and "(~300 words)" in p
+    assert 'level="3"' in p and "1. What is AI?" in p and "Question 1:" in p and "Code is optional" in p   # pitched at the level
+    assert "answer" not in p.split("<quiz>")[1].split("</quiz>")[0].lower()                                  # the key is not shown
 
 
 def test_system_prompts_encode_the_requested_professor_behaviour():
     assert "professor" in prompts.PROFESSOR and "COMPLETE BEGINNER" in prompts.LEARNER_PROFILE
     assert "450-800 words of CONTINUOUS PROSE" in prompts.WEEKLY_SYSTEM and "no bullet lists" in prompts.WEEKLY_SYSTEM
-    assert "at least 1,500 words of prose" in prompts.CHAPTER_SYSTEM and "$$...$$" in prompts.CHAPTER_SYSTEM and "valid Python syntax" in prompts.CHAPTER_SYSTEM
-    assert "brutally specific" in prompts.DAILY_PLAN_SYSTEM and "NEVER invent floating-point" in prompts.DAILY_PLAN_SYSTEM and "rubric" in prompts.DAILY_PLAN_SYSTEM
+    assert "600-1,100 words of prose" in prompts.CHAPTER_SYSTEM and "$$...$$" in prompts.CHAPTER_SYSTEM and "valid Python" in prompts.CHAPTER_SYSTEM
+    assert "TOTAL BEGINNER" in prompts.LESSON_PROFILE and "5-10 minute" in prompts.DAILY_PLAN_SYSTEM and "quiz" in prompts.DAILY_PLAN_SYSTEM
+    assert "NEVER invent precise numeric" in prompts.DAILY_PLAN_SYSTEM and "rubric" in prompts.DAILY_PLAN_SYSTEM
+    assert "<learner_level>" in prompts.INSIGHT_SYSTEM and "Exactly 4 options" in prompts.LEVEL_EXAM_SYSTEM
     assert "500-700 words" in prompts.INSIGHT_SYSTEM and "career implications" in prompts.INSIGHT_SYSTEM
 
 
@@ -217,10 +222,10 @@ def test_daily_generation_runs_plan_then_chapter_and_essay_with_the_configured_l
         def generate_text(self, **kw):
             calls.append(("text", kw["purpose"], kw.get("temperature")))
             if kw["purpose"] == "Chapter":
-                assert any("minimum is 1200" in p for p in kw["check"](chapter_text(words=300)))   # the configured minimum reaches the check
+                assert any("minimum is 700" in p for p in kw["check"](chapter_text(words=300)))    # the configured minimum reaches the check
             return super().generate_text(**kw)
 
-    s = Settings(timezone="UTC", min_candidates=10, chapter_min_words=1200, temp_daily=0.31, temp_chapter=0.52)
+    s = Settings(timezone="UTC", min_candidates=10, chapter_min_words=700, temp_daily=0.31, temp_chapter=0.52)
     generators.generate_daily_briefing(day=date(2026, 10, 28), llm=Spy(), embedder=FakeEmbedder(), settings=s)
     assert calls[0] == ("json", "WeeklyThemeOutput", 0.6)                       # self-healed weekly theme first
     plan_call = calls[1]
@@ -237,7 +242,7 @@ def test_migration_zeroes_skills_and_adds_the_columns(db):
         c.execute("update skills set level = 33")
         c.execute("insert into skill_history (skill_id, level, delta) select id, 1, 1 from skills limit 1")
         c.execute(data_part)
-        assert c.execute("select max(level), count(*) from skills").fetchone() == (0, 7)
+        assert c.execute("select max(level), count(*) from skills").fetchone() == (0, 8)
         assert c.execute("select count(*) from skill_history").fetchone()[0] == 0
         cols = {r[0] for r in c.execute("select column_name from information_schema.columns where table_name='daily_tasks'")}
     assert {"reading_content", "evaluation_rubric", "user_submission", "ai_evaluation_feedback", "evaluation_result",
@@ -254,6 +259,6 @@ def test_reset_progress_cli_requires_confirmation(db):
     with psycopg.connect(db) as c:
         assert c.execute("select min(level) from skills").fetchone()[0] == 40
     yes = subprocess.run([sys.executable, "-m", "app.cli", "reset-progress", "--yes"], env=env, capture_output=True, text=True)
-    assert yes.returncode == 0 and "7 skills reset to 0" in yes.stdout
+    assert yes.returncode == 0 and "8 skills reset to 0" in yes.stdout
     with psycopg.connect(db) as c:
         assert c.execute("select max(level) from skills").fetchone()[0] == 0

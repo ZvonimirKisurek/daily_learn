@@ -39,6 +39,7 @@ class GroundingContext:
     skill_slugs: frozenset[str]
     required_focus: frozenset[str] | None = None  # set in roadmap mode: focus_skills must equal this
     rubric: "Rubric | None" = None  # set when GRADING: the evaluation must score exactly these criteria
+    required_skill: str | None = None  # set for a daily lesson: the learner's current level fixes the skill
 
 
 def _grounding(info: ValidationInfo) -> GroundingContext | None:
@@ -127,15 +128,15 @@ class RubricCriterion(_Strict):
 
 class Rubric(_Strict):
     pass_score: int = Field(ge=5, le=9, description="Minimum overall score (1-10) to pass")
-    criteria: list[RubricCriterion] = Field(min_length=3, max_length=6)
+    criteria: list[RubricCriterion] = Field(min_length=2, max_length=6)
 
     @model_validator(mode="after")
     def _well_formed(self) -> Rubric:
         names = [c.name.strip().lower() for c in self.criteria]
         if len(set(names)) != len(names):
             raise ValueError("rubric criterion names must be unique")
-        if sum(c.max_points for c in self.criteria) < 10:
-            raise ValueError("rubric max_points must sum to at least 10")
+        if sum(c.max_points for c in self.criteria) < 6:
+            raise ValueError("rubric max_points must sum to at least 6")
         return self
 
 
@@ -164,35 +165,67 @@ class HandsOnTask(_Strict):
     objective: Text = Field(max_length=500)
     prerequisites: list[Text] = Field(max_length=5, description="Things to install or know first; may be empty")
     project_layout: list[Text] = Field(min_length=1, max_length=8, description="Every file the project will contain, e.g. 'lab/embed.py'")
-    steps: list[HandsOnStep] = Field(min_length=4, max_length=10, description="Step 1, Step 2, ... in order")
+    steps: list[HandsOnStep] = Field(min_length=2, max_length=10, description="Step 1, Step 2, ... in order (2-5 for a 5-10 minute exercise)")
     deliverable: Text = Field(max_length=300, description="A checkable artifact: a script, a passing test, a printed table")
     submission_instructions: Text = Field(max_length=500, description="Exactly what to paste for grading (the code AND the terminal output of running it)")
     docs_to_consult: list[Text] = Field(max_length=4, description="Official docs by library + symbol name, no URLs; may be empty")
-    estimated_minutes: int = Field(ge=20, le=90)
+    estimated_minutes: int = Field(ge=5, le=90, description="5-10 for a daily lesson")
     stretch_goal: Text | None = Field(description="Optional extension, or null")
     rubric: Rubric
+
+
+# ------------------------------------------------------------------------------ multiple choice (reading quiz, level exam)
+class QuizQuestion(_Strict):
+    question: Text = Field(max_length=300)
+    options: list[Text] = Field(min_length=4, max_length=4, description="Exactly 4 options, one correct; distractors are plausible misconceptions")
+    answer: int = Field(ge=0, le=3, description="Index (0-3) of the correct option")
+    explanation: Text = Field(max_length=400, description="Why the correct option is right (and the tempting wrong one is wrong)")
+
+    @model_validator(mode="after")
+    def _distinct(self) -> QuizQuestion:
+        if len({o.strip().lower() for o in self.options}) != len(self.options):
+            raise ValueError("the 4 options must all be different")
+        return self
+
+
+def _unique_questions(questions: list[QuizQuestion]) -> None:
+    if len({q.question.strip().lower() for q in questions}) != len(questions):
+        raise ValueError("questions must all be different")
+
+
+class LevelExamOutput(_Strict):
+    """A level-completion exam. The model writes it; code shuffles the options and grades it (levels.grade_choices)."""
+    questions: list[QuizQuestion] = Field(min_length=8, max_length=12)
+
+    @model_validator(mode="after")
+    def _ok(self) -> LevelExamOutput:
+        _unique_questions(self.questions)
+        return self
 
 
 # ------------------------------------------------------------------------------ daily plan (stage 1 of the chain)
 class ChapterSection(_Strict):
     heading: Text = Field(max_length=80)
-    key_points: Text = Field(max_length=500, description="What this section must establish: concepts, the intuition, the formula, the example")
-    target_words: int = Field(ge=120, le=500)
+    key_points: Text = Field(max_length=500, description="What this section must establish: the idea, the analogy, the example")
+    target_words: int = Field(ge=80, le=350)
 
 
 class ReadingPlan(_Strict):
     chapter_title: Text = Field(max_length=100)
     skill_slug: SkillSlug
     difficulty: int = Field(ge=1, le=3, description="1=from scratch, 3=research-level")
-    learning_goals: list[Text] = Field(min_length=3, max_length=5, description="After reading you can... (observable)")
-    sections: list[ChapterSection] = Field(min_length=7, max_length=10, description="Ordered outline; include worked examples, pitfalls and a final 'Check Your Understanding'")
-    inspiration_article_ids: list[ArticleRef] = Field(min_length=1, max_length=3, description="Supplied articles to use as case studies or motivation")
-    estimated_minutes: int = Field(ge=20, le=60)
+    learning_goals: list[Text] = Field(min_length=2, max_length=4, description="After reading you can... (observable)")
+    sections: list[ChapterSection] = Field(min_length=3, max_length=6, description="Ordered outline of a 5-10 minute read; no quiz section (the quiz is separate)")
+    inspiration_article_ids: list[ArticleRef] = Field(min_length=1, max_length=3, description="Supplied articles to use as real-world examples")
+    estimated_minutes: int = Field(ge=5, le=10)
+    quiz: list[QuizQuestion] = Field(min_length=4, max_length=5, description="Checks understanding of THIS reading; must be answerable from it")
 
     @model_validator(mode="after")
     def _budget(self) -> ReadingPlan:
-        if sum(s.target_words for s in self.sections) < 1800:
-            raise ValueError("section target_words must sum to at least 1800 so the finished chapter clears the 1500-word minimum")
+        total = sum(s.target_words for s in self.sections)
+        if not 600 <= total <= 1100:
+            raise ValueError(f"section target_words must sum to 600-1100 (a 5-10 minute read), got {total}")
+        _unique_questions(self.quiz)
         return self
 
 
@@ -209,10 +242,17 @@ class DailyPlanOutput(_Strict):
     market_insight: InsightPlan
 
     @model_validator(mode="after")
-    def _time_budget(self) -> DailyPlanOutput:
-        total = self.reading.estimated_minutes + self.hands_on_task.estimated_minutes
-        if total > 135:
-            raise ValueError(f"reading + hands-on must fit in 135 minutes, got {total}")
+    def _time_budget(self, info: ValidationInfo) -> DailyPlanOutput:
+        h = self.hands_on_task
+        if not 5 <= h.estimated_minutes <= 10:
+            raise ValueError(f"hands_on_task.estimated_minutes must be 5-10 (a short daily exercise), got {h.estimated_minutes}")
+        if len(h.steps) > 5:
+            raise ValueError(f"hands_on_task has {len(h.steps)} steps; a 5-10 minute exercise has 2-5")
+        if not 2 <= len(h.rubric.criteria) <= 4:
+            raise ValueError("hands_on_task.rubric must have 2-4 criteria")
+        g = _grounding(info)
+        if g is not None and g.required_skill and {self.reading.skill_slug, h.skill_slug} != {g.required_skill}:
+            raise ValueError(f"reading.skill_slug and hands_on_task.skill_slug must both be {g.required_skill!r} (the learner's current level)")
         return self
 
 

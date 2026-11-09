@@ -7,6 +7,7 @@ import { slugify } from "@/lib/slug";
 import type { TaskDetail } from "@/lib/types";
 import { ExternalLink } from "@/components/mission/task-bodies";
 import { Reveal } from "@/components/motion";
+import { ChapterQuiz } from "./chapter-quiz";
 import { FinishChapter } from "./finish-chapter";
 import { ReadingProgress } from "./reading-progress";
 
@@ -22,7 +23,7 @@ export function ReadingView({ detail }: { detail: TaskDetail }) {
 
       <Reveal>
         <header className="mb-10 max-w-3xl">
-          <div className="eyebrow mb-3 flex items-center gap-2 !text-info"><ScrollText className="size-3.5" /> Chapter · {skillLabel(r.skill_slug)}</div>
+          <div className="eyebrow mb-3 flex items-center gap-2 !text-info"><ScrollText className="size-3.5" /> {detail.lesson ? `Level ${detail.lesson.level} · ${detail.lesson.title}` : "Chapter"} · {skillLabel(r.skill_slug)}</div>
           <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl"><span className="gradient-text">{r.chapter_title}</span></h1>
           <div className="mt-5 flex flex-wrap items-center gap-2.5 text-sm text-muted-foreground">
             <Badge variant="outline"><Clock className="size-3" /> {r.estimated_minutes} min</Badge>
@@ -62,7 +63,10 @@ export function ReadingView({ detail }: { detail: TaskDetail }) {
               <p className="mt-2 text-xs text-muted-foreground">Optional: the chapter is self-contained. These are where the real-world examples came from.</p>
             </aside>
           )}
-          <div className="max-w-[72ch]"><FinishChapter taskId={detail.task.id} completed={detail.task.completed} skillSlug={r.skill_slug} /></div>
+          <div className="max-w-[72ch]">
+            {detail.quiz ? <ChapterQuiz taskId={detail.task.id} questions={detail.quiz} completed={detail.task.completed} score={detail.task.quiz_score} />
+              : <FinishChapter taskId={detail.task.id} completed={detail.task.completed} skillSlug={r.skill_slug} />}
+          </div>
         </article>
       </div>
     </div>

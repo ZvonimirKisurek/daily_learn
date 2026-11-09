@@ -44,7 +44,7 @@ def test_every_schema_satisfies_openai_strict_mode_rules(model):
 
 def test_limits_move_into_descriptions_and_nullable_fields_stay_required():
     d = strict_schema(DailyPlanOutput)["$defs"]["HandsOnTask"]["properties"]
-    assert "4-10 items" in d["steps"]["description"] and "100 characters" in d["title"]["description"]
+    assert "2-10 items" in d["steps"]["description"] and "100 characters" in d["title"]["description"]
     assert "stretch_goal" in strict_schema(DailyPlanOutput)["$defs"]["HandsOnTask"]["required"]  # optional => nullable, not omitted
 
 

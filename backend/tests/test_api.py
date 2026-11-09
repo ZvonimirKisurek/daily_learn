@@ -35,9 +35,19 @@ async def client(db, monkeypatch):
     get_settings.cache_clear()
 
 
-def generate_today():
+def generate_today(level: int = 16, legacy: bool = True):
+    """Today's lesson for a learner on `level` (16 teaches the `rag` skill). legacy=True turns it into a briefing made
+    before the learning path (no quiz, no lesson order), which the completion/grading-mechanics tests below rely on;
+    the gated flow is tested in the learning-path section."""
+    from app.db import get_pool
+    with get_pool().connection() as conn:
+        conn.execute("update learner_progress set current_level = %s", (level,))
     s = Settings(timezone="UTC", min_candidates=10, prompt_article_count=20)
     generators.generate_daily_briefing(day=TODAY, llm=FakeLLM(), embedder=FakeEmbedder(), settings=s)
+    if legacy:
+        with get_pool().connection() as conn:
+            conn.execute("update daily_briefings set level = null")
+            conn.execute("update daily_tasks set quiz = null")
 
 
 def task_ids(db):
@@ -51,7 +61,7 @@ async def test_today_pending_before_generation(client):
     assert r.status_code == 200
     body = r.json()
     assert body["state"] == "pending" and body["briefing"] is None and body["weekly_theme"] is None
-    assert len(body["skills"]) == 7
+    assert len(body["skills"]) == 8
 
 
 async def test_today_ready_has_tasks_theme_and_resolved_urls(client, db):
@@ -65,7 +75,7 @@ async def test_today_ready_has_tasks_theme_and_resolved_urls(client, db):
     assert [t["has_content"] for t in body["briefing"]["tasks"]] == [True, False, False]  # the chapter is fetched on demand, not in /today
     assert body["weekly_theme"]["theme"]["title"] and len(body["weekly_theme"]["theme"]["daily_plan"]) == 7
     assert set(body) == {"date", "state", "briefing", "weekly_theme", "skills"}  # response_model fixes the contract
-    assert set(body["briefing"]) == {"id", "day", "completed_at", "payload", "tasks"}
+    assert set(body["briefing"]) == {"id", "day", "completed_at", "level", "payload", "tasks"}
 
 
 # --------------------------------------------------------------------------------------------- completion
@@ -136,10 +146,10 @@ async def test_task_detail_serves_chapter_project_rubric_and_essay_on_demand(cli
     generate_today()
     ids = task_ids(db)
     reading = (await client.get(f"/api/tasks/{ids['reading']}")).json()
-    assert reading["reading"]["content"].startswith("## Why this exists") and reading["reading"]["word_count"] >= 1500
+    assert reading["reading"]["content"].startswith("## Why this matters") and reading["reading"]["word_count"] >= 600
     assert reading["hands_on"] is None and reading["attempts_max"] == 6
     ho = (await client.get(f"/api/tasks/{ids['hands_on']}")).json()
-    assert len(ho["hands_on"]["steps"]) == 4 and ho["hands_on"]["rubric"]["pass_score"] == 6 and ho["reading"] is None
+    assert len(ho["hands_on"]["steps"]) == 3 and ho["hands_on"]["rubric"]["pass_score"] == 6 and ho["reading"] is None
     assert ho["submission"] is None and ho["evaluation"] is None
     ins = (await client.get(f"/api/tasks/{ids['insight']}")).json()
     assert ins["insight"]["word_count"] >= 450 and ins["insight"]["body"]
@@ -294,7 +304,7 @@ async def test_feed_validation(client):
     assert (await client.get("/api/feed", params={"cursor": "garbage"})).status_code == 400
     ok = (await client.get("/api/feed", params={"sort": "relevance"}))
     assert ok.status_code == 200  # empty db is a valid, empty page
-    assert ok.json() == {"items": [], "next_cursor": None}
+    assert ok.json() == {"items": [], "next_cursor": None, "for_level": None}
 
 
 # --------------------------------------------------------------------------------------------- ops / security
@@ -420,3 +430,114 @@ async def test_notes_roundtrip_overwrite_limits_and_task_detail(client, db):
     missing = "00000000-0000-0000-0000-000000000000"
     assert (await client.get(f"/api/tasks/{missing}/notes")).status_code == 404
     assert (await client.put(f"/api/tasks/{missing}/notes", json={"notes": "a"})).status_code == 404
+
+
+# --------------------------------------------------------------------------------------------- learning path
+def answer_key(db, sql="select quiz from daily_tasks where kind='reading'", *args):
+    with psycopg.connect(db) as conn:
+        return [q["answer"] for q in conn.execute(sql, args).fetchone()[0]]
+
+
+def wrong(key):
+    return [(a + 1) % 4 for a in key]
+
+
+async def test_a_lesson_is_done_in_order_quiz_then_hands_on_then_essay_with_xp(client, db):
+    seed_articles()
+    generate_today(level=1, legacy=False)
+    ids = task_ids(db)
+    today = (await client.get("/api/today")).json()
+    assert today["briefing"]["level"] == 1 and today["briefing"]["payload"]["lesson"]["title"] == "What is AI?"
+    assert {t["skill_slug"] for t in today["briefing"]["tasks"] if t["kind"] != "insight"} == {"ai-foundations"}  # the level fixes the skill
+    r = await client.post(f"/api/tasks/{ids['reading']}/complete")
+    assert r.status_code == 409 and "quiz" in r.json()["detail"]                       # no ticking a reading off
+    r = await client.post(f"/api/tasks/{ids['hands_on']}/submit", json={"submission": GOOD_SUBMISSION})
+    assert r.status_code == 409 and "reading quiz first" in r.json()["detail"]
+    assert (await client.post(f"/api/tasks/{ids['insight']}/complete")).status_code == 409
+    detail = (await client.get(f"/api/tasks/{ids['reading']}")).json()
+    assert len(detail["quiz"]) == 4 and all(set(q) == {"question", "options", "tier"} for q in detail["quiz"])  # no answer key
+    assert (await client.get(f"/api/tasks/{ids['hands_on']}")).json()["locked"] == "Pass the reading quiz first."
+
+    key = answer_key(db)
+    failed = (await client.post(f"/api/tasks/{ids['reading']}/quiz", json={"answers": wrong(key)})).json()
+    assert failed["passed"] is False and failed["correct"] == 0 and failed["pass_mark"] == 4
+    assert all(r["answer"] is None and r["explanation"] is None for r in failed["results"])  # wrong ones: no spoilers
+    assert (await client.post(f"/api/tasks/{ids['reading']}/quiz", json={"answers": [0]})).status_code == 422
+    passed = (await client.post(f"/api/tasks/{ids['reading']}/quiz", json={"answers": key})).json()
+    assert passed["passed"] and passed["attempts"] == 2 and passed["completion"]["xp"] == 10  # no first-try bonus
+    assert all(r["answer"] is not None for r in passed["results"])
+    lab = (await client.post(f"/api/tasks/{ids['hands_on']}/submit", json={"submission": GOOD_SUBMISSION})).json()
+    assert lab["passed"] and lab["xp"] == 30 and lab["skill"]["slug"] == "ai-foundations"
+    essay = (await client.post(f"/api/tasks/{ids['insight']}/complete")).json()
+    assert essay["briefing_completed"] and essay["xp"] == 5 + 10                           # + the lesson bonus
+
+    p = (await client.get("/api/progress")).json()
+    assert p["xp_total"] == 55 and p["xp_today"] == 55 and p["streak_days"] == 1 and p["lessons_done"] == 1
+    assert p["level"]["index"] == 1 and p["exam"]["unlocked"] is False and p["knowledge_score"] == 0
+    assert [x["status"] for x in p["path"][:2]] == ["current", "locked"] and len(p["path"]) == 21
+
+
+async def test_level_exam_unlocks_after_the_lessons_and_a_pass_moves_you_up(client, db):
+    r = await client.post("/api/exams/start", json={"kind": "level"})
+    assert r.status_code == 409 and "4 more lesson" in r.json()["detail"]
+    with psycopg.connect(db) as conn:
+        for d in range(1, 5):  # four finished lessons on level 1
+            conn.execute("insert into daily_briefings (day, payload, level, completed_at) values (current_date - %s, '{}', 1, now())", (d,))
+    assert (await client.get("/api/progress")).json()["exam"]["unlocked"] is True
+    exam = (await client.post("/api/exams/start", json={"kind": "level"})).json()
+    assert exam["total"] == 10 and exam["pass_mark"] == 8 and "answer" not in exam["questions"][0]
+    assert (await client.post("/api/exams/start", json={"kind": "level"})).json()["id"] == exam["id"]  # unanswered: reused, not regenerated
+    key = answer_key(db, "select questions from exams where id = %s", exam["id"])
+    assert (await client.post(f"/api/exams/{exam['id']}/submit", json={"answers": key[:3]})).status_code == 422
+    fail = (await client.post(f"/api/exams/{exam['id']}/submit", json={"answers": wrong(key)})).json()
+    assert fail["passed"] is False and fail["new_level"] == 1 and fail["xp"] == 0 and fail["results"][0]["explanation"]
+    assert (await client.post(f"/api/exams/{exam['id']}/submit", json={"answers": key})).status_code == 409  # one shot per exam
+
+    retry = (await client.post("/api/exams/start", json={"kind": "level"})).json()
+    assert retry["id"] != exam["id"]
+    key = answer_key(db, "select questions from exams where id = %s", retry["id"])
+    ok = (await client.post(f"/api/exams/{retry['id']}/submit", json={"answers": key})).json()
+    assert ok["passed"] and ok["new_level"] == 2 and ok["new_level_title"] == "Data: the fuel of AI" and ok["xp"] == 60
+    p = (await client.get("/api/progress")).json()
+    assert p["level"]["index"] == 2 and p["lessons_done"] == 0 and p["exam"]["unlocked"] is False and p["knowledge_score"] == 5
+    assert (p["path"][0]["status"], p["path"][0]["via"], p["path"][0]["score"]) == ("completed", "exam", 10)
+
+
+async def test_exam_attempts_are_capped_per_day(client, db):
+    with psycopg.connect(db) as conn:
+        for d in range(1, 5):
+            conn.execute("insert into daily_briefings (day, payload, level, completed_at) values (current_date - %s, '{}', 1, now())", (d,))
+    for _ in range(3):
+        exam = (await client.post("/api/exams/start", json={"kind": "level"})).json()
+        await client.post(f"/api/exams/{exam['id']}/submit", json={"answers": [9] * 10})
+    r = await client.post("/api/exams/start", json={"kind": "level"})
+    assert r.status_code == 429 and "tomorrow" in r.json()["detail"]
+
+
+async def test_placement_skips_only_the_tiers_you_know_and_never_moves_you_down(client, db):
+    exam = (await client.post("/api/exams/start", json={"kind": "placement"})).json()
+    assert exam["total"] == 18 and {q["tier"] for q in exam["questions"]} == {1, 2, 3, 4, 5, 6}
+    with psycopg.connect(db) as conn:
+        qs = conn.execute("select questions from exams where id = %s", (exam["id"],)).fetchone()[0]
+    answers = [q["answer"] if q["tier"] in (1, 2, 4) else (q["answer"] + 1) % len(q["options"]) for q in qs]  # tier 4 alone: not enough
+    out = (await client.post(f"/api/exams/{exam['id']}/submit", json={"answers": answers})).json()
+    assert out["placement"]["known_tier"] == 2 and out["new_level"] == 10 and out["xp"] == 0
+    p = (await client.get("/api/progress")).json()
+    assert p["level"]["index"] == 10 and p["placement"]["taken"] and not p["placement"]["available_today"]
+    assert [x["via"] for x in p["path"][:9]] == ["placement"] * 9 and p["path"][9]["status"] == "current"
+    assert p["knowledge_score"] == round(100 * 9 / 21)
+    assert (await client.post("/api/exams/start", json={"kind": "placement"})).status_code == 429  # once a day
+    with psycopg.connect(db) as conn:  # a later, worse placement cannot demote you
+        conn.execute("update exams set submitted_at = now() - interval '2 days'")
+    again = (await client.post("/api/exams/start", json={"kind": "placement"})).json()
+    low = (await client.post(f"/api/exams/{again['id']}/submit", json={"answers": [9] * 18})).json()
+    assert low["placement"]["start_level"] == 1 and low["new_level"] == 10
+
+
+async def test_feed_for_you_ranks_against_the_current_level(client, db):
+    seed_articles(8)
+    with_skill_embeddings(db)
+    r = (await client.get("/api/feed", params={"sort": "for_you"})).json()
+    assert r["for_level"] == {"index": 1, "title": "What is AI?", "tier_name": "Beginner", "skill": "ai-foundations"}
+    rel = [i["relevance"] for i in r["items"]]
+    assert rel == sorted(rel, reverse=True) and len(rel) == 8

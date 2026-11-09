@@ -34,7 +34,8 @@ export function ReadingSummary({ r, task }: { r: ReadingMeta; task: Task }) {
   return (
     <div className="text-sm leading-relaxed">
       <p className="mb-3 text-muted-foreground">
-        A self-contained chapter of about {r.word_count.toLocaleString("en-US")} words: no other reading needed.
+        A short, self-contained reading of about {r.word_count.toLocaleString("en-US")} words ({r.estimated_minutes} min)
+        {r.quiz_questions ? <>, then a {r.quiz_questions}-question quiz you must pass to unlock the exercise.</> : ": no other reading needed."}
       </p>
       <H>After this chapter you can</H>
       <ul className="list-disc space-y-1 pl-5 marker:text-muted-foreground">{r.learning_goals.map((g) => <li key={g}>{g}</li>)}</ul>
@@ -44,7 +45,7 @@ export function ReadingSummary({ r, task }: { r: ReadingMeta; task: Task }) {
           <li key={h} className="rounded-full border bg-white/[0.03] px-2.5 py-0.5 text-xs text-muted-foreground"><span className="mr-1 font-mono opacity-60">{i + 1}</span>{h}</li>
         ))}
       </ol>
-      <Button asChild className="mt-5"><Link href={`/read/${task.id}`}><BookOpenText /> {task.completed ? "Re-read the chapter" : "Open the chapter"} <ArrowRight /></Link></Button>
+      <Button asChild className="mt-5"><Link href={`/read/${task.id}`}><BookOpenText /> {task.completed ? "Re-read" : "Open the reading"} <ArrowRight /></Link></Button>
     </div>
   );
 }

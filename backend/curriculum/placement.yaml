@@ -1,0 +1,158 @@
+# Placement exam: 3 questions per tier, easiest tier first. Static (no LLM): the same yardstick every time, free to run,
+# and the answer key is reviewed by a human. A tier counts as KNOWN when at least `tier_pass` of its questions are right;
+# you start at the first level of the first tier you do not know. Options are shuffled each time the exam is served.
+# `answer` is the index of the correct option as written here.
+tier_pass: 2
+questions:
+  # Tier 1: Beginner
+  - tier: 1
+    question: "Which statement best describes machine learning?"
+    options:
+      - "A program that only follows hand-written if/else rules"
+      - "A system that learns patterns from examples (data) instead of being programmed for every case"
+      - "Any software that runs on a graphics card"
+      - "A robot with a physical body"
+    answer: 1
+    explanation: "Machine learning systems infer rules from examples. Hand-written rules are classic programming."
+  - tier: 1
+    question: "You want to predict house prices from past sales. In that dataset, what is the 'label'?"
+    options: ["The number of bedrooms", "The sale price", "The street name", "The number of rows in the table"]
+    answer: 1
+    explanation: "The label is the answer the model must learn to predict; bedrooms and street are input features."
+  - tier: 1
+    question: "Why do we keep some data aside as a test set?"
+    options:
+      - "To make training faster"
+      - "To check how well the model does on examples it has never seen"
+      - "Because test data is lower quality"
+      - "To keep a backup of the data"
+    answer: 1
+    explanation: "Unseen data is the only honest estimate of how the model will behave in the real world."
+  # Tier 2: Novice
+  - tier: 2
+    question: "Linear regression is mainly used to..."
+    options:
+      - "predict a continuous number, such as a price"
+      - "sort a list alphabetically"
+      - "compress images"
+      - "generate text"
+    answer: 0
+    explanation: "Regression predicts numbers; classification predicts categories."
+  - tier: 2
+    question: "A spam filter flags 100 emails as spam and 90 of them really are spam. What is its precision?"
+    options: ["10%", "90%", "100%", "It cannot be computed without the total number of emails"]
+    answer: 1
+    explanation: "Precision = true positives / everything flagged = 90 / 100."
+  - tier: 2
+    question: "A model scores 99% on its training data but 60% on new data. This is most likely..."
+    options: ["underfitting", "overfitting", "a perfectly tuned model", "a sign that more training epochs are needed"]
+    answer: 1
+    explanation: "A big gap between training and unseen performance means the model memorised instead of generalising."
+  # Tier 3: Intermediate
+  - tier: 3
+    question: "What does an activation function such as ReLU add to a neural network?"
+    options:
+      - "Non-linearity, so stacked layers can model more than a straight line"
+      - "More training data"
+      - "A way to save the weights to disk"
+      - "Nothing: it only makes training slower"
+    answer: 0
+    explanation: "Without non-linear activations, any stack of layers collapses into a single linear function."
+  - tier: 3
+    question: "During training, what does backpropagation compute?"
+    options:
+      - "The gradient of the loss with respect to every weight"
+      - "The final accuracy on the test set"
+      - "The best possible learning rate"
+      - "A random starting value for each weight"
+    answer: 0
+    explanation: "Backpropagation applies the chain rule to get each weight's gradient; the optimiser then uses it."
+  - tier: 3
+    question: "Your training loss suddenly explodes to NaN. What is usually the first thing to try?"
+    options: ["Lower the learning rate", "Add more layers", "Delete the validation set", "Train for more epochs"]
+    answer: 0
+    explanation: "Steps that are too large make the weights diverge; a smaller learning rate is the usual first fix."
+  # Tier 4: Advanced
+  - tier: 4
+    question: "Two sentence embeddings have a cosine similarity close to 1. What does that suggest?"
+    options:
+      - "The sentences have the same number of words"
+      - "The vectors point in nearly the same direction, so the texts are probably similar in meaning"
+      - "The sentences are written in different languages"
+      - "The embedding model failed"
+    answer: 1
+    explanation: "Cosine similarity measures the angle between vectors; in a good embedding space, direction encodes meaning."
+  - tier: 4
+    question: "What does the attention mechanism in a transformer let each token do?"
+    options:
+      - "Weigh how relevant every other token is when building its own representation"
+      - "Skip tokenisation entirely"
+      - "Look up answers on the internet"
+      - "Avoid matrix multiplication"
+    answer: 0
+    explanation: "Attention computes a weighted mix of the other tokens' information, with weights learned from the data."
+  - tier: 4
+    question: "In retrieval-augmented generation (RAG), what is retrieval used for?"
+    options:
+      - "Fine-tuning the model's weights"
+      - "Fetching relevant documents and putting them in the prompt so answers are grounded in evidence"
+      - "Compressing the model"
+      - "Translating the prompt into English"
+    answer: 1
+    explanation: "RAG changes what the model reads at answer time, not what it learned during training."
+  # Tier 5: Proficient
+  - tier: 5
+    question: "Why do vector databases use indexes such as HNSW?"
+    options:
+      - "They return exact nearest neighbours at any scale"
+      - "They find approximate nearest neighbours quickly, trading a little recall for a large speed-up"
+      - "They split text into tokens"
+      - "They train the embedding model"
+    answer: 1
+    explanation: "HNSW is an approximate nearest-neighbour graph: much faster than a full scan, at a small cost in recall."
+  - tier: 5
+    question: "What does recall@5 measure for a retrieval system?"
+    options:
+      - "What fraction of the relevant documents show up in the top 5 results"
+      - "How fast the top 5 results are returned"
+      - "How many documents are in the index"
+      - "How often the LLM repeats itself"
+    answer: 0
+    explanation: "Recall@k counts how much of what should be found is actually found within the first k results."
+  - tier: 5
+    question: "In production ML, 'data drift' means..."
+    options:
+      - "The live input data has shifted away from what the model was trained on"
+      - "The model file was corrupted"
+      - "The server clock is wrong"
+      - "The training loss went down"
+    answer: 0
+    explanation: "When inputs change, a model's accuracy can silently degrade; drift monitoring catches it early."
+  # Tier 6: Expert
+  - tier: 6
+    question: "Why is LoRA fine-tuning so much cheaper than full fine-tuning?"
+    options:
+      - "It trains small low-rank matrices added to frozen weights instead of updating every weight"
+      - "It deletes half of the model's layers"
+      - "It needs no training data"
+      - "It only changes the tokenizer"
+    answer: 0
+    explanation: "The base weights stay frozen; only a tiny number of adapter parameters are trained and stored."
+  - tier: 6
+    question: "Quantising a model's weights from 16-bit to 4-bit mainly..."
+    options:
+      - "cuts memory use and speeds up inference, at some cost in accuracy"
+      - "always improves accuracy"
+      - "increases the context window"
+      - "makes training from scratch unnecessary"
+    answer: 0
+    explanation: "Fewer bits per weight means less memory and bandwidth; precision loss usually costs a little quality."
+  - tier: 6
+    question: "A support bot must answer from internal docs that change every week. What is the best default design?"
+    options:
+      - "Fine-tune the model again every night"
+      - "RAG over the docs, because the knowledge changes and answers should cite sources"
+      - "A longer system prompt with no documents"
+      - "Train a new model from scratch"
+    answer: 1
+    explanation: "Retrieval keeps answers current and citable without retraining; fine-tuning teaches style, not fresh facts."

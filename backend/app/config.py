@@ -48,7 +48,9 @@ class Settings(BaseSettings):
 
     # --- deep learning mode ---
     llm_chapter_max_tokens: int = 12000  # a 2,000+ word chapter with code needs ~4-6k tokens; leave headroom
-    chapter_min_words: int = 1500  # prose words (outside code fences) the chapter must reach
+    chapter_min_words: int = 600  # prose words (outside code fences): a 5-10 minute daily reading...
+    chapter_max_words: int = 1250  # ...and no longer
+    exam_cooldown_hours: int = 24  # an unanswered level exam is reused (not regenerated) for this long
     essay_min_words: int = 450
     essay_max_words: int = 800
     max_submission_attempts: int = 6  # graded attempts per task (each one is an LLM call)

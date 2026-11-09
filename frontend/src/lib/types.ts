@@ -8,6 +8,7 @@ export interface Task {
   id: string; kind: TaskKind; skill_slug: string; difficulty: number; title: string;
   completed: boolean; completed_at: string | null; points_awarded: number | null;
   attempt_count: number; evaluation_score: number | null; evaluation_passed: boolean | null; has_content: boolean;
+  has_quiz: boolean; quiz_attempts: number; quiz_score: number | null; xp_awarded: number | null;
 }
 
 export interface RubricCriterion { name: string; description: string; max_points: number; must_pass: boolean }
@@ -22,15 +23,21 @@ export interface HandsOnSpec {
 
 export interface ReadingMeta {
   chapter_title: string; skill_slug: string; difficulty: number; learning_goals: string[]; estimated_minutes: number;
-  word_count: number; section_headings: string[]; inspiration: ArticleRef[];
+  word_count: number; section_headings: string[]; inspiration: ArticleRef[]; quiz_questions: number | null;
 }
 export interface InsightMeta {
   headline: string; thesis: string; skill_slug: string; body: string; word_count: number; evidence: ArticleRef[];
 }
 
+/** Which learning-path level/topic a lesson taught. Null on briefings made before the learning path (not gated). */
+export interface LessonInfo {
+  level: number; of: number; tier: number; tier_name: string; title: string; topic: string; review: boolean;
+  lesson_number: number; lessons_required: number;
+}
+
 export interface Briefing {
-  id: string; day: string; completed_at: string | null; tasks: Task[];
-  payload: { morning_reading: ReadingMeta; hands_on_task: HandsOnSpec; market_insight: InsightMeta };
+  id: string; day: string; completed_at: string | null; tasks: Task[]; level: number | null;
+  payload: { lesson: LessonInfo | null; morning_reading: ReadingMeta; hands_on_task: HandsOnSpec; market_insight: InsightMeta };
 }
 
 export interface DayPlan {
@@ -55,7 +62,7 @@ export interface Skill {
 export interface Today { date: string; state: "ready" | "pending"; briefing: Briefing | null; weekly_theme: WeeklyTheme | null; skills: Skill[] }
 
 export interface Completion {
-  task: Task; skill: { slug: string; level: number; delta: number }; briefing_completed: boolean; already_completed: boolean;
+  task: Task; skill: { slug: string; level: number; delta: number }; briefing_completed: boolean; already_completed: boolean; xp: number;
 }
 
 export interface CriterionResult { criterion: string; points: number; max_points: number; evidence: string }
@@ -65,7 +72,7 @@ export interface Evaluation {
 }
 export interface SubmissionResult {
   task: Task; evaluation: Evaluation; passed: boolean; skill: { slug: string; level: number; delta: number } | null;
-  briefing_completed: boolean; attempts_used: number; attempts_max: number;
+  briefing_completed: boolean; attempts_used: number; attempts_max: number; xp: number;
 }
 
 export interface TaskDetail {
@@ -77,6 +84,42 @@ export interface TaskDetail {
   archived: boolean;
   /** The learner's notebook text for this task ("" if none). */
   notes: string;
+  /** The reading quiz, without answers (reading tasks on the learning path). */
+  quiz: PublicQuestion[] | null;
+  lesson: LessonInfo | null;
+  /** Why this task cannot be done yet (lesson order), or null. */
+  locked: string | null;
+}
+
+// ------------------------------------------------------------------------------------------------ learning path
+export interface PublicQuestion { question: string; options: string[]; tier: number | null }
+export interface ChoiceResult { correct: boolean; chosen: number; answer: number | null; explanation: string | null }
+export interface QuizResult { passed: boolean; correct: number; total: number; pass_mark: number; results: ChoiceResult[]; attempts: number; completion: Completion | null }
+
+export type LevelStatus = "completed" | "current" | "locked";
+export interface PathLevel {
+  index: number; tier: number; tier_name: string; skill: string; title: string; summary: string; topics: string[];
+  status: LevelStatus; via: "exam" | "placement" | null; score: number | null; total: number | null;
+}
+export interface Progress {
+  level: { index: number; tier: number; tier_name: string; skill: string; title: string; summary: string; topics: string[]; lessons_required: number };
+  levels_total: number; lessons_done: number; graduated: boolean;
+  exam: {
+    unlocked: boolean; attempts_today: number; attempts_max: number; pass_percent: number; questions: number;
+    last: { correct: number; total: number; passed: boolean | null; submitted_at: string } | null; open_exam_id: string | null;
+  };
+  xp_total: number; xp_today: number; streak_days: number; knowledge_score: number;
+  placement: { taken: boolean; available_today: boolean };
+  path: PathLevel[];
+}
+
+export type ExamKind = "placement" | "level";
+export interface Exam { id: string; kind: ExamKind; level: number | null; level_title: string | null; questions: PublicQuestion[]; total: number; pass_mark: number | null }
+export interface ExamResult {
+  id: string; kind: ExamKind; level: number | null; correct: number; total: number; passed: boolean | null; pass_mark: number | null;
+  results: (ChoiceResult & { question: string; options: string[] })[];
+  previous_level: number; new_level: number; new_level_title: string; xp: number;
+  placement: { known_tier: number; start_level: number; tiers: { tier: number; name: string; correct: number; total: number }[] } | null;
 }
 
 export interface SkillMatch { skill_slug: string; skill_name: string; similarity: number; strength: "strong" | "moderate" | "weak" }
@@ -87,8 +130,8 @@ export interface FeedItem {
   skill_match: SkillMatch | null; relevance: number; also_covered_by: string[];
 }
 
-export interface FeedPage { items: FeedItem[]; next_cursor: string | null }
-export interface FeedQuery { category?: Category; skill?: string; sort?: "recent" | "relevance"; min_strength?: "moderate" | "strong"; cursor?: string; limit?: number }
+export interface FeedPage { items: FeedItem[]; next_cursor: string | null; for_level: { index: number; title: string; tier_name: string; skill: string } | null }
+export interface FeedQuery { category?: Category; skill?: string; sort?: "recent" | "relevance" | "for_you"; min_strength?: "moderate" | "strong"; cursor?: string; limit?: number }
 
 // ------------------------------------------------------------------------------------------------ Phase 11: Bitcoin
 export type BitcoinHorizonKey = "1d" | "3d" | "7d" | "14d";

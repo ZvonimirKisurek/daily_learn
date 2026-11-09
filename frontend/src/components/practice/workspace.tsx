@@ -57,7 +57,8 @@ export function Workspace({ detail }: { detail: TaskDetail }) {
   const lines = useMemo(() => Math.max(code.split("\n").length, 14), [code]);
   const tooShort = code.trim().length < 20;
   const archived = detail.archived;
-  const canSubmit = !pending && !passed && !archived && !tooShort && code.length <= MAX && left > 0;
+  const locked = !passed && detail.locked;  // lesson order: the reading quiz comes first
+  const canSubmit = !pending && !passed && !archived && !locked && !tooShort && code.length <= MAX && left > 0;
 
   function submit() {
     if (!canSubmit) return;
@@ -99,7 +100,7 @@ export function Workspace({ detail }: { detail: TaskDetail }) {
 
       <div className="flex flex-wrap items-center gap-3">
         <Button size="lg" onClick={submit} disabled={!canSubmit}>{pending ? <Loader2 className="animate-spin" /> : passed ? <CheckCircle2 /> : <Send />}{passed ? "Passed" : "Submit for evaluation"}</Button>
-        <span className="text-sm text-muted-foreground">{passed ? "Task complete." : archived ? "This task is from the past and can no longer be submitted." : left > 0 ? <>{left} of {detail.attempts_max} attempts left</> : "No attempts left for this task."}</span>
+        <span className="text-sm text-muted-foreground">{passed ? "Task complete." : locked ? locked : archived ? "This task is from the past and can no longer be submitted." : left > 0 ? <>{left} of {detail.attempts_max} attempts left</> : "No attempts left for this task."}</span>
         {!passed && tooShort && code.length > 0 && <span className="text-xs text-warn">Paste your code and its output first.</span>}
       </div>
 

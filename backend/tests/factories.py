@@ -61,17 +61,23 @@ def rubric_dict():
     ]}
 
 
-def daily_dict(article_id, skill="rag", evidence=None, minutes=(30, 45)):
-    """A valid DailyPlanOutput (stage 1 of the daily chain)."""
+def quiz_dict(n: int = 4) -> list[dict]:
+    return [{"question": f"Question {i}: which statement about cosine similarity is true?",
+             "options": ["It ignores vector length", "It adds the vectors", "It counts words", "It sorts the list"],
+             "answer": 0, "explanation": "Cosine similarity compares directions, so length does not matter."} for i in range(1, n + 1)]
+
+
+def daily_dict(article_id, skill="rag", evidence=None, minutes=(8, 10)):
+    """A valid DailyPlanOutput (stage 1 of the daily chain): a short lesson with a quiz."""
     return {
-        "reading": {"chapter_title": "Embeddings and Cosine Similarity from Scratch", "skill_slug": skill, "difficulty": 2,
-                    "learning_goals": ["Define an embedding", "Compute cosine similarity", "Explain why normalising matters"],
-                    "sections": [{"heading": f"Section {i}", "key_points": "Establish the concept, the formula and a worked example.", "target_words": 240} for i in range(1, 9)],
-                    "inspiration_article_ids": [article_id], "estimated_minutes": minutes[0]},
-        "hands_on_task": {"title": "Chunk a PDF", "skill_slug": skill, "difficulty": 2, "objective": "Implement cosine similarity and test it.",
-                          "prerequisites": ["Python 3.11"], "project_layout": ["lab/cosine.py", "lab/test_cosine.py"],
-                          "steps": [{"title": f"Step {i}", "instructions": f"Create lab/file{i}.py and implement part {i}.", "commands": ["python lab/cosine.py"],
-                                     "expected_output": "Prints 1.0 for identical vectors."} for i in range(1, 5)],
+        "reading": {"chapter_title": "Embeddings and Cosine Similarity from Scratch", "skill_slug": skill, "difficulty": 1,
+                    "learning_goals": ["Define an embedding", "Explain cosine similarity"],
+                    "sections": [{"heading": f"Section {i}", "key_points": "Establish the idea, an analogy and a worked example.", "target_words": 200} for i in range(1, 5)],
+                    "inspiration_article_ids": [article_id], "estimated_minutes": minutes[0], "quiz": quiz_dict()},
+        "hands_on_task": {"title": "Chunk a PDF", "skill_slug": skill, "difficulty": 1, "objective": "Implement cosine similarity and test it.",
+                          "prerequisites": ["Python 3.11"], "project_layout": ["lab/cosine.py"],
+                          "steps": [{"title": f"Step {i}", "instructions": f"Edit lab/cosine.py and implement part {i}.", "commands": ["python lab/cosine.py"],
+                                     "expected_output": "Prints 1.0 for identical vectors."} for i in range(1, 4)],
                           "deliverable": "cosine.py that prints similarities", "submission_instructions": "Paste cosine.py and the terminal output.",
                           "docs_to_consult": ["numpy.linalg.norm"], "estimated_minutes": minutes[1], "stretch_goal": None, "rubric": rubric_dict()},
         "market_insight": {"headline": "Postgres is becoming the default vector store", "thesis": "Teams consolidate vector search into Postgres.",
@@ -79,17 +85,17 @@ def daily_dict(article_id, skill="rag", evidence=None, minutes=(30, 45)):
     }
 
 
-def chapter_text(words: int = 1700, cites=("A1",)) -> str:
-    sections = ["Why this exists", "Intuition", "The mathematics", "A worked example", "Implementation", "Pitfalls and failure modes", "In production"]
+def chapter_text(words: int = 800, cites=("A1",)) -> str:
+    """A short lesson reading: 4 sections, one formula and one python example, no quiz section."""
+    sections = ["Why this matters", "The idea in plain words", "A worked example", "Common misconceptions"]
     per = max(60, words // len(sections))
     parts = []
     for i, h in enumerate(sections):
-        parts.append(f"## {h}\n\n" + prose(per, cites=cites if i in (0, 6) else ()))
-        if h == "The mathematics":
-            parts.append("The similarity of two vectors is $\\cos\\theta = \\frac{a \\cdot b}{\\|a\\|\\|b\\|}$, which in display form reads\n\n$$\\cos\\theta = \\frac{\\sum_i a_i b_i}{\\sqrt{\\sum_i a_i^2}\\sqrt{\\sum_i b_i^2}}$$\n")
-        if h in ("A worked example", "Implementation"):
+        parts.append(f"## {h}\n\n" + prose(per, cites=cites if i in (0, 3) else ()))
+        if h == "The idea in plain words":
+            parts.append("The similarity of two vectors is $\\cos\\theta = \\frac{a \\cdot b}{\\|a\\|\\|b\\|}$.\n")
+        if h == "A worked example":
             parts.append("```python\nimport numpy as np\n\n\ndef cosine(a, b):\n    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))\n\n\nprint(cosine(np.array([1.0, 0.0]), np.array([1.0, 1.0])))\n```\n")
-    parts.append("## Check Your Understanding\n\n1. Why divide by the norms?\n2. What is the similarity of a vector with itself?\n3. When can cosine mislead?\n4. How would you test it?")
     return "\n\n".join(parts)
 
 
@@ -125,3 +131,15 @@ def make_skills(rng, n_embedded=True):
 def make_candidate(i, rng, source="src", emb=None, age_days=1.0, engagement=None, weight=1.0):
     return Candidate(f"id-{i}", f"Title {i}", f"Summary {i}", f"https://x.test/{i}", datetime.now(timezone.utc) - timedelta(days=age_days),
                      source, source.title(), "engineering_blog", weight, engagement, emb if emb is not None else unit_vec(rng))
+
+
+def lesson_dict(level: int = 1, done: int = 0) -> dict:
+    """The <learner_level>/<todays_lesson> context generators.current_lesson() builds, for a learner on `level`."""
+    from app.curriculum import generators
+
+    class Repo:
+        @staticmethod
+        def learner_level():
+            return level, done
+
+    return generators.current_lesson(Repo)

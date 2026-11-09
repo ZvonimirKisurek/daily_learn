@@ -39,6 +39,7 @@ class ReadingOut(BaseModel):
     word_count: int
     section_headings: list[str]
     inspiration: list[ArticleRefOut]
+    quiz_questions: int | None = Field(default=None, description="number of quiz questions (null on lessons made before quizzes)")
 
 
 class InsightOut(BaseModel):
@@ -50,8 +51,21 @@ class InsightOut(BaseModel):
     evidence: list[ArticleRefOut]
 
 
+class LessonInfo(BaseModel):
+    level: int
+    of: int
+    tier: int
+    tier_name: str
+    title: str
+    topic: str
+    review: bool
+    lesson_number: int
+    lessons_required: int
+
+
 class BriefingPayloadOut(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    lesson: LessonInfo | None = Field(default=None, description="the learning-path level/topic this lesson taught (null: legacy briefing)")
     morning_reading: ReadingOut
     hands_on_task: HandsOnTask
     market_insight: InsightOut
@@ -70,12 +84,17 @@ class TaskOut(BaseModel):
     evaluation_score: int | None = None
     evaluation_passed: bool | None = None
     has_content: bool = False
+    has_quiz: bool = False
+    quiz_attempts: int = 0
+    quiz_score: int | None = None
+    xp_awarded: int | None = None
 
 
 class BriefingOut(BaseModel):
     id: UUID
     day: date
     completed_at: datetime | None
+    level: int | None = Field(default=None, description="learning-path level; null = a legacy briefing whose tasks are not gated")
     payload: BriefingPayloadOut
     tasks: list[TaskOut]
 
@@ -134,6 +153,7 @@ class CompletionOut(BaseModel):
     skill: SkillDelta
     briefing_completed: bool
     already_completed: bool
+    xp: int = Field(default=0, description="XP earned by this completion (incl. the lesson bonus)")
 
 
 class SkillMatch(BaseModel):
@@ -159,9 +179,17 @@ class FeedItem(BaseModel):
     also_covered_by: list[str] = Field(description="other sources whose near-identical story was collapsed into this one")
 
 
+class FeedLevel(BaseModel):
+    index: int
+    title: str
+    tier_name: str
+    skill: str
+
+
 class FeedPage(BaseModel):
     items: list[FeedItem]
     next_cursor: str | None
+    for_level: FeedLevel | None = Field(default=None, description="sort=for_you: the level the ranking was matched to")
 
 
 class QueueOut(BaseModel):
@@ -186,6 +214,9 @@ class TaskDetailOut(BaseModel):
     attempts_max: int
     notes: str = Field(default="", description="the learner's notebook for this task")
     archived: bool = Field(default=False, description="the task belongs to a past day (in the learner's timezone)")
+    quiz: list["PublicQuestion"] | None = Field(default=None, description="the reading quiz, WITHOUT answers")
+    lesson: LessonInfo | None = None
+    locked: str | None = Field(default=None, description="why this task cannot be done yet (lesson order), or null")
 
 
 class NotesIn(BaseModel):
@@ -209,6 +240,144 @@ class SubmissionOut(BaseModel):
     briefing_completed: bool
     attempts_used: int
     attempts_max: int
+    xp: int = 0
+
+
+# ----------------------------------------------------------------------------------------------- learning path
+class PublicQuestion(BaseModel):
+    question: str
+    options: list[str]
+    tier: int | None = None
+
+
+class AnswersIn(BaseModel):
+    answers: list[int] = Field(max_length=40, description="the chosen option index for each question, in order")
+
+
+class ChoiceResult(BaseModel):
+    correct: bool
+    chosen: int
+    answer: int | None = Field(default=None, description="the right option; withheld on a failed reading quiz")
+    explanation: str | None = None
+
+
+class QuizOut(BaseModel):
+    passed: bool
+    correct: int
+    total: int
+    pass_mark: int
+    results: list[ChoiceResult]
+    attempts: int
+    completion: CompletionOut | None
+
+
+class PathLevel(BaseModel):
+    index: int
+    tier: int
+    tier_name: str
+    skill: str
+    title: str
+    summary: str
+    topics: list[str]
+    status: Literal["completed", "current", "locked"]
+    via: Literal["exam", "placement"] | None
+    score: int | None
+    total: int | None
+
+
+class CurrentLevel(BaseModel):
+    index: int
+    tier: int
+    tier_name: str
+    skill: str
+    title: str
+    summary: str
+    topics: list[str]
+    lessons_required: int
+
+
+class LastExam(BaseModel):
+    correct: int
+    total: int
+    passed: bool | None
+    submitted_at: datetime
+
+
+class ExamStatus(BaseModel):
+    unlocked: bool
+    attempts_today: int
+    attempts_max: int
+    pass_percent: int
+    questions: int
+    last: LastExam | None
+    open_exam_id: UUID | None
+
+
+class PlacementStatus(BaseModel):
+    taken: bool
+    available_today: bool
+
+
+class ProgressOut(BaseModel):
+    level: CurrentLevel
+    levels_total: int
+    lessons_done: int = Field(description="lessons fully finished on the current level")
+    graduated: bool
+    exam: ExamStatus
+    xp_total: int
+    xp_today: int
+    streak_days: int
+    knowledge_score: int = Field(description="0-100: share of the path proven by exams or placement")
+    placement: PlacementStatus
+    path: list[PathLevel]
+
+
+class ExamStartIn(BaseModel):
+    kind: Literal["placement", "level"]
+
+
+class ExamOut(BaseModel):
+    id: UUID
+    kind: Literal["placement", "level"]
+    level: int | None
+    level_title: str | None
+    questions: list[PublicQuestion]
+    total: int
+    pass_mark: int | None
+
+
+class ExamQuestionResult(ChoiceResult):
+    question: str
+    options: list[str]
+
+
+class PlacementTier(BaseModel):
+    tier: int
+    name: str
+    correct: int
+    total: int
+
+
+class PlacementOut(BaseModel):
+    known_tier: int
+    start_level: int
+    tiers: list[PlacementTier]
+
+
+class ExamResultOut(BaseModel):
+    id: UUID
+    kind: Literal["placement", "level"]
+    level: int | None
+    correct: int
+    total: int
+    passed: bool | None = Field(description="level exams only")
+    pass_mark: int | None
+    results: list[ExamQuestionResult]
+    previous_level: int
+    new_level: int
+    new_level_title: str
+    xp: int
+    placement: PlacementOut | None
 
 
 # ----------------------------------------------------------------------------------------------- Phase 11: Bitcoin
@@ -288,3 +457,6 @@ class BitcoinLatestOut(BaseModel):
     prediction: BitcoinPredictionOut | None
     news: list[BitcoinNewsOut]
     disclaimer: str = BITCOIN_DISCLAIMER
+
+
+TaskDetailOut.model_rebuild()  # it references PublicQuestion, declared further down

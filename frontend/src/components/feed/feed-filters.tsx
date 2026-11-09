@@ -40,11 +40,12 @@ const Row = ({ label, children }: { label: string; children: React.ReactNode }) 
  * Filters are plain links that change the URL (?category=&skill=&sort=). The URL is the single source of
  * truth: shareable, back-button friendly, and the Server Component re-fetches from it - no client state to sync.
  */
-export function FeedFilters({ params, skills }: { params: FeedParams; skills: Skill[] }) {
+export function FeedFilters({ params, skills, levelTitle }: { params: FeedParams; skills: Skill[]; levelTitle?: string }) {
   return (
     <div className="space-y-2.5">
       <Row label="Sort">
-        <Chip to={href(params, { sort: undefined })} active={!params.sort || params.sort === "recent"}>Newest</Chip>
+        <Chip to={href(params, { sort: undefined })} active={!params.sort}>For you{levelTitle ? ` (${levelTitle})` : ""}</Chip>
+        <Chip to={href(params, { sort: "recent" })} active={params.sort === "recent"}>Newest</Chip>
         <Chip to={href(params, { sort: "relevance" })} active={params.sort === "relevance"}>Most relevant to my gaps</Chip>
       </Row>
       <Row label="Match">
