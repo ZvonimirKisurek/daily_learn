@@ -20,6 +20,7 @@ from app.bitcoin import ingest, technicals
 from app.bitcoin.schemas import BitcoinGrounding, BitcoinPredictionOutput
 from app.bitcoin.technicals import HORIZONS
 from app.config import Settings, get_settings
+from app.curriculum.errors import LLMValidationFailed
 from app.curriculum.prompts import BITCOIN_PREDICTION_SYSTEM, build_bitcoin_prompt
 from app.db import get_pool
 
@@ -30,14 +31,18 @@ def describe_failure(exc: BaseException) -> str:
     """A short, user-facing reason for the dashboard. Never echoes request payloads or keys."""
     import openai
 
-    from app.curriculum.errors import LLMBudgetExceeded, LLMRefusal, LLMTruncated, LLMValidationFailed
+    from app.curriculum.errors import LLMBudgetExceeded, LLMRefusal, LLMTruncated
 
     if isinstance(exc, ingest.PriceUnavailable):
         return "Price feeds unreachable (CoinGecko and Coinbase both failed). No forecast is made without a real price."
     if isinstance(exc, LLMBudgetExceeded):
         return "Daily AI budget reached (LLM_DAILY_BUDGET_USD). The next scheduled run will try again."
     if isinstance(exc, LLMValidationFailed):
-        return "The model's forecast kept failing validation (citations, plausibility band or advice filter) after repairs."
+        # Say WHICH rules failed: "field: problem" lines from the last attempt, minus Pydantic's "Value error, " prefix.
+        lines = [ln.lstrip("- ").replace("Value error, ", "") for ln in (exc.errors or "").splitlines() if ln.strip()]
+        detail = "; ".join(lines[:3]) + (f" (+{len(lines) - 3} more)" if len(lines) > 3 else "")
+        return ("The model's forecast kept failing validation after repairs"
+                + (f": {detail}" if detail else ".") + " The raw model output is in the worker log.")
     if isinstance(exc, (LLMRefusal, LLMTruncated)):
         return f"The model did not return a usable forecast ({exc.__class__.__name__})."
     if isinstance(exc, openai.AuthenticationError):
@@ -109,8 +114,18 @@ def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool)
     last7 = [(d.isoformat(), c) for d, c in series[-7:]]
     grounding = BitcoinGrounding(news_ids=frozenset(n["ref"] for n in news), current_price=current, daily_sigma=tech.daily_sigma,
                                  band_sigmas=s.bitcoin_band_sigmas, max_confidence=s.bitcoin_max_confidence)
-    out: BitcoinPredictionOutput = llm.generate(system=BITCOIN_PREDICTION_SYSTEM, user=build_bitcoin_prompt(td, last7, news),
-                                                output_model=BitcoinPredictionOutput, grounding=grounding, temperature=s.temp_bitcoin)
+    try:
+        out: BitcoinPredictionOutput = llm.generate(system=BITCOIN_PREDICTION_SYSTEM,
+                                                    user=build_bitcoin_prompt(td, last7, news, band_sigmas=s.bitcoin_band_sigmas),
+                                                    output_model=BitcoinPredictionOutput, grounding=grounding, temperature=s.temp_bitcoin)
+    except LLMValidationFailed as exc:
+        # Every rejected reply was already logged attempt by attempt (StructuredLLM.generate). This line ties them to the
+        # inputs, so the log alone answers "what did the model see, and what did it write?".
+        log.error("btc forecast failed validation after %d attempts | price=%.2f daily_sigma=%.4f band=%gσ news_ids=%s\n"
+                  "last errors:\n%s\n----- last raw model output -----\n%s\n----- end -----",
+                  len(exc.raw_outputs), current, tech.daily_sigma, s.bitcoin_band_sigmas,
+                  ",".join(n["ref"] for n in news) or "none", exc.errors, (exc.raw_outputs or [""])[-1][:12_000])
+        raise
 
     # 3. Store, with an exact record of what the model saw.
     inputs = {

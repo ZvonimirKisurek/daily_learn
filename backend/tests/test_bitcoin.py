@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from app.bitcoin import technicals
 from app.bitcoin.ingest import BTC_PATTERN, clean_summary
-from app.bitcoin.schemas import BitcoinGrounding, BitcoinPredictionOutput
+from app.bitcoin.schemas import BitcoinGrounding, BitcoinPredictionOutput, band
 from app.curriculum.prompts import build_bitcoin_prompt
 from tests.llm_helpers import completion, make_llm
 
@@ -62,12 +62,14 @@ def test_valid_output_passes():
 
 
 @pytest.mark.parametrize("over, fragment", [
-    ({"reasoning_3d": "Momentum is soft [T] and an exchange hack weighs on sentiment [N9], so a small decline is slightly favoured."}, "unknown news ids"),
-    ({"reasoning_1d": "ETF outflows [N1] dominate the tape today and there is little else to go on in the news flow for tomorrow."}, "[T]"),
-    ({"predicted_price_1d": 90_000.0}, "outside the plausible"),  # +18% in a day with sigma 2%
-    ({"confidence_14d": 97}, "calibration cap"),
+    ({"reasoning_3d": "Momentum is soft [T] and an exchange hack weighs on sentiment [N9], so a small decline is slightly favoured."}, "do not exist"),
+    ({"reasoning_1d": "Flows dominate the tape today and there is little else to go on in the news flow for tomorrow's session."}, "at least one fact"),
+    ({"sentiment_summary": "Headlines are mixed with ETF outflows offset by a constructive regulatory story; little is BTC-specific."}, "[N#]"),
+    ({"predicted_price_1d": 90_000.0}, "outside the plausible"),  # +20% in a day with sigma 2% (4-sigma limit is about 8.3%)
     ({"predicted_price_7d": 75_000.0}, "commit to a direction"),
     ({"reasoning_1d": "Price is under SMA-30 [T] and ETF flows are negative [N1]; investors should buy the dip while fear is elevated."}, "investment advice"),
+    ({"reasoning_1d": "Price is under SMA-30 [T] and ETF flows are negative [N1]. Buy the dip while the RSI is still near oversold levels."}, "investment advice"),
+    ({"reasoning_1d": "Price is under SMA-30 [T] and ETF flows are negative [N1]; set a stop-loss under the 30-day low to manage risk."}, "investment advice"),
     ({"technical_summary": "RSI is 38 and price is below both moving averages; volatility is moderate and the trend is down."}, "[T]"),
 ])
 def test_validators_reject(over, fragment):
@@ -76,16 +78,60 @@ def test_validators_reject(over, fragment):
     assert fragment in str(exc.value)
 
 
-def test_descriptive_market_language_is_not_advice():
-    r = "Selling pressure eased as buyers absorbed ETF outflows [N1]; price remains under SMA-30 [T] after the sell-off and long liquidations."
-    BitcoinPredictionOutput.model_validate(output_dict(reasoning_1d=r), context=G)
+@pytest.mark.parametrize("text", [
+    "Selling pressure eased as buyers absorbed ETF outflows [N1]; price remains under SMA-30 [T] after the sell-off and long liquidations.",
+    "Strive continued to buy bitcoin [N2] and whales accumulated through the dip, while price holds under SMA-30 [T].",
+    "Leveraged longs were liquidated [N1] and traders took profits; short-term momentum is weak with RSI near 38 [T].",
+    "Sell pressure eased after the ETF outflows [N1]. Buy-side depth is thin, and price sits under its 30-day average [T].",
+])
+def test_descriptive_market_language_is_not_advice(text):
+    BitcoinPredictionOutput.model_validate(output_dict(reasoning_1d=text), context=G)
+
+
+@pytest.mark.parametrize("raw, canonical", [
+    ("ETF outflows [N1, N3] weigh on price (T).", "ETF outflows [N1][N3] weigh on price [T]."),
+    ("ETF outflows (N1) and RSI near 38 [T1].", "ETF outflows [N1] and RSI near 38 [T]."),
+    ("ETF outflows [A2] and the trend [Technical].", "ETF outflows [N2] and the trend [T]."),
+    ("ETF outflows N2 and RSI [N1; T].", "ETF outflows [N2] and RSI [N1][T]."),
+    ("ETF outflows [news 3], [n1 & T].", "ETF outflows [N3], [N1][T]."),
+    ("Below SMA-30 (SMA-30) [T] and RSI (RSI 38) since 2024 (2024); N95 masks.", "Below SMA-30 (SMA-30) [T] and RSI (RSI 38) since 2024 (2024); N95 masks."),
+])
+def test_citation_variants_are_normalised(raw, canonical):
+    filler = " The base rate dominates at this horizon, so the move is small."
+    out = BitcoinPredictionOutput.model_validate(output_dict(reasoning_1d=raw + filler), context=G)
+    assert out.reasoning_1d == canonical + filler
+
+
+def test_confidence_above_cap_is_clamped_not_rejected():
+    out = BitcoinPredictionOutput.model_validate(output_dict(confidence_14d=97), context=G)
+    assert out.confidence_14d == 85
+
+
+def test_reasoning_may_rest_on_technicals_alone():
+    r = "Over two weeks the indicators dominate: price is 5% under SMA-30 [T] and RSI sits near 38, so a modest drift is favoured."
+    BitcoinPredictionOutput.model_validate(output_dict(reasoning_14d=r), context=G)
 
 
 def test_band_scales_with_horizon():
-    # +9% is ~1.5 sigma over 14 days (sigma*sqrt(14) = 7.5%) but 4.5 sigma in one day.
-    BitcoinPredictionOutput.model_validate(output_dict(predicted_price_14d=81_750.0), context=G)
+    # +10% is ~1.3 sigma over 14 days (sigma*sqrt(14) = 7.5%) but 5 sigma in one day (limit 4 sigma).
+    BitcoinPredictionOutput.model_validate(output_dict(predicted_price_14d=82_500.0), context=G)
     with pytest.raises(ValidationError):
-        BitcoinPredictionOutput.model_validate(output_dict(predicted_price_1d=81_750.0), context=G)
+        BitcoinPredictionOutput.model_validate(output_dict(predicted_price_1d=82_500.0), context=G)
+
+
+def test_prompt_states_the_validators_band():
+    t = technicals.compute([(TODAY - timedelta(days=1), 74_000.0)], 75_000.0, today=TODAY).as_dict()
+    p = build_bitcoin_prompt(t, [], [], band_sigmas=4.0)
+    lo, hi = band(75_000.0, t["daily_sigma"], 1, 4.0)
+    assert f"1d: {lo:.0f} .. {hi:.0f} USD" in p and "HARD LIMIT" in p
+    assert "75,000" not in p and "current_price: 75000.00" in p  # no thousands separators anywhere a model might copy
+
+
+def test_thousands_truncated_price_is_rescued_only_inside_the_band():
+    out = BitcoinPredictionOutput.model_validate(output_dict(predicted_price_1d=75.3), context=G)
+    assert out.predicted_price_1d == pytest.approx(75_300)
+    with pytest.raises(ValidationError, match="outside the plausible"):  # 40k is not a plausible reading either
+        BitcoinPredictionOutput.model_validate(output_dict(predicted_price_1d=40.0), context=G)
 
 
 def test_no_news_means_no_news_citation_required():
@@ -104,6 +150,22 @@ def test_repair_loop_fixes_an_out_of_band_price():
     assert out.predicted_price_1d == good["predicted_price_1d"]
     assert "outside the plausible" in sent[1]["messages"][-1]["content"]
     assert sent[0]["response_format"]["json_schema"]["strict"] is True
+
+
+def test_exhausted_repairs_log_raw_output_and_explain(caplog):
+    """When every attempt fails, each raw reply is logged at ERROR, attached to the exception, and the dashboard message
+    names the failing rule."""
+    from app.bitcoin.predictor import describe_failure
+    from app.curriculum.errors import LLMValidationFailed
+
+    bad = json.dumps(output_dict(reasoning_3d="Momentum is soft [T] and a hack weighs on sentiment [N9], favouring a small decline."))
+    llm, _ = make_llm([completion(bad)] * 10, usage=_NoUsage())
+    with caplog.at_level("ERROR"), pytest.raises(LLMValidationFailed) as exc:
+        llm.generate(system="s", user="u", output_model=BitcoinPredictionOutput, grounding=G)
+    assert len(exc.value.raw_outputs) == llm._s.llm_max_repairs + 1
+    assert "raw model output" in caplog.text and "a hack weighs on sentiment [N9]" in caplog.text
+    msg = describe_failure(exc.value)
+    assert "reasoning_3d" in msg and "N9" in msg and "worker log" in msg
 
 
 class _NoUsage:

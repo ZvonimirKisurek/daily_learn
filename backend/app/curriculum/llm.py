@@ -131,6 +131,7 @@ class StructuredLLM:
         response_format = {"type": "json_schema", "json_schema": {"name": output_model.__name__, "strict": True, "schema": strict_schema(output_model)}}
         messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         last_errors = ""
+        raw_outputs: list[str] = []
         for attempt in range(s.llm_max_repairs + 1):
             text = self._chat(purpose=output_model.__name__, model=model, messages=messages, response_format=response_format,
                               temperature=temperature, max_tokens=s.llm_max_tokens, attempt=attempt)
@@ -138,12 +139,18 @@ class StructuredLLM:
                 return output_model.model_validate_json(text, context=grounding)
             except ValidationError as exc:
                 last_errors = format_errors(exc)
-                log.warning("validation failed (attempt %d):\n%s", attempt, last_errors)
+                raw_outputs.append(text)
+                # The raw reply is model output (no keys, no secrets), so it is safe to log in full, and it is the only
+                # way to see WHY a rule keeps failing. Truncated so one bad reply cannot flood the log.
+                log.error("%s failed validation (attempt %d/%d):\n%s\n----- raw model output -----\n%s\n----- end raw output -----",
+                          output_model.__name__, attempt + 1, s.llm_max_repairs + 1, last_errors, text[:12_000])
                 messages += [
                     {"role": "assistant", "content": text},
                     {"role": "user", "content": "Your JSON failed validation:\n" + last_errors + "\nReturn the complete corrected JSON object."},
                 ]
-        raise LLMValidationFailed(f"still invalid after {s.llm_max_repairs} repairs:\n{last_errors}")
+        err = LLMValidationFailed(f"still invalid after {s.llm_max_repairs} repairs:\n{last_errors}")
+        err.errors, err.raw_outputs = last_errors, raw_outputs  # for callers that want to log or surface the details
+        raise err
 
     # ------------------------------------------------------------------ mode 2: long-form markdown, validated by measurement
     def generate_text(self, *, system: str, user: str, check: Callable[[str], list[str]], purpose: str,

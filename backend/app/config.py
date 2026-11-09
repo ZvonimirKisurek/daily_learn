@@ -98,7 +98,7 @@ class Settings(BaseSettings):
     bitcoin_prompt_news: int = 30  # max headlines in the prompt (~150 tokens each)
     bitcoin_max_per_source: int = 8  # so one prolific feed can't fill the prompt
     bitcoin_max_confidence: int = 85  # validator cap: no honest model is >85% sure where BTC will be next week
-    bitcoin_band_sigmas: float = 3.0  # a forecast must sit within ±k·σ·√h of today's price (see bitcoin/schemas.py)
+    bitcoin_band_sigmas: float = 4.0  # a forecast must sit within ±k·σ·√h of today's price (see bitcoin/schemas.py)
     bitcoin_regen_cooldown_minutes: int = 10  # the manual "Refresh" can't trigger paid runs faster than this
     bitcoin_news_retention_days: int = 30
     temp_bitcoin: float = 0.2  # analysis, not creativity: keep the numbers stable run to run
