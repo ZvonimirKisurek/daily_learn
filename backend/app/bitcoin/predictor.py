@@ -1,12 +1,15 @@
-"""The daily Bitcoin forecast: ingest, compute indicators, prompt, validate, store.
+"""The daily Bitcoin forecast: ingest, compute indicators, score past forecasts, prompt, validate, store.
 
     ingest_price ─┐
-    ingest_news  ─┼─► technicals.compute (code) ─► build_bitcoin_prompt ─► StructuredLLM.generate(BitcoinPredictionOutput,
-    daily closes ─┘                                                         context=BitcoinGrounding) ─► insert row
+    ingest_news  ─┼─► technicals.compute (code) ──┐
+    daily OHLC   ─┘                                ├─► build_bitcoin_prompt ─► StructuredLLM.generate(BitcoinPredictionOutput,
+    past forecasts ─► accuracy.get_past_accuracy ─┘                            context=BitcoinGrounding) ─► insert row
+                                                                                                              │
+    (the stored row is scored by get_past_accuracy once its horizons pass: the self-correction loop) ◄────────┘
 
 Failure policy: no price means no forecast (PriceUnavailable propagates). Missing history or news degrades the inputs
 (fewer indicators, no headlines) and the prompt says so explicitly, so the model leans on the base rate instead of
-inventing context. Every attempt, including repair attempts, counts against LLM_DAILY_BUDGET_USD through the shared
+inventing context. A failure to score past forecasts only drops the track record from the prompt. Every attempt, including repair attempts, counts against LLM_DAILY_BUDGET_USD through the shared
 usage ledger.
 """
 from __future__ import annotations
@@ -16,7 +19,7 @@ from datetime import datetime, timezone
 
 from psycopg.types.json import Jsonb
 
-from app.bitcoin import ingest, technicals
+from app.bitcoin import accuracy, ingest, technicals
 from app.bitcoin.schemas import BitcoinGrounding, BitcoinPredictionOutput
 from app.bitcoin.technicals import HORIZONS
 from app.config import Settings, get_settings
@@ -100,8 +103,17 @@ def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool)
             ingest.ingest_news(s)
         except Exception:  # noqa: BLE001 - stale news is better than no forecast
             log.exception("bitcoin news ingestion failed; forecasting with what is already stored")
-    history = ingest.fetch_daily_closes(s.bitcoin_history_days, s)
+    history = ingest.fetch_daily_ohlc(s.bitcoin_history_days, s)
     tech = technicals.compute(history, current)
+    candles = technicals.candles_with_spot(history, current)
+
+    # The feedback loop: how did the forecasts whose target date has now passed actually do?
+    try:
+        track = accuracy.get_past_accuracy({c.day: c.close for c in history}, window_days=s.bitcoin_accuracy_window_days,
+                                           tolerance_hours=s.bitcoin_accuracy_tolerance_hours)
+    except Exception:  # noqa: BLE001 - a forecast without a report card beats no forecast
+        log.exception("bitcoin accuracy scoring failed; forecasting without a track record")
+        track = None
 
     news = ingest.recent_news(s.bitcoin_news_window_hours, s.bitcoin_prompt_news, s.bitcoin_max_per_source)
     for i, n in enumerate(news, 1):
@@ -110,13 +122,13 @@ def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool)
 
     # 2. Prompt + validated generation.
     td = tech.as_dict()
-    series = technicals.with_spot(history, current)
-    last7 = [(d.isoformat(), c) for d, c in series[-7:]]
     grounding = BitcoinGrounding(news_ids=frozenset(n["ref"] for n in news), current_price=current, daily_sigma=tech.daily_sigma,
-                                 band_sigmas=s.bitcoin_band_sigmas, max_confidence=s.bitcoin_max_confidence)
+                                 band_sigmas=s.bitcoin_band_sigmas, max_confidence=s.bitcoin_max_confidence,
+                                 require_advanced=tech.macd is not None or tech.bb_upper is not None)
+    user_prompt = build_bitcoin_prompt(td, candles[-30:], news, accuracy=track, band_sigmas=s.bitcoin_band_sigmas)
     try:
-        out: BitcoinPredictionOutput = llm.generate(system=BITCOIN_PREDICTION_SYSTEM,
-                                                    user=build_bitcoin_prompt(td, last7, news, band_sigmas=s.bitcoin_band_sigmas),
+        # temperature = settings.temp_bitcoin (0.6): see app/config.py
+        out: BitcoinPredictionOutput = llm.generate(system=BITCOIN_PREDICTION_SYSTEM, user=user_prompt,
                                                     output_model=BitcoinPredictionOutput, grounding=grounding, temperature=s.temp_bitcoin)
     except LLMValidationFailed as exc:
         # Every rejected reply was already logged attempt by attempt (StructuredLLM.generate). This line ties them to the
@@ -130,7 +142,9 @@ def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool)
     # 3. Store, with an exact record of what the model saw.
     inputs = {
         "technicals": td,
-        "history": [{"date": d.isoformat(), "close": round(c, 2)} for d, c in series[-30:]],
+        "history": [{"date": c.day.isoformat(), "open": round(c.open, 2), "high": round(c.high, 2), "low": round(c.low, 2),
+                     "close": round(c.close, 2)} for c in candles[-30:]],
+        "accuracy": track,
         "news": [{"ref": n["ref"], "id": str(n["id"]), "title": n["title"], "url": n["url"], "source": n["source_name"]} for n in news],
     }
     cols = {"price_id": price_row["id"], "current_price": round(current, 2), "model": s.llm_model, "trigger": trigger, "inputs": Jsonb(inputs),

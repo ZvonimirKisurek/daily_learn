@@ -104,7 +104,7 @@ export function PredictionCard({ horizon: h, current, cited, index }: {
             className="absolute inset-x-0 top-full mt-1.5 overflow-hidden rounded-xl border bg-[#0a0d12]/95 shadow-2xl backdrop-blur-xl"
             style={{ borderColor: tone.glow, scale: 1.03, transformOrigin: "top" }}
           >
-            <p className="px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
+            <p className="max-h-80 overflow-y-auto whitespace-pre-line px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
               <CitedText text={h.reasoning} cited={cited} />
             </p>
           </motion.div>

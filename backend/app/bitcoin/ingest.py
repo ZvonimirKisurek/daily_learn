@@ -25,6 +25,7 @@ import yaml
 from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential_jitter
 
+from app.bitcoin.technicals import Candle
 from app.config import Settings, get_settings
 from app.db import get_pool
 from app.ingestion.http import PoliteClient
@@ -88,27 +89,33 @@ def fetch_spot_price(settings: Settings | None = None) -> tuple[float, str]:
     raise PriceUnavailable("; ".join(errors))
 
 
-def fetch_daily_closes(days: int, settings: Settings | None = None) -> list[tuple[date, float]]:
-    """Daily closing prices (UTC days), oldest first, one per day. Empty list if every provider fails: the predictor
-    degrades gracefully (fewer indicators) rather than refusing to run."""
+def fetch_daily_ohlc(days: int, settings: Settings | None = None) -> list[Candle]:
+    """Daily OHLC candles (UTC days), oldest first, one per day. Empty list if every provider fails: the predictor
+    degrades gracefully (fewer indicators) rather than refusing to run.
+
+    Coinbase is tried FIRST here because it is the free source with true daily highs and lows (ATR needs them).
+    CoinGecko's free history has closes only (its /ohlc endpoint returns 4-day candles beyond 30 days), so as the
+    fallback it yields close-only candles (open = high = low = close) and technicals marks ATR as approximated."""
     s = settings or get_settings()
     with _client(s) as c:
+        try:
+            # Coinbase candles: [time, low, high, open, close, volume], newest first, at most 300 per request.
+            rows = _get_json(c, COINBASE_CANDLES, granularity=86400)
+            out = sorted(Candle(datetime.fromtimestamp(r[0], tz=timezone.utc).date(), float(r[3]), float(r[2]), float(r[1]), float(r[4]))
+                         for r in rows)
+            if len(out) >= 2:
+                return out[-days:]
+        except Exception as exc:  # noqa: BLE001
+            log.warning("coinbase candles failed: %r", exc)
         try:
             data = _get_json(c, f"{COINGECKO}/coins/bitcoin/market_chart", vs_currency="usd", days=days, interval="daily")
             by_day: dict[date, float] = {}
             for ms, price in data["prices"]:
                 by_day[datetime.fromtimestamp(ms / 1000, tz=timezone.utc).date()] = float(price)  # last value per day wins
             if len(by_day) >= 2:
-                return sorted(by_day.items())
+                return [Candle(d, p, p, p, p) for d, p in sorted(by_day.items())]
         except Exception as exc:  # noqa: BLE001
             log.warning("coingecko history failed: %r", exc)
-        try:
-            # Coinbase candles: [time, low, high, open, close, volume], newest first, at most 300 per request.
-            rows = _get_json(c, COINBASE_CANDLES, granularity=86400)
-            out = sorted((datetime.fromtimestamp(r[0], tz=timezone.utc).date(), float(r[4])) for r in rows)
-            return out[-days:]
-        except Exception as exc:  # noqa: BLE001
-            log.warning("coinbase history failed: %r", exc)
     return []
 
 

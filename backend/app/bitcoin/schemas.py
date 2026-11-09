@@ -34,6 +34,9 @@ REJECT (a real failure the model has to correct).
      market vocabulary: "MicroStrategy continued to buy bitcoin", "leveraged longs were liquidated" and "whales
      accumulated" describe what happened and are allowed; "buy the dip", "you should", "set a stop-loss" are not.
   e. A forecast equal to today's price. The model must commit to a direction, at confidence 50 if it sees no edge.
+  f. Missing advanced technicals. When MACD or Bollinger values were in the prompt (require_advanced), every reasoning
+     must name MACD or the Bollinger Bands. The rubric's top tier depends on them, so a reasoning that never mentions
+     them cannot have justified its confidence. A plain substring check: cheap, and hard to satisfy by accident.
 
 WHAT "CONFIDENCE" MEANS (the same definition appears in the prompt): the probability, 0-100, that on the target date
 the actual price will be on the same side of today's price as the forecast, i.e. that the forecast DIRECTION is right.
@@ -59,6 +62,7 @@ log = logging.getLogger(__name__)
 
 NEWS_TAG = re.compile(r"\[(N\d{1,3})\]")
 TECH_TAG = "[T]"
+ADVANCED = re.compile(r"\bMACD\b|\bBollinger\b", re.I)
 TEXT_FIELDS = ("sentiment_summary", "technical_summary", "reasoning_1d", "reasoning_3d", "reasoning_7d", "reasoning_14d")
 
 # ------------------------------------------------------------------------------------------------ citation normalisation
@@ -131,6 +135,7 @@ class BitcoinGrounding:
     daily_sigma: float
     band_sigmas: float = 4.0
     max_confidence: int = 85
+    require_advanced: bool = False  # True when MACD/Bollinger values were in the prompt (enough history to compute them)
 
 
 def band(current_price: float, daily_sigma: float, days: int, k: float) -> tuple[float, float]:
@@ -144,7 +149,8 @@ def _g(info: ValidationInfo) -> BitcoinGrounding | None:
     return info.context if isinstance(info.context, BitcoinGrounding) else None
 
 
-def _check_text(v: str, info: ValidationInfo, *, need_news: bool = False, need_tech: bool = False, need_any: bool = False) -> str:
+def _check_text(v: str, info: ValidationInfo, *, need_news: bool = False, need_tech: bool = False, need_any: bool = False,
+                need_advanced: bool = False) -> str:
     if m := ADVICE.search(v):
         raise ValueError(f"contains investment advice ({m.group(0).strip()!r}). Describe what the market is doing; never tell "
                          "the reader what to do")
@@ -162,10 +168,15 @@ def _check_text(v: str, info: ValidationInfo, *, need_news: bool = False, need_t
         raise ValueError("must cite the indicators with the exact tag [T]")
     if need_any and not (has_news or has_tech):
         raise ValueError("must cite at least one fact: a headline as [N#] (e.g. [N3]) and/or an indicator as [T]")
+    if need_advanced and g.require_advanced and not ADVANCED.search(v):
+        raise ValueError("must state the MACD and/or Bollinger Band status with its value, e.g. \"MACD -957 sits below its "
+                         "signal line -579 [T]\" or \"price is at %B 0.39 inside the Bollinger Bands [T]\"")
     return v
 
 
-Reasoning = Field(min_length=40, max_length=1200, description="2-4 sentences. Cite headlines as [N#] (e.g. [N3]) and indicators as [T].")
+# The prompt asks for 2-3 paragraphs (~600-1800 chars). The cap is 2400 so a thorough note is never bounced for length;
+# the floor stays low because depth is the prompt's job, and a length repair round-trip costs a full API call.
+Reasoning = Field(min_length=40, max_length=2400, description="3 paragraphs separated by a blank line: macro and news (cite [N#]), technical setup (MACD, RSI and Bollinger values, cite [T]), then the prediction, risk and confidence justification.")
 Confidence = Field(ge=0, le=100, description="Probability (0-100) that the price on the target date is on the SAME SIDE of today's price as your forecast. 50 = coin flip.")
 Price = Field(gt=0, description="Forecast BTC price in USD on the target date. Must lie inside the plausible range given in <market_data>.")
 
@@ -235,7 +246,7 @@ class BitcoinPredictionOutput(BaseModel):
     @field_validator("reasoning_1d", "reasoning_3d", "reasoning_7d", "reasoning_14d")
     @classmethod
     def _reasoning(cls, v: str, info: ValidationInfo) -> str:
-        return _check_text(v, info, need_any=True)
+        return _check_text(v, info, need_any=True, need_advanced=True)
 
     @model_validator(mode="after")
     def _numbers(self, info: ValidationInfo) -> "BitcoinPredictionOutput":
@@ -254,6 +265,9 @@ class BitcoinPredictionOutput(BaseModel):
                 problems.append(f"predicted_price_{key} equals today's price: commit to a direction (confidence 50 if you see no edge)")
         if problems:
             raise ValueError("; ".join(problems))
+        confs = {getattr(self, f"confidence_{key}") for key, _ in HORIZONS}
+        if len(confs) == 1:  # allowed (the prompt permits it with a reason) but it is the failure mode the rubric targets
+            log.warning("btc forecast: identical confidence %d%% on every horizon", confs.pop())
         return self
 
     def horizon(self, key: str) -> tuple[float, int, str]:

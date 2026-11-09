@@ -111,6 +111,10 @@ export interface BitcoinTechnicals {
   sma_7: number | null; sma_30: number | null; price_vs_sma7_pct: number | null; price_vs_sma30_pct: number | null;
   rsi_14: number | null; daily_sigma: number; annualised_vol_pct: number; high_30d: number | null; low_30d: number | null;
   one_sigma_move: Record<BitcoinHorizonKey, number>; days_of_history: number;
+  macd: number | null; macd_signal: number | null; macd_hist: number | null; macd_hist_prev: number | null;
+  bb_upper: number | null; bb_middle: number | null; bb_lower: number | null; bb_percent_b: number | null;
+  bb_bandwidth_pct: number | null; bb_bandwidth_pctl: number | null;
+  atr_14: number | null; atr_pct: number | null; ohlc_real: boolean;
 }
 export interface BitcoinPrediction {
   id: string; created_at: string; current_price: number; model: string; trigger: string;

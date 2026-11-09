@@ -271,6 +271,12 @@ function TechnicalsPanel({ prediction: p }: { prediction: BitcoinPrediction }) {
         {(["1d", "3d", "7d", "14d"] as const).map((k) => (
           <Stat key={k} label={<>1<span className="normal-case">σ</span> · {k}</>} value={t.one_sigma_move ? `±${usd(t.one_sigma_move[k])}` : "—"} />
         ))}
+        {/* Older forecasts predate these indicators, so every one is optional. */}
+        <Stat label="MACD hist" value={t.macd_hist == null ? "—" : `${t.macd_hist > 0 ? "+" : ""}${t.macd_hist.toFixed(0)}`}
+          valueClassName={trendClass(t.macd_hist ?? null)} />
+        <Stat label="Bollinger %B" value={t.bb_percent_b == null ? "—" : t.bb_percent_b.toFixed(2)} />
+        <Stat label="BB width" value={t.bb_bandwidth_pct == null ? "—" : `${t.bb_bandwidth_pct.toFixed(1)}%`} />
+        <Stat label="ATR 14" value={t.atr_pct == null ? "—" : `${t.atr_pct.toFixed(2)}%`} />
       </dl>
       <p className="mt-4 border-t border-white/[0.06] pt-4 text-[13px] leading-relaxed text-foreground/85">
         <CitedText text={p.technical_summary} cited={p.cited_news} />

@@ -20,7 +20,9 @@ G = BitcoinGrounding(news_ids=frozenset({"N1", "N2", "N3"}), current_price=75_00
 
 
 def output_dict(**over) -> dict:
-    r = "Price sits below the 30-day average [T] while ETF outflows weigh on demand [N1]; the base rate dominates at this horizon."
+    r = ("Price sits below the 30-day average [T], MACD is under its signal line and RSI near 38 shows weak momentum.\n\n"
+         "ETF outflows weigh on demand [N1], and nothing in the feed offsets them yet.\n\n"
+         "Signals align modestly, so the forecast stays inside one sigma. Confidence 58% (medium): agreement, but high volatility.")
     d = {
         "sentiment_summary": "Headlines are mixed: ETF outflows [N1] offset by a constructive regulatory story [N2]; little is BTC-specific.",
         "sentiment_score": -10,
@@ -217,7 +219,7 @@ def btc_db(db, monkeypatch):
         conn.execute("insert into bitcoin_news (source_name, title, url, url_hash, published_at) values ('Old', 'stale', 'https://n.test/old', 'hold', now() - interval '10 days')")
     hist = [(datetime.now(timezone.utc).date() - timedelta(days=40 - i), 70_000.0 + 100 * i) for i in range(40)]
     monkeypatch.setattr(ingest, "fetch_spot_price", lambda s=None: (75_123.45, "coingecko"))
-    monkeypatch.setattr(ingest, "fetch_daily_closes", lambda days, s=None: hist)
+    monkeypatch.setattr(ingest, "fetch_daily_ohlc", lambda days, s=None: technicals.as_candles(hist))
     monkeypatch.setattr(ingest, "ingest_news", lambda s=None: {"inserted": 0})
     return db
 
@@ -351,3 +353,109 @@ async def test_missing_tables_is_a_clean_503(db, monkeypatch):
         with psycopg.connect(db, autocommit=True) as conn:
             conn.execute("alter table bitcoin_runs_hidden rename to bitcoin_runs")
         get_settings.cache_clear()
+
+
+def test_long_multi_paragraph_reasoning_is_accepted_and_keeps_paragraphs():
+    para = "The RSI of 35.3 sits just above washed-out territory [T] while ETF outflows continue [N1]. " * 7
+    r = f"{para}\n\n{para}\n\nConfidence 72% (high): technicals and news agree [T]."
+    assert 1200 < len(r) <= 2400
+    out = BitcoinPredictionOutput.model_validate(output_dict(reasoning_7d=r), context=G)
+    assert out.reasoning_7d.count("\n\n") == 2
+
+
+def test_prompt_includes_signal_readout_and_calibration_rubric():
+    from app.curriculum.prompts import BITCOIN_PREDICTION_SYSTEM
+
+    hist = [(TODAY - timedelta(days=40 - i), 90_000 - 400 * i) for i in range(40)]  # steady decline
+    t = technicals.compute(hist, 73_000.0, today=TODAY).as_dict()
+    p = build_bitcoin_prompt(t, [], [])
+    assert "<signal_readout>" in p and "technical_bias: bearish" in p and "rsi_zone:" in p
+    assert "HIGH   76-85" in BITCOIN_PREDICTION_SYSTEM and "never below 50" in BITCOIN_PREDICTION_SYSTEM
+    assert "macd_state:" in p and "bollinger:" in p and "<track_record>(unavailable" in p
+
+
+# ------------------------------------------------------------------------------------------------ advanced indicators
+def test_ema_macd_bollinger_atr_known_values():
+    assert technicals.ema([1, 2, 3, 4, 5], 3) == [2.0, 3.0, 4.0]  # seed = SMA(1,2,3) = 2, alpha = 0.5
+    assert technicals.macd([100.0] * 40) == (0.0, 0.0, 0.0, 0.0)  # no trend, no momentum
+    assert technicals.macd([100.0] * 34) is None  # needs slow + signal = 35 closes
+    up = technicals.macd([100.0 + i for i in range(60)])
+    assert up[0] > 0 and up[1] > 0  # a steady uptrend: fast EMA above slow
+    bb = technicals.bollinger([100.0] * 19 + [100.0])
+    assert bb["upper"] == bb["lower"] == 100.0 and bb["percent_b"] == 0.5 and bb["bandwidth_pct"] == 0.0
+    bb = technicals.bollinger([float(x % 2) + 100 for x in range(20)])  # alternating 100/101: sd = 0.5
+    assert bb["upper"] == pytest.approx(101.5) and bb["lower"] == pytest.approx(99.5)
+    day = [technicals.Candle(TODAY - timedelta(days=30 - i), 100, 105, 95, 100) for i in range(30)]
+    assert technicals.atr(day) == pytest.approx(10.0)  # every true range is high - low = 10
+    gap = [technicals.Candle(TODAY, 100, 101, 99, 100), technicals.Candle(TODAY, 120, 121, 119, 120)]
+    assert technicals.atr(gap, n=1) == pytest.approx(21.0)  # the overnight gap counts: |121 - 100|
+
+
+def test_compute_flags_close_only_history_and_builds_atr_envelope():
+    hist = [(TODAY - timedelta(days=60 - i), 70_000 + 50 * i) for i in range(60)]
+    t = technicals.compute(hist, 73_000.0, today=TODAY)
+    assert t.ohlc_real is False and t.macd is not None and t.bb_upper is not None and t.atr_14 is not None
+    _, hi = t.atr_envelope["14d"]
+    assert hi - t.current_price == pytest.approx(t.atr_14 * math.sqrt(14), abs=0.02)
+    candles = [technicals.Candle(d, c, c * 1.01, c * 0.99, c) for d, c in hist]
+    assert technicals.compute(candles, 73_000.0, today=TODAY).ohlc_real is True
+
+
+def test_reasoning_must_name_macd_or_bollinger_when_they_were_given():
+    plain = ("Price is under SMA-30 [T] and ETF outflows weigh on demand [N1]; the base rate dominates at this horizon, "
+             "so the move is small.")
+    strict = BitcoinGrounding(**{**G.__dict__, "require_advanced": True})
+    BitcoinPredictionOutput.model_validate(output_dict(reasoning_3d=plain), context=G)  # not required: passes
+    with pytest.raises(ValidationError, match="MACD and/or Bollinger"):
+        BitcoinPredictionOutput.model_validate(output_dict(reasoning_3d=plain), context=strict)
+    ok = plain.replace("SMA-30 [T]", "the lower Bollinger band [T]")
+    BitcoinPredictionOutput.model_validate(output_dict(reasoning_3d=ok), context=strict)
+
+
+# ------------------------------------------------------------------------------------------------ track record
+def test_score_metrics():
+    from app.bitcoin.accuracy import score
+
+    assert score([])["n"] == 0 and score([])["mape_pct"] is None
+    s = score([
+        {"current": 100, "predicted": 102, "actual": 104, "confidence": 70},  # right way, 1.92% off; no-change 3.85% off
+        {"current": 100, "predicted": 103, "actual": 96, "confidence": 70},   # wrong way, 7.29% off; no-change 4.17% off
+    ])
+    assert s["n"] == 2 and s["hit_rate_pct"] == 50.0 and s["mean_confidence"] == 70.0 and s["calibration_gap"] == 20.0
+    assert s["mape_pct"] == pytest.approx((2 / 104 + 7 / 96) / 2 * 100, abs=0.01)
+    assert s["naive_mape_pct"] == pytest.approx((4 / 104 + 4 / 96) / 2 * 100, abs=0.01)
+    assert s["skill"] < 0 and s["bias_pct"] > 0  # worse than no-change, and the misses leaned bullish
+
+
+def test_track_record_block_flags_overconfidence_and_small_samples():
+    from app.curriculum.prompts import _track_record
+
+    bad = {"n": 12, "mape_pct": 4.1, "naive_mape_pct": 3.0, "skill": -0.37, "hit_rate_pct": 42.0, "mean_confidence": 66.0,
+           "calibration_gap": 24.0, "bias_pct": 2.5}
+    acc = {"window_days": 14, "min_samples": 5, "horizons": {"1d": bad, "3d": {"n": 2}, "7d": {"n": 0}, "14d": {"n": 0}}}
+    block = _track_record(acc)
+    assert "OVERCONFIDENT by 24 points" in block and "WORSE than no-change" in block and "HIGH ERROR" in block
+    assert "SYSTEMATIC BULLISH LEAN" in block and "3d: n=2 (below min_samples=5" in block
+    assert "unavailable" in _track_record(None)
+
+
+@pytest.mark.integration
+def test_get_past_accuracy_scores_matured_forecasts_only(btc_db):
+    from app.bitcoin.accuracy import get_past_accuracy
+
+    now = datetime.now(timezone.utc)
+    cols = ", ".join(f"predicted_price_{k}, confidence_{k}, reasoning_{k}" for k in ("1d", "3d", "7d", "14d"))
+    with psycopg.connect(btc_db, autocommit=True) as conn:
+        def forecast(days_ago: float, pred_1d: float):
+            vals = [pred_1d, 70, "r", 100, 60, "r", 100, 60, "r", 100, 60, "r"]
+            conn.execute(f"insert into bitcoin_predictions (current_price, {cols}, sentiment_score, sentiment_summary, technical_summary, model, created_at) "
+                         f"values (100, {', '.join(['%s'] * 12)}, 0, 's', 't', 'm', %s)", [*vals, now - timedelta(days=days_ago)])
+        forecast(3, 102)    # 1d target 2 days ago: matured, scored against the spot fetch below
+        forecast(2.5, 98)   # 1d target 1.5 days ago: no spot fetch near it -> daily-close fallback
+        forecast(0.5, 110)  # 1d target still in the future: not scored
+        conn.execute("insert into bitcoin_prices (price_usd, fetched_at) values (104, %s)", [now - timedelta(days=2, hours=1)])
+    fallback = {(now - timedelta(days=1.5)).date(): 96.0}
+    acc = get_past_accuracy(fallback, window_days=14, tolerance_hours=6, now=now)
+    h = acc["horizons"]["1d"]
+    assert h["n"] == 2 and h["hit_rate_pct"] == 100.0 and acc["daily_close_fallbacks"] == 1
+    assert acc["horizons"]["14d"]["n"] == 0  # nothing has reached its 14-day target yet

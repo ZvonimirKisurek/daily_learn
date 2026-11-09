@@ -114,13 +114,22 @@ def main() -> int:
 
             s = get_settings()
             price, src = ingest.fetch_spot_price(s)
-            hist = ingest.fetch_daily_closes(s.bitcoin_history_days, s)
+            hist = ingest.fetch_daily_ohlc(s.bitcoin_history_days, s)
             rows, errors = ingest.asyncio.run(ingest._fetch_all(ingest.load_sources(s), s))
             rows.sort(key=lambda r: (not r["btc_relevant"], -r["published_at"].timestamp()))
             news = [{**r, "ref": f"N{i}"} for i, r in enumerate(rows[: s.bitcoin_prompt_news], 1)]
-            print(f"# price {price:,.2f} from {src}; {len(hist)} daily closes; {len(rows)} headlines; failed sources: {errors or 'none'}\n")
+            print(f"# price {price:,.2f} from {src}; {len(hist)} daily candles; {len(rows)} headlines; failed sources: {errors or 'none'}\n")
             print(BITCOIN_PREDICTION_SYSTEM, "\n\n----- user -----\n")
-            print(build_bitcoin_prompt(technicals.compute(hist, price).as_dict(), [(d.isoformat(), c) for d, c in technicals.with_spot(hist, price)[-7:]], news))
+            try:
+                from app.bitcoin.accuracy import get_past_accuracy
+
+                track = get_past_accuracy({c.day: c.close for c in hist}, window_days=s.bitcoin_accuracy_window_days,
+                                          tolerance_hours=s.bitcoin_accuracy_tolerance_hours)
+            except Exception as exc:  # noqa: BLE001 - a dry run must work without a database
+                print(f"# track record unavailable: {exc.__class__.__name__}")
+                track = None
+            print(build_bitcoin_prompt(technicals.compute(hist, price).as_dict(), technicals.candles_with_spot(hist, price)[-30:], news,
+                                       accuracy=track, band_sigmas=s.bitcoin_band_sigmas))
             return 0
         if args.ingest_only:
             print(ingest.ingest_price(), ingest.ingest_news(), sep="\n")
