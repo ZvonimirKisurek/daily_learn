@@ -97,13 +97,13 @@ class Settings(BaseSettings):
     bitcoin_news_window_hours: int = 72  # only news this recent reaches the prompt
     bitcoin_prompt_news: int = 15  # max headlines in the prompt (~200 tokens each); 30 days of OHLC now share the budget
     bitcoin_max_per_source: int = 8  # so one prolific feed can't fill the prompt
-    bitcoin_max_confidence: int = 85  # validator cap: no honest model is >85% sure where BTC will be next week
+    bitcoin_max_confidence: int = 95  # validator cap; the 5/5 confluence band tops out here (see bitcoin/confluence.py)
     bitcoin_band_sigmas: float = 4.0  # a forecast must sit within ±k·σ·√h of today's price (see bitcoin/schemas.py)
     bitcoin_regen_cooldown_minutes: int = 10  # the manual "Refresh" can't trigger paid runs faster than this
     bitcoin_news_retention_days: int = 30
     bitcoin_accuracy_window_days: int = 14  # self-correction: score forecasts whose target fell in this window
     bitcoin_accuracy_tolerance_hours: float = 12  # a spot fetch this close to the target instant counts as the actual price
-    temp_bitcoin: float = 0.6  # room for the model to weigh evidence and vary confidence by horizon (0.2 produced a flat 55% everywhere)
+    temp_bitcoin: float = 0.4  # the confluence rules are arithmetic now: less sampling noise, fewer repair round-trips
 
 
     @property

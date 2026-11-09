@@ -15,7 +15,7 @@ REJECT (a real failure the model has to correct).
   - Truncated prices. Under strict JSON decoding, a model that writes "73,250" emits 73: the comma ends the number. A
     price below current/500 whose x1000 value lies inside the band is read as thousands. The prompt also prints every
     price without separators and says "write 73250.0", which prevents the habit in the first place.
-  - Confidence above the cap. It is clamped to max_confidence (default 85) instead of rejected. The intent ("very sure")
+  - Confidence above the cap. It is clamped to max_confidence (default 95) instead of rejected. The intent ("very sure")
     is clear, and the cap is our policy, not the model's mistake.
 
   REJECTED (substantive)
@@ -34,6 +34,12 @@ REJECT (a real failure the model has to correct).
      market vocabulary: "MicroStrategy continued to buy bitcoin", "leveraged longs were liquidated" and "whales
      accumulated" describe what happened and are allowed; "buy the dip", "you should", "set a stop-loss" are not.
   e. A forecast equal to today's price. The model must commit to a direction, at confidence 50 if it sees no edge.
+  g. Confluence (when tech_signals is set). For each horizon the validator recomputes k, the number of the five
+     confluence signals (confluence.py) that point in the forecast's direction, from the model's OWN output: the sign
+     of predicted - current, and its sentiment_score for the news vote. Two checks: the reasoning must contain the
+     breakdown line "Confluence: k/5" with the correct k, and the confidence must lie in the band for k
+     (confluence.band). The band's floor drops to 50 when accuracy.regime_penalty() says the same regime has failed
+     before. The repair message spells out every vote, so a miscount is fixed in one round trip.
   f. Missing advanced technicals. When MACD or Bollinger values were in the prompt (require_advanced), every reasoning
      must name MACD or the Bollinger Bands. The rubric's top tier depends on them, so a reasoning that never mentions
      them cannot have justified its confidence. A plain substring check: cheap, and hard to satisfy by accident.
@@ -56,6 +62,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
+from app.bitcoin import confluence
 from app.bitcoin.technicals import HORIZONS
 
 log = logging.getLogger(__name__)
@@ -63,6 +70,7 @@ log = logging.getLogger(__name__)
 NEWS_TAG = re.compile(r"\[(N\d{1,3})\]")
 TECH_TAG = "[T]"
 ADVANCED = re.compile(r"\bMACD\b|\bBollinger\b", re.I)
+BREAKDOWN = re.compile(r"Confluence:\s*(\d)\s*/\s*5", re.I)
 TEXT_FIELDS = ("sentiment_summary", "technical_summary", "reasoning_1d", "reasoning_3d", "reasoning_7d", "reasoning_14d")
 
 # ------------------------------------------------------------------------------------------------ citation normalisation
@@ -134,8 +142,10 @@ class BitcoinGrounding:
     current_price: float
     daily_sigma: float
     band_sigmas: float = 4.0
-    max_confidence: int = 85
+    max_confidence: int = 95
     require_advanced: bool = False  # True when MACD/Bollinger values were in the prompt (enough history to compute them)
+    tech_signals: dict | None = None  # confluence.technical_signals() of today's indicators; None = rule not enforced
+    accuracy: dict | None = None  # accuracy.get_past_accuracy(), for the regime-matched penalty
 
 
 def band(current_price: float, daily_sigma: float, days: int, k: float) -> tuple[float, float]:
@@ -263,12 +273,36 @@ class BitcoinPredictionOutput(BaseModel):
                                 f"{lo:.0f}..{hi:.0f} for {days} day(s); pick a price inside that range")
             if abs(price - g.current_price) < 0.01:
                 problems.append(f"predicted_price_{key} equals today's price: commit to a direction (confidence 50 if you see no edge)")
+            elif g.tech_signals is not None:
+                problems += self._confluence_problems(g, key, days, 1 if price > g.current_price else -1)
         if problems:
             raise ValueError("; ".join(problems))
         confs = {getattr(self, f"confidence_{key}") for key, _ in HORIZONS}
         if len(confs) == 1:  # allowed (the prompt permits it with a reason) but it is the failure mode the rubric targets
             log.warning("btc forecast: identical confidence %d%% on every horizon", confs.pop())
         return self
+
+    def _confluence_problems(self, g: BitcoinGrounding, key: str, days: int, direction: int) -> list[str]:
+        from app.bitcoin.accuracy import regime_penalty  # local import: accuracy imports the DB layer
+
+        k, votes = confluence.confluence(g.tech_signals, self.sentiment_score, direction)
+        lo, hi = confluence.band(k, key)
+        penalty = regime_penalty(g.accuracy, key, days, k)
+        if penalty:
+            lo = 50
+        why = f"a {'UP' if direction > 0 else 'DOWN'} forecast has confluence {k}/5 ({confluence.describe(votes)})"
+        out = []
+        conf = getattr(self, f"confidence_{key}")
+        if not lo <= conf <= hi:
+            out.append(f"confidence_{key}={conf} but {why}, so confidence must be {lo}-{hi}"
+                       + (f" (floor lowered to 50 by the {penalty})" if penalty else ""))
+        written = BREAKDOWN.findall(getattr(self, f"reasoning_{key}"))
+        if not written:
+            out.append(f"reasoning_{key} must end with the breakdown line, e.g. \"Confluence: {k}/5 ({confluence.describe(votes)}). "
+                       f"Confidence set to {min(max(conf, lo), hi)}%.\"")
+        elif int(written[-1]) != k:
+            out.append(f"reasoning_{key} says Confluence: {written[-1]}/5 but {why}")
+        return out
 
     def horizon(self, key: str) -> tuple[float, int, str]:
         return getattr(self, f"predicted_price_{key}"), getattr(self, f"confidence_{key}"), getattr(self, f"reasoning_{key}")

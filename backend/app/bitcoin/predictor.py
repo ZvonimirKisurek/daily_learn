@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 from psycopg.types.json import Jsonb
 
-from app.bitcoin import accuracy, ingest, technicals
+from app.bitcoin import accuracy, confluence, ingest, technicals
 from app.bitcoin.schemas import BitcoinGrounding, BitcoinPredictionOutput
 from app.bitcoin.technicals import HORIZONS
 from app.config import Settings, get_settings
@@ -124,10 +124,11 @@ def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool)
     td = tech.as_dict()
     grounding = BitcoinGrounding(news_ids=frozenset(n["ref"] for n in news), current_price=current, daily_sigma=tech.daily_sigma,
                                  band_sigmas=s.bitcoin_band_sigmas, max_confidence=s.bitcoin_max_confidence,
-                                 require_advanced=tech.macd is not None or tech.bb_upper is not None)
+                                 require_advanced=tech.macd is not None or tech.bb_upper is not None,
+                                 tech_signals=confluence.technical_signals(td), accuracy=track)
     user_prompt = build_bitcoin_prompt(td, candles[-30:], news, accuracy=track, band_sigmas=s.bitcoin_band_sigmas)
     try:
-        # temperature = settings.temp_bitcoin (0.6): see app/config.py
+        # temperature = settings.temp_bitcoin (0.4): the confluence rules are arithmetic, so less sampling noise helps
         out: BitcoinPredictionOutput = llm.generate(system=BITCOIN_PREDICTION_SYSTEM, user=user_prompt,
                                                     output_model=BitcoinPredictionOutput, grounding=grounding, temperature=s.temp_bitcoin)
     except LLMValidationFailed as exc:

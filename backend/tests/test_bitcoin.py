@@ -105,8 +105,8 @@ def test_citation_variants_are_normalised(raw, canonical):
 
 
 def test_confidence_above_cap_is_clamped_not_rejected():
-    out = BitcoinPredictionOutput.model_validate(output_dict(confidence_14d=97), context=G)
-    assert out.confidence_14d == 85
+    out = BitcoinPredictionOutput.model_validate(output_dict(confidence_14d=99), context=G)
+    assert out.confidence_14d == 95
 
 
 def test_reasoning_may_rest_on_technicals_alone():
@@ -200,8 +200,14 @@ class FakeBtcLLM:
     def generate(self, *, system, user, output_model, grounding, **kw):
         assert output_model is BitcoinPredictionOutput
         self.prompts.append(user)
+        from app.bitcoin import confluence
+
         c = grounding.current_price
         d = output_dict(**{f"predicted_price_{k}": round(c * (1 + m), 2) for k, m in (("1d", .001), ("3d", -.004), ("7d", .01), ("14d", .02))})
+        for key in ("1d", "3d", "7d", "14d"):  # play by the confluence rule, as the real model must
+            k, votes = confluence.confluence(grounding.tech_signals, d["sentiment_score"], 1 if d[f"predicted_price_{key}"] > c else -1)
+            d[f"confidence_{key}"] = confluence.band(k, key)[0]
+            d[f"reasoning_{key}"] += f" Confluence: {k}/5 ({confluence.describe(votes)}). Confidence set to {d[f'confidence_{key}']}%."
         return output_model.model_validate(d, context=grounding)
 
 
@@ -235,7 +241,7 @@ def test_generate_prediction_stores_row_with_inputs(btc_db):
     assert p.index("Bitcoin ETFs") < p.index("Ether upgrade")  # bitcoin-specific first
     with psycopg.connect(btc_db) as conn:
         row = conn.execute("select trigger, current_price, predicted_price_14d, confidence_1d, inputs, price_id from bitcoin_predictions").fetchone()
-    assert row[0] == "cli" and float(row[1]) == 75_123.45 and row[3] == 55 and row[5] is not None
+    assert row[0] == "cli" and float(row[1]) == 75_123.45 and 50 <= row[3] <= 95 and row[5] is not None
     assert [n["ref"] for n in row[4]["news"]] == ["N1", "N2", "N3"] and row[4]["history"][-1]["close"] == 75_123.45
 
 
@@ -369,9 +375,12 @@ def test_prompt_includes_signal_readout_and_calibration_rubric():
     hist = [(TODAY - timedelta(days=40 - i), 90_000 - 400 * i) for i in range(40)]  # steady decline
     t = technicals.compute(hist, 73_000.0, today=TODAY).as_dict()
     p = build_bitcoin_prompt(t, [], [])
+    assert t["macd"] < 0 and t["macd_hist"] < 0 and t["bb_percent_b"] < 0.4  # the steady decline is bearish on all four
     assert "<signal_readout>" in p and "technical_bias: bearish" in p and "rsi_zone:" in p
-    assert "HIGH   76-85" in BITCOIN_PREDICTION_SYSTEM and "never below 50" in BITCOIN_PREDICTION_SYSTEM
+    assert "5/5  80-95" in BITCOIN_PREDICTION_SYSTEM and "never below 50" in BITCOIN_PREDICTION_SYSTEM
+    assert "A clear trend is a clear trend" in BITCOIN_PREDICTION_SYSTEM
     assert "macd_state:" in p and "bollinger:" in p and "<track_record>(unavailable" in p
+    assert "a DOWN forecast: 4/4 technical signals agree -> confluence 5/5" in p
 
 
 # ------------------------------------------------------------------------------------------------ advanced indicators
@@ -436,6 +445,7 @@ def test_track_record_block_flags_overconfidence_and_small_samples():
     block = _track_record(acc)
     assert "OVERCONFIDENT by 24 points" in block and "WORSE than no-change" in block and "HIGH ERROR" in block
     assert "SYSTEMATIC BULLISH LEAN" in block and "3d: n=2 (below min_samples=5" in block
+    assert "strong: n=0 (not enough history" in block  # bad overall numbers but no regime data: no penalty
     assert "unavailable" in _track_record(None)
 
 
@@ -459,3 +469,58 @@ def test_get_past_accuracy_scores_matured_forecasts_only(btc_db):
     h = acc["horizons"]["1d"]
     assert h["n"] == 2 and h["hit_rate_pct"] == 100.0 and acc["daily_close_fallbacks"] == 1
     assert acc["horizons"]["14d"]["n"] == 0  # nothing has reached its 14-day target yet
+
+
+# ------------------------------------------------------------------------------------------------ confluence
+BEAR = {"SMA": -1, "MACD": -1, "RSI": -1, "Bollinger": -1}
+
+
+def test_confluence_signals_and_bands():
+    from app.bitcoin import confluence as cf
+
+    t = {"current_price": 70_000, "price_vs_sma7_pct": -2.0, "price_vs_sma30_pct": -6.0, "macd": -900.0, "macd_hist": -150.0,
+         "rsi_14": 34.0, "bb_percent_b": 0.15}
+    assert cf.technical_signals(t) == BEAR
+    assert cf.technical_signals(t | {"macd_hist": 120.0})["MACD"] == 0  # below zero but recovering: neutral, not bullish
+    assert cf.technical_signals(t | {"price_vs_sma7_pct": 1.0})["SMA"] == 0  # split SMAs
+    assert cf.confluence(BEAR, -70, -1)[0] == 5 and cf.confluence(BEAR, -10, -1)[0] == 4 and cf.confluence(BEAR, -70, 1)[0] == 0
+    assert cf.band(5, "1d") == (80, 95) and cf.band(4, "14d") == (50, 79) and cf.band(1, "3d") == (50, 54)
+
+
+def _with(reason: str, conf: int, **over) -> dict:
+    d = output_dict(sentiment_score=-70, **over)
+    for key in ("1d", "3d", "7d", "14d"):
+        d[f"predicted_price_{key}"] = 74_000.0
+        d[f"confidence_{key}"] = conf
+        d[f"reasoning_{key}"] += f" {reason}"
+    return d
+
+
+def test_confluence_band_and_breakdown_are_enforced():
+    g = BitcoinGrounding(**{**G.__dict__, "tech_signals": BEAR})
+    line = "Confluence: 5/5 (SMA bearish, MACD bearish, RSI bearish, Bollinger bearish, news bearish). Confidence set to 85%."
+    BitcoinPredictionOutput.model_validate(_with(line, 85), context=g)
+    with pytest.raises(ValidationError, match="confidence_1d=55 but a DOWN forecast has confluence 5/5"):
+        BitcoinPredictionOutput.model_validate(_with(line, 55), context=g)
+    with pytest.raises(ValidationError, match="says Confluence: 4/5"):
+        BitcoinPredictionOutput.model_validate(_with(line.replace("5/5", "4/5"), 85), context=g)
+    with pytest.raises(ValidationError, match="must end with the breakdown line"):
+        BitcoinPredictionOutput.model_validate(_with("", 85), context=g)
+
+
+def test_same_regime_penalty_lowers_the_floor_but_mape_is_ignored_at_5_of_5():
+    from app.bitcoin.accuracy import regime_penalty
+
+    bad_error = {"n": 8, "mape_pct": 5.0, "naive_mape_pct": 3.0, "skill": -0.6, "hit_rate_pct": 70.0, "mean_confidence": 72.0,
+                 "calibration_gap": 2.0, "bias_pct": 0.1}
+    overconf = bad_error | {"skill": 0.2, "mape_pct": 2.0, "hit_rate_pct": 50.0, "calibration_gap": 22.0}
+    acc = lambda m: {"horizons": {"1d": {"n": 8, "by_regime": {"strong": m}}}}  # noqa: E731
+    assert regime_penalty(acc(bad_error), "1d", 1, 5) is None  # 5/5: "a clear trend is a clear trend"
+    assert "HIGH ERROR" in regime_penalty(acc(bad_error), "1d", 1, 4)  # 4/5 is not exempt
+    assert "OVERCONFIDENT" in regime_penalty(acc(overconf), "1d", 1, 5)  # failed in exactly this regime: still counts
+    assert regime_penalty(acc(overconf), "1d", 1, 3) is None  # a strong-regime failure says nothing about 3/5 setups
+    g = BitcoinGrounding(**{**G.__dict__, "tech_signals": BEAR, "accuracy": acc(overconf)})
+    line = "Confluence: 5/5 (SMA bearish, MACD bearish, RSI bearish, Bollinger bearish, news bearish). Confidence set to 62%."
+    d = _with(line, 80)
+    d["confidence_1d"] = 62
+    BitcoinPredictionOutput.model_validate(d, context=g)  # the penalty lets 1d go below the 5/5 floor

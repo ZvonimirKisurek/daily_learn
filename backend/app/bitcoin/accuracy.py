@@ -30,6 +30,12 @@ THE METRICS (per horizon), and why each one is there:
   bias_pct          mean((predicted - actual) / actual) · 100, the SIGNED error. Positive = targets were too high on
                     average (a bullish lean), negative = too bearish. MAPE says "how wrong"; bias says "wrong which way".
 
+REGIMES. Each scored forecast is also tagged with the confluence regime it was made in (confluence.py: strong = 4-5 of
+5 signals agreed with its direction, moderate = 3, weak = 0-2), recomputed from the indicators and sentiment score
+stored with it. Metrics are reported overall AND per regime, because a penalty should only apply when the current setup
+looks like the one that failed: being wrong in choppy 2/5 markets says little about a clean 5/5 trend. Forecasts made
+before MACD/Bollinger were stored cannot be tagged and only count toward the overall numbers.
+
 SAMPLE SIZE. With n forecasts the standard error of a hit rate is sqrt(p(1-p)/n): about ±13 percentage points at n=14
 and ±22 at n=5. Small samples are mostly noise, so the prompt is told to discount them (below MIN_SAMPLES, ignore them).
 """
@@ -39,12 +45,48 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from statistics import fmean
 
+from app.bitcoin import confluence
 from app.bitcoin.technicals import HORIZONS
 from app.db import get_pool
 
 log = logging.getLogger(__name__)
 
 MIN_SAMPLES = 5  # below this, the prompt treats the track record as "not enough data yet"
+HIGH_ERROR_MAPE_1D = 3.0  # % at 1 day; the threshold scales with sqrt(days), like a random walk's expected error
+OVERCONFIDENT_GAP = 10  # stated confidence beat the actual hit rate by more than this many points
+
+
+def flags(m: dict, days: int) -> list[str]:
+    """The problems a block of metrics shows, in the words the prompt uses. Empty below MIN_SAMPLES."""
+    if m.get("n", 0) < MIN_SAMPLES:
+        return []
+    out = []
+    if m["calibration_gap"] is not None and m["calibration_gap"] > OVERCONFIDENT_GAP:
+        out.append(f"OVERCONFIDENT by {m['calibration_gap']:.0f} points")
+    if m["skill"] is not None and m["skill"] < 0:
+        out.append("WORSE than no-change")
+    if m["mape_pct"] > HIGH_ERROR_MAPE_1D * days ** 0.5:
+        out.append(f"HIGH ERROR (above {HIGH_ERROR_MAPE_1D * days ** 0.5:.1f}%)")
+    if m["mape_pct"] and abs(m["bias_pct"]) >= m["mape_pct"] / 2:
+        out.append(f"SYSTEMATIC {'BULLISH' if m['bias_pct'] > 0 else 'BEARISH'} LEAN")
+    return out
+
+
+def regime_penalty(accuracy: dict | None, horizon: str, days: int, k: int) -> str | None:
+    """Why confidence may (and should) be cut below its confluence band for this horizon, or None.
+
+    Only the record from the SAME regime counts. At 5/5 confluence the error-size penalties (MAPE, skill) are ignored,
+    as the prompt promises: "a clear trend is a clear trend". The one thing that still counts at 5/5 is a calibration
+    failure in strong regimes themselves: if our 5/5-style calls have been right far less often than we claimed, that
+    is exactly the regime that failed, and ignoring it would switch off the feedback loop where it matters most."""
+    if not accuracy:
+        return None
+    m = ((accuracy.get("horizons") or {}).get(horizon) or {}).get("by_regime", {}).get(confluence.regime(k)) or {}
+    found = flags(m, days) if m else []
+    if k == 5:
+        found = [f for f in found if f.startswith("OVERCONFIDENT")]
+    found = [f for f in found if not f.startswith("SYSTEMATIC")]  # a lean changes the direction check, not the size
+    return f"{confluence.regime(k)}-regime record: {'; '.join(found)}" if found else None
 
 
 def score(samples: list[dict]) -> dict:
@@ -80,6 +122,7 @@ def _matured(days: int, start: datetime, now: datetime, tolerance_hours: float) 
     key = f"{days}d"  # from the fixed HORIZONS table, never user input, so formatting it into the SQL is safe
     sql = f"""
         select p.created_at, p.current_price, p.predicted_price_{key} as predicted, p.confidence_{key} as confidence,
+               p.sentiment_score, p.inputs -> 'technicals' as tech,
                p.created_at + make_interval(days => %(days)s) as target, a.price_usd as actual
         from bitcoin_predictions p
         left join lateral (
@@ -112,9 +155,16 @@ def get_past_accuracy(daily_closes: dict[date, float] | None = None, *, window_d
                 fallback_used += actual is not None
             if actual is None:
                 continue
-            samples.append({"current": float(row["current_price"]), "predicted": float(row["predicted"]), "actual": float(actual),
-                            "confidence": int(row["confidence"])})
-        horizons[key] = score(samples)
+            current, predicted = float(row["current_price"]), float(row["predicted"])
+            tech = row["tech"] or {}
+            reg = None
+            if tech.get("macd") is not None and tech.get("bb_percent_b") is not None:  # older rows lack the new indicators
+                k, _ = confluence.confluence(confluence.technical_signals(tech), row["sentiment_score"], 1 if predicted > current else -1)
+                reg = confluence.regime(k)
+            samples.append({"current": current, "predicted": predicted, "actual": float(actual), "confidence": int(row["confidence"]),
+                            "regime": reg})
+        horizons[key] = score(samples) | {
+            "by_regime": {r: score([x for x in samples if x["regime"] == r]) for r in ("strong", "moderate", "weak")}}
     result = {"window_days": window_days, "min_samples": MIN_SAMPLES, "horizons": horizons, "daily_close_fallbacks": fallback_used}
     log.info("btc accuracy over %dd: %s", window_days,
              " ".join(f"{k}:n={v['n']},mape={v['mape_pct']},hit={v['hit_rate_pct']}" for k, v in horizons.items()))
