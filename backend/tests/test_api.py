@@ -46,7 +46,7 @@ def generate_today(level: int = 16, legacy: bool = True):
     generators.generate_daily_briefing(day=TODAY, llm=FakeLLM(), embedder=FakeEmbedder(), settings=s)
     if legacy:
         with get_pool().connection() as conn:
-            conn.execute("update daily_briefings set level = null")
+            conn.execute("update daily_briefings set level = null, payload = payload - 'lesson'")
             conn.execute("update daily_tasks set quiz = null")
 
 
@@ -541,3 +541,31 @@ async def test_feed_for_you_ranks_against_the_current_level(client, db):
     assert r["for_level"] == {"index": 1, "title": "What is AI?", "tier_name": "Beginner", "skill": "ai-foundations"}
     rel = [i["relevance"] for i in r["items"]]
     assert rel == sorted(rel, reverse=True) and len(rel) == 8
+
+
+async def test_regenerating_a_week_gives_consecutive_topics_backs_up_and_past_lessons_stay_doable(client, db, tmp_path):
+    import json
+    from datetime import timedelta
+    seed_articles()
+    s = Settings(timezone="UTC", min_candidates=10, prompt_article_count=20)
+    start = TODAY - timedelta(days=5)
+    for d in (start - timedelta(days=1), start, start + timedelta(days=1)):  # three old-format lessons, one outside the range
+        generators.generate_daily_briefing(day=d, llm=FakeLLM(), embedder=FakeEmbedder(), settings=s)
+    with psycopg.connect(db) as conn:
+        conn.execute("update daily_briefings set level = null")
+        conn.execute("update daily_tasks set notes = 'my notes', completed_at = now() where kind = 'reading'")
+    out = generators.regenerate_lessons(start, TODAY, llm=FakeLLM(), embedder=FakeEmbedder(), settings=s, backup_path=str(tmp_path / "b.json"))
+    assert out["failed"] == [] and out["deleted"] == 2 and out["backed_up"] == 2
+    topics = [g["topic"] for g in out["generated"]]
+    level1 = generators.levels.ladder().level(1).topics
+    assert topics == level1 + level1[:2] and len(out["generated"]) == 6   # one topic per day, in order, then review
+    backup = json.loads((tmp_path / "b.json").read_text())
+    assert [t["notes"] for b in backup["briefings"] for t in b["tasks"] if t["kind"] == "reading"] == ["my notes", "my notes"]
+    with psycopg.connect(db) as conn:
+        rows = conn.execute("select day, level from daily_briefings order by day").fetchall()
+        reading = conn.execute("select t.id from daily_tasks t join daily_briefings b on b.id = t.briefing_id where b.day = %s and t.kind = 'reading'",
+                               (start,)).fetchone()[0]
+    assert rows[0] == (start - timedelta(days=1), None) and all(lv == 1 for _, lv in rows[1:])  # outside the range: untouched
+    detail = (await client.get(f"/api/tasks/{reading}")).json()
+    assert detail["archived"] is False and detail["lesson"]["topic"] == level1[0]               # catch-up: still doable
+    assert (await client.post(f"/api/tasks/{reading}/quiz", json={"answers": answer_key(db, "select quiz from daily_tasks where id = %s", reading)})).json()["passed"]

@@ -3,8 +3,9 @@
 # How it works (app/curriculum/levels.py):
 #  * You are always on exactly ONE level. Each day's lesson (a 5-10 min reading + quiz, a 5-10 min hands-on exercise and
 #    the market essay) teaches the next topic of that level, at that level's difficulty.
+#  * One topic per day, in order; after the last topic, review lessons until the exam is passed.
 #  * A lesson counts only when ALL of it is done: the reading quiz passed, the hands-on graded as passed, the essay read.
-#    A topic whose lesson you did not finish comes back the next day.
+#    Missed a day? Its lesson stays on the calendar and can be finished later (catch-up); it still counts.
 #  * After `topics` lessons the level exam unlocks. Pass it (>= pass_percent) to move to the next level. Fail it and
 #    you stay on the level (review lessons) until you pass.
 #  * The placement exam (placement.yaml) can skip whole tiers you already know. It only ever moves you up.

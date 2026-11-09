@@ -60,7 +60,8 @@ celery -A app.celery_app worker -l info & celery -A app.celery_app beat -l info
 Daily lessons follow a **21-level path from "What is AI?" to expert** ([`backend/curriculum/levels.yaml`](backend/curriculum/levels.yaml)), in six tiers: Beginner, Novice, Intermediate, Advanced, Proficient, Expert. The weekly theme is unchanged.
 
 - **One short lesson a day** on the next topic of your current level: a 5-10 minute reading, a 4-5 question **quiz you must pass** (80%) to unlock a 5-10 minute **hands-on exercise** (graded), then the market essay, written for your level. Steps unlock in that order.
-- A lesson counts only when all three are done. A topic you did not finish comes back the next day.
+- A lesson counts only when all three are done. Missed a day? Its lesson stays on the calendar and can still be finished (catch-up).
+- Remake past lessons in this format (old ones are backed up to JSON first): `python -m app.cli regenerate-lessons --from 2026-11-03 --yes`, or run the "Scheduled jobs" workflow manually with that command (the backup is uploaded as the `lessons-backup` artifact).
 - After a level's lessons, its **level exam** unlocks: 10 fresh LLM-written questions, pass with 80% to move up (3 attempts/day, every retry is a new exam). Fail and you keep getting review lessons on that level.
 - **Placement exam** (18 fixed questions, 3 per tier, [`placement.yaml`](backend/curriculum/placement.yaml)): skips the tiers you already know. It can only move you up.
 - **XP** (quiz 10, +5 first try; exercise 10 + 2 x score; essay 5; finished lesson +10; level exam +50), a **day streak**, and an **AI knowledge score** (0-100 = share of the path proven).

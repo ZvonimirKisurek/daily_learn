@@ -139,7 +139,8 @@ def lesson_dict(level: int = 1, done: int = 0) -> dict:
 
     class Repo:
         @staticmethod
-        def learner_level():
+        def learner_level(before):
             return level, done
 
-    return generators.current_lesson(Repo)
+    from datetime import date
+    return generators.current_lesson(date(2026, 11, 9), Repo)

@@ -74,7 +74,8 @@ async def task_detail(task_id: UUID, conn: Conn, cfg: Cfg):
     detail = await queries.get_task_detail(conn, task_id, cfg.max_submission_attempts)
     if detail is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
-    detail["archived"] = detail["day"] < _today(cfg)  # a past day's lab is read-only in the UI
+    # A past day's legacy lab is read-only; learning-path lessons can be caught up any time (they count toward the exam).
+    detail["archived"] = detail["day"] < _today(cfg) and detail["lesson"] is None
     return detail
 
 

@@ -91,13 +91,29 @@ def save_briefing(day: date, theme_id: str, payload: dict, tasks: list[dict], re
     return str(bid)
 
 
-def learner_level() -> tuple[int, int]:
-    """(current level, lessons FULLY finished on it). Lessons count only when every task was done."""
+def learner_level(before: date) -> tuple[int, int]:
+    """(current level, lessons already GENERATED on it for days before `before`). The count picks the next topic, so
+    consecutive days get consecutive topics even when generated in one go; FINISHED lessons are what unlock the exam."""
     with get_pool().connection() as conn:
         row = conn.execute("select current_level from learner_progress where id = 1").fetchone()
         level = row["current_level"] if row else 1
-        done = conn.execute("select count(*) as n from daily_briefings where level = %s and completed_at is not null", (level,)).fetchone()["n"]
-    return level, done
+        n = conn.execute("select count(*) as n from daily_briefings where level = %s and day < %s", (level, before)).fetchone()["n"]
+    return level, n
+
+
+def briefings_between(start: date, end: date) -> list[dict]:
+    """Full copies (tasks, submissions, notes, grades) of the briefings in a date range: the backup before a regeneration."""
+    with get_pool().connection() as conn:
+        rows = conn.execute("select id, day, level, payload, completed_at, created_at from daily_briefings where day between %s and %s order by day",
+                            (start, end)).fetchall()
+        for r in rows:
+            r["tasks"] = conn.execute("select * from daily_tasks where briefing_id = %s order by kind", (r["id"],)).fetchall()
+    return rows
+
+
+def delete_briefings_between(start: date, end: date) -> int:
+    with get_pool().connection() as conn:  # cascades to daily_tasks; XP and skill history keep their rows (task_id -> null)
+        return conn.execute("delete from daily_briefings where day between %s and %s", (start, end)).rowcount
 
 
 def has_level_embedding(level: int) -> bool:

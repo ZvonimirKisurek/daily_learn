@@ -62,6 +62,14 @@ jobs:
             python -m app.cli $c
             echo "::endgroup::"
           done
+      - name: Upload lessons backup (regenerate-lessons)
+        if: always() && startsWith(github.event.inputs.command, 'regenerate-lessons')
+        uses: actions/upload-artifact@v4
+        with:
+          name: lessons-backup
+          path: /tmp/lessons_backup.json
+          retention-days: 90
+          if-no-files-found: ignore
       - name: Upload progress backup
         if: github.event.schedule == '30 4 * * 0'
         uses: actions/upload-artifact@v4

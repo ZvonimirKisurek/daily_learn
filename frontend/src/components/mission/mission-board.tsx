@@ -86,8 +86,7 @@ export function MissionBoard({ briefing, heading = "Today's Lesson", archived = 
       {lesson && (
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
           <Badge variant="violet"><GraduationCap className="size-3" /> Level {lesson.level} · {lesson.title}</Badge>
-          <span className="text-muted-foreground">Lesson {lesson.lesson_number} of {lesson.lessons_required}: <span className="text-foreground">{lesson.topic}</span></span>
-          {lesson.review && <Badge variant="warn">review</Badge>}
+          <span className="text-muted-foreground">{lesson.review ? "Review" : `Lesson ${lesson.lesson_number} of ${lesson.lessons_required}`}: <span className="text-foreground">{lesson.topic}</span></span>
         </div>
       )}
 

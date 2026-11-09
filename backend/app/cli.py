@@ -11,6 +11,37 @@ from app.ingestion.models import SourceState
 from app.ingestion.sources import load_sources
 
 
+def _regenerate_lessons(args) -> int:
+    import json
+    from datetime import date
+
+    from app.curriculum import generators, repository
+    from app.db import get_pool
+
+    settings = get_settings()
+    today = generators.local_now(settings).date()
+    start, end = date.fromisoformat(args.start), date.fromisoformat(args.end) if args.end else today
+    if start > end or end > today:
+        print(f"bad range {start}..{end}: it must be in order and end no later than today ({today})")
+        return 2
+    with get_pool().connection() as conn:
+        if conn.execute("select to_regclass('public.learner_progress') is not null as ok").fetchone()["ok"] is False:
+            print("the learning-path tables are missing: apply supabase/migrations/20261109000010_learning_path.sql first")
+            return 2
+    old = repository.briefings_between(start, end)
+    n_days = (end - start).days + 1
+    done = sum(1 for b in old for t in b["tasks"] if t["completed_at"])
+    print(f"{n_days} day(s) {start}..{end}: {len(old)} existing lesson(s) will be replaced ({done} completed task(s); "
+          f"submissions and notes are saved to {args.backup}). XP and skill points already earned are kept. "
+          f"About $0.05-0.10 of LLM spend per day (daily cap LLM_DAILY_BUDGET_USD={settings.llm_daily_budget_usd}).")
+    if not args.yes:
+        print("Re-run with --yes to confirm.")
+        return 2
+    r = generators.regenerate_lessons(start, end, settings=settings, backup_path=args.backup)
+    print(json.dumps(r, indent=2, default=str))
+    return 1 if r["failed"] else 0
+
+
 def _dry_run(only: list[str] | None) -> int:
     """Fetch + parse every source without touching the DB or OpenAI. Doubles as a source-liveness check."""
     from app.ingestion.pipeline import fetch_all
@@ -66,6 +97,11 @@ def main() -> int:
         g.add_argument("--force", action="store_true", help="regenerate even if one exists")
         g.add_argument("--dry-run", action="store_true", help="print the exact prompt; no LLM call, nothing stored")
         g.add_argument("--date", help="YYYY-MM-DD (default: auto)")
+    rg = sub.add_parser("regenerate-lessons", help="remake the daily lessons of a date range in the learning-path format (destructive, backed up first)")
+    rg.add_argument("--from", dest="start", required=True, help="first day, YYYY-MM-DD")
+    rg.add_argument("--to", dest="end", help="last day, YYYY-MM-DD (default: today)")
+    rg.add_argument("--backup", default="/tmp/lessons_backup.json", help="where the old lessons (tasks, submissions, notes) are saved first")
+    rg.add_argument("--yes", action="store_true", help="required: confirm replacing the lessons in that range")
     btc = sub.add_parser("bitcoin", help="Phase 11: fetch BTC price + news and generate the AI forecast")
     btc.add_argument("--ingest-only", action="store_true", help="fetch price + news only; no LLM call")
     btc.add_argument("--dry-run", action="store_true", help="fetch data and print the exact prompt; no LLM call, nothing stored")
@@ -179,6 +215,8 @@ def main() -> int:
 
         print(calibration.stats_report([r["sim"] for r in calibration.fetch_candidates()], get_settings()))
         return 0
+    if args.cmd == "regenerate-lessons":
+        return _regenerate_lessons(args)
     if args.cmd in ("generate-weekly", "generate-daily"):
         import json
         from datetime import date

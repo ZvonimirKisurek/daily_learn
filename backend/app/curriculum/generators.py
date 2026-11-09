@@ -110,11 +110,12 @@ def generate_weekly_theme(
     return {"id": theme_id, "week_start": week_start.isoformat(), "payload": payload, "cached": False}
 
 
-def current_lesson(repo=repository, lad: levels.Ladder | None = None) -> dict:
-    """Today's place on the learning path: the current level and the topic of its next unfinished lesson.
-    A topic advances only when a lesson is FULLY finished, so a skipped or half-done day comes back."""
+def current_lesson(day: date, repo=repository, lad: levels.Ladder | None = None) -> dict:
+    """The day's place on the learning path: the current level and its next topic (one topic per day, in order; after
+    the last topic, review lessons until the exam is passed). A missed day is not lost: its lesson stays on the calendar
+    and can be finished later, and only FINISHED lessons unlock the level exam."""
     lad = lad or levels.ladder()
-    index, done = repo.learner_level()
+    index, done = repo.learner_level(day)
     lv = lad.level(index)
     topic, review = levels.lesson_topic(lv, done)
     return {"level": lv.index, "of": len(lad.levels), "tier": lv.tier, "tier_name": lad.tier_name(lv.tier), "title": lv.title,
@@ -157,7 +158,7 @@ def generate_daily_briefing(
         if theme_row is None and dry_run:
             raise NotEnoughData("dry run needs a stored weekly theme; run generate-weekly first")
 
-    lesson = current_lesson(repo)
+    lesson = current_lesson(day, repo)
     skills = ensure_skill_embeddings(repo.load_skills(), embedder, repo, settings)
     articles = _select(skills, settings, repo, exclude=repo.used_reading_ids(),
                        boost={lesson["skill"]: 1.3})  # bias retrieval toward the level's skill
@@ -227,6 +228,39 @@ def generate_daily_briefing(
     log.info("daily lesson saved for %s: level %d, %r (reading %d words, essay %d words)", day, lesson["level"], lesson["topic"],
              payload["morning_reading"]["word_count"], payload["market_insight"]["word_count"])
     return {"id": briefing_id, "day": day.isoformat(), "payload": payload, "cached": False}
+
+
+def regenerate_lessons(start: date, end: date, *, llm=None, embedder=None, repo=repository, settings: Settings | None = None,
+                       backup_path: str | None = None) -> dict:
+    """Remake every daily lesson from `start` to `end` (inclusive) in the learning-path format, oldest first, so the days
+    get consecutive topics of the current level. DESTRUCTIVE for those days (tasks, submissions, notes): everything is
+    first written to `backup_path` as JSON. XP and skill points already earned are kept."""
+    import json
+    from pathlib import Path
+
+    from app.curriculum.errors import LLMBudgetExceeded
+
+    settings = settings or get_settings()
+    old = repo.briefings_between(start, end)
+    if backup_path:
+        Path(backup_path).write_text(json.dumps({"exported_at": datetime.now(timezone.utc).isoformat(), "briefings": old}, default=str, indent=1))
+    deleted = repo.delete_briefings_between(start, end)
+    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    made, failed = [], []
+    for i, d in enumerate(days):
+        for attempt in (1, 2):  # one retry: a flaky API call should not leave a hole in the week
+            try:
+                out = generate_daily_briefing(day=d, force=True, llm=llm, embedder=embedder, repo=repo, settings=settings)
+                made.append({"day": d.isoformat(), "level": out["payload"]["lesson"]["level"], "topic": out["payload"]["lesson"]["topic"]})
+                break
+            except LLMBudgetExceeded as exc:  # every later day would fail the same way: stop and report
+                failed += [{"day": x.isoformat(), "error": f"budget: {exc}"} for x in days[i:]]
+                return {"backed_up": len(old), "deleted": deleted, "generated": made, "failed": failed}
+            except Exception as exc:  # noqa: BLE001
+                log.warning("lesson for %s failed (attempt %d): %r", d, attempt, exc)
+                if attempt == 2:
+                    failed.append({"day": d.isoformat(), "error": repr(exc)[:300]})
+    return {"backed_up": len(old), "deleted": deleted, "generated": made, "failed": failed}
 
 
 def generate_level_exam(level_index: int, recent_titles: list[str], *, llm, settings: Settings | None = None,
