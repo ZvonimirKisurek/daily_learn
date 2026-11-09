@@ -1,6 +1,7 @@
-import { FileCode2, Flag, ListOrdered, Scale, Terminal } from "lucide-react";
+import { FileCode2, Flag, ListOrdered, PenLine, Scale, Terminal } from "lucide-react";
 import { CodeBlock } from "@/components/code-block";
 import { Badge } from "@/components/ui/badge";
+import { isWrittenExercise } from "@/lib/skills";
 import type { HandsOnSpec } from "@/lib/types";
 
 const Cmd = ({ lines }: { lines: string[] }) => {
@@ -24,9 +25,17 @@ export function SpecPanel({ spec }: { spec: HandsOnSpec }) {
         {spec.prerequisites.length > 0 && <ul className="mt-3 flex flex-wrap gap-1.5">{spec.prerequisites.map((p) => <li key={p}><Badge variant="outline">{p}</Badge></li>)}</ul>}
       </Block>
 
-      <Block icon={FileCode2} title="Project layout">
-        <ul className="space-y-1 font-mono text-sm">{spec.project_layout.map((f) => <li key={f} className="text-emerald-200/90"><span className="mr-2 text-muted-foreground">▸</span>{f}</li>)}</ul>
-      </Block>
+      {isWrittenExercise(spec) ? (
+        <Block icon={PenLine} title="How to do this exercise">
+          <p className="leading-relaxed">No code and no files needed. Write your answers <strong>directly in the &quot;your submission&quot; box</strong> (on the right, or below on a phone), following the steps, then press <strong>Submit for evaluation</strong>.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Where a step mentions {spec.project_layout.map((f) => <code key={f} className="mx-1 rounded bg-white/10 px-1.5 py-0.5 font-mono text-xs">{f}</code>)}, that just means &quot;your answers&quot;: type them in the box.</p>
+        </Block>
+      ) : (
+        <Block icon={FileCode2} title="Files to create on your computer">
+          <ul className="space-y-1 font-mono text-sm">{spec.project_layout.map((f) => <li key={f} className="flex items-center gap-2 text-emerald-200/90"><FileCode2 className="size-3.5 text-muted-foreground" />{f}</li>)}</ul>
+          <p className="mt-2 text-xs text-muted-foreground">Create these in a folder on your computer, follow the steps, then paste the code and its output into the submission box.</p>
+        </Block>
+      )}
 
       <Block icon={ListOrdered} title={`${spec.steps.length} steps`}>
         <ol className="space-y-6">

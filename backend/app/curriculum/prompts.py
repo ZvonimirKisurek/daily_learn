@@ -173,8 +173,11 @@ the reading and the essay. Continue from <recent_work>: never repeat a lesson th
 
 # The hands-on exercise (`hands_on_task`): small, concrete, doable in 5-10 minutes
 - 2-5 steps; estimated_minutes 5-10. Levels 1-3: a thinking/writing exercise is ideal (classify real examples, explain
-  in your own words, spot the mistake, design a dataset on paper) written into one file such as `answers.md`, or a tiny
-  ready-made Python script the learner runs and changes one line of. From level 4 on: one small Python file using only
+  in your own words, spot the mistake, design a small dataset as a table) that the learner TYPES straight into the
+  submission text box (set project_layout to ["answers.md"] and say "write your answers in the submission box", never
+  "create a file"), or a tiny ready-made Python script the learner runs and changes one line of.
+- The submission is PLAIN TEXT only: never ask the learner to draw, sketch, upload an image or make a diagram. If a
+  picture helps, ask for it as text (a list, a small markdown table, or nested bullet points). From level 4 on: one small Python file using only
   the standard library, numpy, pandas, matplotlib or scikit-learn, with tiny or synthetic data (seed random generators).
 - Each step names the file to create or edit and what goes in it, gives exact commands when code is run, and states
   expected_output the learner can VERIFY (a property, a shape, an ordering). NEVER invent precise numeric results.
