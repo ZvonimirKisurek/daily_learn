@@ -93,7 +93,8 @@ class StructuredLLM:
     def __init__(self, settings: Settings, client: openai.OpenAI | None = None, usage=None) -> None:
         self._s = settings
         self._usage = usage or DbUsage(settings)
-        self._client = client or openai.OpenAI(api_key=settings.openai_api_key or None, max_retries=settings.llm_sdk_retries)
+        self._client = client or openai.OpenAI(api_key=settings.openai_api_key or None, max_retries=settings.llm_sdk_retries,
+                                                 timeout=settings.llm_timeout_seconds)  # a stalled request is retried, not waited on for 10 min
 
     # ------------------------------------------------------------------ one chat-completion attempt (shared by both modes)
     def _chat(self, *, purpose: str, model: str, messages: list[dict], response_format: dict | None,

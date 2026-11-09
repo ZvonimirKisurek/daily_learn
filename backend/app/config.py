@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # --- LLM / curriculum engine ---
     llm_model: str = "gpt-4o"  # must support Structured Outputs (gpt-4o-2024-08-06 or later). Check your account's model list
+    llm_timeout_seconds: float = 120.0  # per OpenAI request (the SDK default of 600 s let one stalled call block a run)
     llm_max_tokens: int = 8000  # max completion tokens per call (gpt-4o allows up to 16k)
     llm_seed: int | None = None  # set for best-effort reproducible outputs
     # Sampling temperature per task (OpenAI chat models accept it; reasoning models such as o-series/gpt-5 do not).
