@@ -82,12 +82,21 @@ async def require_token(settings: Cfg, authorization: Annotated[str | None, Head
 _inline_lock = threading.Lock()
 
 
-def _enqueue_inline(task_name: str, **_kwargs) -> None:
+class QueueUnavailable(RuntimeError):
+    """Neither the task queue nor the inline fallback can take the job."""
+
+
+def _enqueue_inline(task_name: str, **kwargs) -> None:
     """Run the job in a daemon thread of this process (TASK_BACKEND=inline; no Redis/Celery needed).
     Returns immediately, like a queue would; the lock stops a double-click from running two LLM jobs at once."""
     def run() -> None:
         if not _inline_lock.acquire(blocking=False):
-            return log.info("inline job already running; ignoring %s", task_name)
+            log.info("inline job already running; ignoring %s", task_name)
+            if kwargs.get("run_id"):  # don't leave the dashboard waiting on a run that will never start
+                from app.bitcoin.predictor import _mark_run
+
+                _mark_run(kwargs["run_id"], status="failed", error="Another background job was already running. Try again in a minute.")
+            return
         try:
             if task_name == "app.tasks.generate_daily_briefing":
                 from app.curriculum.generators import generate_daily_briefing as job
@@ -98,7 +107,7 @@ def _enqueue_inline(task_name: str, **_kwargs) -> None:
 
                 from app.bitcoin.predictor import generate_prediction
 
-                job = partial(generate_prediction, trigger="manual")
+                job = partial(generate_prediction, trigger="manual", run_id=kwargs.get("run_id"))
             else:
                 raise ValueError(f"unknown task {task_name}")
             job()
@@ -128,5 +137,22 @@ def get_llm(settings: Cfg):
 
 
 def get_enqueue(settings: Cfg) -> Callable[..., None]:
-    """The function the API uses to start background work, chosen by TASK_BACKEND."""
-    return _enqueue_inline if settings.task_backend == "inline" else _enqueue_celery
+    """The function the API uses to start background work, chosen by TASK_BACKEND.
+
+    With Celery, a dead broker (Redis down, wrong REDIS_URL, Upstash quota exhausted) used to surface as a bare
+    "task queue unavailable". Now it falls back to the inline runner (TASK_INLINE_FALLBACK, default on) so a button press
+    still works on a single-user deployment, or raises QueueUnavailable with a message the UI can show."""
+    if settings.task_backend == "inline":
+        return _enqueue_inline
+    fallback = settings.task_inline_fallback
+
+    def enqueue(task_name: str, **kwargs) -> None:
+        try:
+            _enqueue_celery(task_name, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - any broker failure
+            if not fallback:
+                raise QueueUnavailable("Analysis engine offline: the task queue (Redis) is unreachable. Please try again later.") from exc
+            log.warning("task queue unreachable (%r); running %s inline", exc, task_name)
+            _enqueue_inline(task_name, **kwargs)
+
+    return enqueue

@@ -146,7 +146,7 @@ def btc_db(db, monkeypatch):
     from app.bitcoin import ingest
 
     with psycopg.connect(db, autocommit=True) as conn:
-        conn.execute("truncate bitcoin_predictions, bitcoin_prices, bitcoin_news cascade")
+        conn.execute("truncate bitcoin_runs, bitcoin_predictions, bitcoin_prices, bitcoin_news cascade")
         now = datetime.now(timezone.utc)
         for i, (src, title, rel) in enumerate([("CoinDesk", "Bitcoin ETFs shed $430M", True), ("The Block", "Ether upgrade", False),
                                                ("Decrypt", "BTC miners pivot to AI", True)]):
@@ -195,10 +195,18 @@ async def test_bitcoin_api_latest_and_generate(btc_db, monkeypatch):
             assert empty["price"] is None and empty["prediction"] is None and len(empty["news"]) == 4 and "Not financial advice" in empty["disclaimer"]
 
             r = await c.post("/api/bitcoin/generate")
-            assert r.status_code == 202 and r.json()["queued"] and calls == [("app.tasks.generate_bitcoin_daily_insight", {"trigger": "manual"})]
+            assert r.status_code == 202 and r.json()["queued"]
+            run_id = r.json()["run_id"]
+            assert calls == [("app.tasks.generate_bitcoin_daily_insight", {"trigger": "manual", "run_id": run_id})]
+            queued = (await c.get("/api/bitcoin/latest")).json()["run"]
+            assert queued["id"] == run_id and queued["status"] == "queued" and queued["stalled"] is False
 
-            generate_prediction(trigger="manual", llm=FakeBtcLLM())  # what the worker would do
+            again = (await c.post("/api/bitcoin/generate")).json()  # a double-click joins the run in flight
+            assert again["run_id"] == run_id and len(calls) == 1
+
+            generate_prediction(trigger="manual", llm=FakeBtcLLM(), run_id=run_id)  # what the worker would do
             body = (await c.get("/api/bitcoin/latest")).json()
+            assert body["run"]["status"] == "succeeded" and body["run"]["finished_at"]
             assert body["price"]["price_usd"] == 75_123.45
             pred = body["prediction"]
             assert [h["key"] for h in pred["horizons"]] == ["1d", "3d", "7d", "14d"]
@@ -211,3 +219,73 @@ async def test_bitcoin_api_latest_and_generate(btc_db, monkeypatch):
             again = (await c.post("/api/bitcoin/generate")).json()  # inside the cooldown: nothing queued, nothing paid for
             assert again["queued"] is False and "minutes" in again["reason"] and len(calls) == 1
     get_settings.cache_clear()
+
+
+@pytest.mark.integration
+def test_failed_run_records_a_readable_reason(btc_db, monkeypatch):
+    from app.bitcoin import ingest
+    from app.bitcoin.predictor import generate_prediction
+
+    def down(s=None):
+        raise ingest.PriceUnavailable("coingecko: timeout; coinbase: timeout")
+
+    monkeypatch.setattr(ingest, "fetch_spot_price", down)
+    with pytest.raises(ingest.PriceUnavailable):
+        generate_prediction(trigger="cli", llm=FakeBtcLLM())
+    with psycopg.connect(btc_db) as conn:
+        status, error = conn.execute("select status, error from bitcoin_runs").fetchone()
+    assert status == "failed" and error.startswith("Price feeds unreachable")
+
+
+@pytest.mark.integration
+async def test_generate_when_queue_is_down(btc_db, monkeypatch):
+    """Redis down: with the fallback (default) the job runs inline; without it the API answers a clean 503 and the run is
+    marked failed with the same message, so the dashboard can explain what happened."""
+    from app.api import deps
+    from app.config import Settings, get_settings
+    from app.main import create_app
+
+    def broker_down(name, **kw):
+        raise ConnectionRefusedError("redis://localhost:6379")
+
+    inline = []
+    monkeypatch.setattr(deps, "_enqueue_celery", broker_down)
+    monkeypatch.setattr(deps, "_enqueue_inline", lambda name, **kw: inline.append(kw))
+    monkeypatch.setenv("API_TOKEN", "")
+    get_settings.cache_clear()
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c:
+            app.dependency_overrides[deps.settings_dep] = lambda: Settings(task_backend="celery", task_inline_fallback=True, api_token="")
+            r = await c.post("/api/bitcoin/generate")
+            assert r.status_code == 202 and inline and inline[0]["run_id"] == r.json()["run_id"]
+
+            with psycopg.connect(btc_db, autocommit=True) as conn:
+                conn.execute("delete from bitcoin_runs")
+            app.dependency_overrides[deps.settings_dep] = lambda: Settings(task_backend="celery", task_inline_fallback=False, api_token="")
+            r = await c.post("/api/bitcoin/generate")
+            assert r.status_code == 503 and r.json()["detail"].startswith("Analysis engine offline")
+            run = (await c.get("/api/bitcoin/latest")).json()["run"]
+            assert run["status"] == "failed" and run["error"].startswith("Analysis engine offline")
+    get_settings.cache_clear()
+
+
+@pytest.mark.integration
+async def test_missing_tables_is_a_clean_503(db, monkeypatch):
+    from app.config import get_settings
+    from app.main import create_app
+
+    monkeypatch.setenv("API_TOKEN", "")
+    get_settings.cache_clear()
+    with psycopg.connect(db, autocommit=True) as conn:
+        conn.execute("alter table bitcoin_runs rename to bitcoin_runs_hidden")
+    try:
+        app = create_app()
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c:
+                for r in (await c.get("/api/bitcoin/latest"), await c.post("/api/bitcoin/generate")):
+                    assert r.status_code == 503 and "migrations" in r.json()["detail"]
+    finally:
+        with psycopg.connect(db, autocommit=True) as conn:
+            conn.execute("alter table bitcoin_runs_hidden rename to bitcoin_runs")
+        get_settings.cache_clear()

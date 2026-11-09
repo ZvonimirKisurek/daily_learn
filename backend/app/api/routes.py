@@ -7,11 +7,12 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import openai
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.concurrency import run_in_threadpool
 
 from app.api import queries
-from app.api.deps import Cfg, Conn, Pool, get_enqueue, get_llm, require_token
+from app.api.deps import Cfg, Conn, Pool, QueueUnavailable, get_enqueue, get_llm, require_token
 from app.api.schemas import BitcoinLatestOut, CompletionOut, NotesIn, NotesOut, FeedPage, QueueOut, SkillOut, SubmissionIn, SubmissionOut, TaskDetailOut, TodayOut
 from app.curriculum.errors import LLMBudgetExceeded, LLMError
 from app.curriculum.evaluation import evaluate
@@ -150,28 +151,49 @@ async def generate_briefing(conn: Conn, cfg: Cfg, enqueue: Annotated[Callable[[s
         # `enqueue` is blocking network I/O (a Redis connection). Calling it directly inside `async def` would
         # freeze the event loop - and every other request - while it waits. Offload blocking calls to a thread.
         await run_in_threadpool(enqueue, "app.tasks.generate_daily_briefing")
-    except Exception as exc:  # broker down
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "task queue unavailable") from exc
+    except Exception as exc:  # broker down and inline fallback disabled
+        msg = str(exc) if isinstance(exc, QueueUnavailable) else "task queue unavailable"
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, msg) from exc
     return QueueOut(queued=True)
 
 
 # ----------------------------------------------------------------------------------------------- Phase 11: Bitcoin
+_BTC_MISSING = ("Bitcoin tables are missing in this database. Apply supabase/migrations/20261108000008_bitcoin.sql and "
+                "20261109000009_bitcoin_runs.sql, then reload.")
+
+
 @router.get("/bitcoin/latest", response_model=BitcoinLatestOut)
 async def bitcoin_latest(conn: Conn):
-    """Latest BTC price, the latest AI forecast (4 horizons with confidence + reasoning) and recent news.
-    Before the first run, `price` and `prediction` are null. That is a normal 200, not an error."""
-    return await queries.fetch_bitcoin_latest(conn)
+    """Latest BTC price, the latest AI forecast (4 horizons with confidence + reasoning), recent news, and the status of
+    the most recent run. Before the first run everything is null/empty: a normal 200, not an error."""
+    try:
+        return await queries.fetch_bitcoin_latest(conn)
+    except psycopg.errors.UndefinedTable:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _BTC_MISSING) from None
 
 
 @router.post("/bitcoin/generate", response_model=QueueOut, status_code=status.HTTP_202_ACCEPTED)
-async def bitcoin_generate(conn: Conn, cfg: Cfg, enqueue: Annotated[Callable[..., None], Depends(get_enqueue)]):
-    """Manual trigger (the dashboard's Refresh button). Like /briefing/generate it only ENQUEUES: fetching feeds plus an
-    LLM call takes 15-60 s, far too long to hold an HTTP request. The UI polls /bitcoin/latest until a newer forecast
-    appears. A cooldown stops repeated clicks from paying for identical forecasts."""
-    if await queries.bitcoin_generated_recently(conn, cfg.bitcoin_regen_cooldown_minutes):
-        return QueueOut(queued=False, reason=f"a forecast was generated in the last {cfg.bitcoin_regen_cooldown_minutes} minutes")
+async def bitcoin_generate(pool: Pool, cfg: Cfg, enqueue: Annotated[Callable[..., None], Depends(get_enqueue)]):
+    """Manual trigger (the dashboard's Refresh button). Only ENQUEUES: feeds + an LLM call take 15-60 s, far too long to
+    hold an HTTP request. A `bitcoin_runs` row (status `queued`) is created first and its id travels with the job, so the
+    UI can show queued -> running -> succeeded/failed (with the reason) instead of polling blindly.
+
+    Explicit short transactions (not the per-request `Conn`): the run row must be COMMITTED before the job starts, or a
+    fast inline job could look for a row that isn't visible yet."""
     try:
-        await run_in_threadpool(enqueue, "app.tasks.generate_bitcoin_daily_insight", trigger="manual")
-    except Exception as exc:  # broker down
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "task queue unavailable") from exc
-    return QueueOut(queued=True)
+        async with pool.connection() as conn:
+            if await queries.bitcoin_generated_recently(conn, cfg.bitcoin_regen_cooldown_minutes):
+                return QueueOut(queued=False, reason=f"A forecast was generated in the last {cfg.bitcoin_regen_cooldown_minutes} minutes.")
+            if active := await queries.active_bitcoin_run(conn):
+                return QueueOut(queued=True, reason="An analysis is already running.", run_id=active["id"])
+            run_id = await queries.create_bitcoin_run(conn, "manual")
+    except psycopg.errors.UndefinedTable:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _BTC_MISSING) from None
+    try:
+        await run_in_threadpool(enqueue, "app.tasks.generate_bitcoin_daily_insight", trigger="manual", run_id=str(run_id))
+    except Exception as exc:
+        msg = str(exc) if isinstance(exc, QueueUnavailable) else "Analysis engine offline: could not start the job. Please try again later."
+        async with pool.connection() as conn:
+            await queries.fail_bitcoin_run(conn, run_id, msg)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, msg) from exc
+    return QueueOut(queued=True, run_id=run_id)

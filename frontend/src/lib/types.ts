@@ -120,4 +120,10 @@ export interface BitcoinPrediction {
   history: { date: string; close: number }[];
   cited_news: { ref: string; title: string; url: string; source: string }[];
 }
-export interface BitcoinLatest { price: BitcoinPrice | null; prediction: BitcoinPrediction | null; news: BitcoinNews[]; disclaimer: string }
+export interface BitcoinRun {
+  id: string; trigger: string; status: "queued" | "running" | "succeeded" | "failed"; error: string | null;
+  created_at: string; started_at: string | null; finished_at: string | null;
+  /** Queued for over 2 minutes: nothing is consuming the task queue. */
+  stalled: boolean;
+}
+export interface BitcoinLatest { run: BitcoinRun | null; price: BitcoinPrice | null; prediction: BitcoinPrediction | null; news: BitcoinNews[]; disclaimer: string }

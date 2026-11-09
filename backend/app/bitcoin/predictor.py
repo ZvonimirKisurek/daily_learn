@@ -12,7 +12,7 @@ usage ledger.
 from __future__ import annotations
 
 import logging
-from datetime import timezone
+from datetime import datetime, timezone
 
 from psycopg.types.json import Jsonb
 
@@ -26,7 +26,61 @@ from app.db import get_pool
 log = logging.getLogger(__name__)
 
 
-def generate_prediction(*, trigger: str = "beat", llm=None, settings: Settings | None = None, ingest_news: bool = True) -> dict:
+def describe_failure(exc: BaseException) -> str:
+    """A short, user-facing reason for the dashboard. Never echoes request payloads or keys."""
+    import openai
+
+    from app.curriculum.errors import LLMBudgetExceeded, LLMRefusal, LLMTruncated, LLMValidationFailed
+
+    if isinstance(exc, ingest.PriceUnavailable):
+        return "Price feeds unreachable (CoinGecko and Coinbase both failed). No forecast is made without a real price."
+    if isinstance(exc, LLMBudgetExceeded):
+        return "Daily AI budget reached (LLM_DAILY_BUDGET_USD). The next scheduled run will try again."
+    if isinstance(exc, LLMValidationFailed):
+        return "The model's forecast kept failing validation (citations, plausibility band or advice filter) after repairs."
+    if isinstance(exc, (LLMRefusal, LLMTruncated)):
+        return f"The model did not return a usable forecast ({exc.__class__.__name__})."
+    if isinstance(exc, openai.AuthenticationError):
+        return "OpenAI rejected the API key (OPENAI_API_KEY)."
+    if isinstance(exc, (openai.APIConnectionError, openai.APITimeoutError, openai.InternalServerError, openai.RateLimitError)):
+        return "OpenAI is unreachable or rate-limiting right now. Try again in a few minutes."
+    return f"{exc.__class__.__name__}: {str(exc)[:240]}"
+
+
+def _mark_run(run_id, **cols) -> None:
+    try:  # status bookkeeping must never be the reason a forecast fails
+        sets = ", ".join(f"{k} = %s" for k in cols)
+        with get_pool().connection() as conn:
+            conn.execute(f"update bitcoin_runs set {sets} where id = %s", [*cols.values(), run_id])
+    except Exception:  # noqa: BLE001
+        log.exception("could not update bitcoin run %s", run_id)
+
+
+def generate_prediction(*, trigger: str = "beat", llm=None, settings: Settings | None = None, ingest_news: bool = True,
+                        run_id: str | None = None) -> dict:
+    """Run a forecast and record its status in bitcoin_runs. The API creates the run (status `queued`) and passes
+    `run_id`; scheduled and CLI runs create their own row here."""
+    if run_id is None:
+        try:
+            with get_pool().connection() as conn:
+                run_id = conn.execute("insert into bitcoin_runs (trigger, status, started_at) values (%s, 'running', now()) returning id",
+                                      (trigger,)).fetchone()["id"]
+        except Exception:  # noqa: BLE001
+            log.exception("could not create bitcoin run row")
+    else:
+        _mark_run(run_id, status="running", started_at=datetime.now(timezone.utc), error=None)
+    try:
+        result = _predict(trigger=trigger, llm=llm, settings=settings, ingest_news=ingest_news)
+    except Exception as exc:
+        if run_id:
+            _mark_run(run_id, status="failed", error=describe_failure(exc)[:1000], finished_at=datetime.now(timezone.utc))
+        raise
+    if run_id:
+        _mark_run(run_id, status="succeeded", prediction_id=result["id"], finished_at=datetime.now(timezone.utc))
+    return result | {"run_id": str(run_id) if run_id else None}
+
+
+def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool) -> dict:
     s = settings or get_settings()
     if llm is None:
         from app.curriculum.llm import StructuredLLM

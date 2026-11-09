@@ -58,7 +58,7 @@ export const saveNotes = (id: string, notes: string) =>
 /** Phase 11: latest BTC price, the latest AI forecast (4 horizons) and recent crypto news. */
 export const getBitcoinLatest = () => request<BitcoinLatest>("/api/bitcoin/latest");
 /** Enqueue a fresh forecast (202). `queued: false` + reason when one was made within the cooldown. */
-export const queueBitcoin = () => request<{ queued: boolean; reason: string | null }>("/api/bitcoin/generate", { method: "POST" });
+export const queueBitcoin = () => request<{ queued: boolean; reason: string | null; run_id: string | null }>("/api/bitcoin/generate", { method: "POST" });
 export const queueBriefing = () => request<{ queued: boolean; reason: string | null }>("/api/briefing/generate", { method: "POST" });
 
 export function getFeed(q: FeedQuery) {

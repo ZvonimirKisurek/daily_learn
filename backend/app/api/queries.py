@@ -332,7 +332,27 @@ async def fetch_bitcoin_latest(conn: AsyncConnection, news_limit: int = 25) -> d
             "history": inputs.get("history") or [],
             "cited_news": [{k: n[k] for k in ("ref", "title", "url", "source")} for n in inputs.get("news") or []],
         }
-    return {"price": dict(price) | {"price_usd": float(price["price_usd"])} if price else None, "prediction": prediction, "news": news}
+    run = await (await conn.execute(
+        """select id, trigger, status, error, created_at, started_at, finished_at,
+                  (status = 'queued' and created_at < now() - interval '2 minutes') as stalled
+           from bitcoin_runs order by created_at desc limit 1""")).fetchone()
+    return {"price": dict(price) | {"price_usd": float(price["price_usd"])} if price else None, "prediction": prediction, "news": news, "run": run}
+
+
+async def active_bitcoin_run(conn: AsyncConnection) -> dict | None:
+    """A run that is genuinely in flight. Queued rows older than 2 minutes and running rows older than 15 are treated as
+    dead (no worker, or a crashed process), so they can't block the button forever."""
+    return await (await conn.execute(
+        """select id from bitcoin_runs where (status = 'queued' and created_at > now() - interval '2 minutes')
+              or (status = 'running' and started_at > now() - interval '15 minutes') order by created_at desc limit 1""")).fetchone()
+
+
+async def create_bitcoin_run(conn: AsyncConnection, trigger: str) -> UUID:
+    return (await (await conn.execute("insert into bitcoin_runs (trigger) values (%s) returning id", (trigger,))).fetchone())["id"]
+
+
+async def fail_bitcoin_run(conn: AsyncConnection, run_id: UUID, error: str) -> None:
+    await conn.execute("update bitcoin_runs set status = 'failed', error = %s, finished_at = now() where id = %s", (error[:1000], run_id))
 
 
 async def bitcoin_generated_recently(conn: AsyncConnection, minutes: int) -> bool:

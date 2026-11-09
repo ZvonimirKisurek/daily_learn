@@ -6,19 +6,26 @@ import type { BitcoinPrediction } from "@/lib/types";
 
 type Row = { date: string; close?: number; forecast?: number; band?: [number, number] };
 
+const EMERALD = "#34d399";
+const CYAN = "#22d3ee";
+const VIOLET = "#a78bfa";
+const AXIS = { fill: "#5b6474", fontSize: 10, fontFamily: "var(--font-mono)" };
+
 /**
- * 30 days of real closes (solid amber) joined to the four forecast points (dashed), with a shaded ±1σ cone showing how
- * far a random walk would typically move by each date. If the dashed line sits well inside the cone, the model is
- * making a small call relative to normal noise, which is usually the honest outcome.
+ * Neon terminal chart:
+ *   history   emerald line with a soft glow (CSS drop-shadow on the SVG path) over a vertical emerald-to-transparent fill
+ *   forecast  dashed line whose stroke is a horizontal cyan-to-violet gradient, so it shifts colour further into the future
+ *   ±1σ cone  violet, semi-transparent, widening with √days: the backend's random-walk yardstick. A forecast well inside
+ *             the cone is a small call relative to normal noise.
+ * The x-axis has one row per calendar day, including future days, so spacing is proportional to time.
+ * Recharts' own draw-in animation (isAnimationActive) traces the lines left to right on first paint.
  */
-export function PriceChart({ prediction }: { prediction: BitcoinPrediction }) {
+export function PriceChart({ prediction, height = 300 }: { prediction: BitcoinPrediction; height?: number }) {
   const { history, horizons, current_price: now } = prediction;
   const lastDate = history.at(-1)?.date ?? prediction.created_at.slice(0, 10);
   const rows: Row[] = history.map((p) => ({ date: p.date, close: p.close }));
-  // The forecast line starts at the last real point so the two series join.
   if (rows.length) Object.assign(rows[rows.length - 1], { forecast: now, band: [now, now] as [number, number] });
-  // One row per future DAY (not per horizon) so the x-axis is proportional to time: T+14 sits a week after T+7.
-  // The cone widens with sqrt(days), the random-walk scaling the backend uses for its 1-sigma figures.
+
   const sigma1d = horizons.find((h) => h.key === "1d")?.one_sigma_usd ?? 0;
   const byDate = new Map(horizons.map((h) => [h.target_date, h.predicted_price]));
   const start = new Date(`${lastDate}T12:00:00Z`);
@@ -32,30 +39,45 @@ export function PriceChart({ prediction }: { prediction: BitcoinPrediction }) {
   const lo = Math.min(...values), hi = Math.max(...values), pad = (hi - lo) * 0.08 || 500;
 
   return (
-    <div className="h-[230px] w-full" role="img"
+    <div className="w-full" style={{ height }} role="img"
       aria-label={`BTC price over the last ${history.length} days with AI forecasts: ${horizons.map((h) => `${h.label} ${usd(h.predicted_price)}`).join(", ")}`}>
-      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 640, height: 230 }}>
-        <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 800, height }}>
+        <ComposedChart data={rows} margin={{ top: 12, right: 4, bottom: 0, left: 0 }}>
           <defs>
-            <linearGradient id="btc-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.28} />
-              <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+            <linearGradient id="btc-hist-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={EMERALD} stopOpacity={0.32} />
+              <stop offset="70%" stopColor={EMERALD} stopOpacity={0.04} />
+              <stop offset="100%" stopColor={EMERALD} stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="btc-fc-stroke" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={CYAN} />
+              <stop offset="100%" stopColor={VIOLET} />
+            </linearGradient>
+            <linearGradient id="btc-cone" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={CYAN} stopOpacity={0.05} />
+              <stop offset="100%" stopColor={VIOLET} stopOpacity={0.2} />
             </linearGradient>
           </defs>
-          <XAxis dataKey="date" tickFormatter={shortDate} tick={{ fill: "#6b7280", fontSize: 10, fontFamily: "var(--font-mono)" }}
-            axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickLine={false} minTickGap={28} />
-          <YAxis domain={[lo - pad, hi + pad]} orientation="right" width={58} tickFormatter={(v: number) => `${(v / 1000).toFixed(1)}k`}
-            tick={{ fill: "#6b7280", fontSize: 10, fontFamily: "var(--font-mono)" }} axisLine={false} tickLine={false} />
-          <ReferenceLine x={lastDate} stroke="rgba(255,255,255,0.18)" strokeDasharray="2 3" label={{ value: "NOW", fill: "#9ca3af", fontSize: 9, position: "insideTopLeft" }} />
-          <Area dataKey="band" stroke="none" fill="#38bdf8" fillOpacity={0.08} isAnimationActive={false} name="±1σ range" />
-          <Area dataKey="close" stroke="#f59e0b" strokeWidth={1.75} fill="url(#btc-fill)" isAnimationActive={false} name="Close" connectNulls={false} />
-          <Line dataKey="forecast" stroke="#fbbf24" strokeWidth={1.75} strokeDasharray="5 4" dot={{ r: 2.5, fill: "#fbbf24", strokeWidth: 0 }}
-            isAnimationActive={false} name="AI forecast" connectNulls />
+          <XAxis dataKey="date" tickFormatter={shortDate} tick={AXIS} axisLine={{ stroke: "rgba(255,255,255,0.06)" }} tickLine={false} minTickGap={36} />
+          <YAxis domain={[lo - pad, hi + pad]} orientation="right" width={56} tickFormatter={(v: number) => `${(v / 1000).toFixed(1)}k`}
+            tick={AXIS} axisLine={false} tickLine={false} />
+          <ReferenceLine y={now} stroke="rgba(52,211,153,0.25)" strokeDasharray="1 4" />
+          <ReferenceLine x={lastDate} stroke="rgba(255,255,255,0.22)" strokeDasharray="2 4"
+            label={{ value: "NOW", fill: EMERALD, fontSize: 9, fontFamily: "var(--font-mono)", position: "insideTopLeft" }} />
+          <Area dataKey="band" stroke={VIOLET} strokeOpacity={0.25} strokeWidth={1} fill="url(#btc-cone)" isAnimationActive={false} name="±1σ range" />
+          <Area dataKey="close" stroke={EMERALD} strokeWidth={2} fill="url(#btc-hist-fill)" name="Close" connectNulls={false}
+            animationDuration={1200} style={{ filter: "drop-shadow(0 0 6px rgba(52,211,153,0.55))" }}
+            activeDot={{ r: 4, fill: EMERALD, stroke: "#07090d", strokeWidth: 2 }} />
+          <Line dataKey="forecast" stroke="url(#btc-fc-stroke)" strokeWidth={2} strokeDasharray="6 5" connectNulls name="AI forecast"
+            animationBegin={900} animationDuration={900} style={{ filter: "drop-shadow(0 0 6px rgba(34,211,238,0.55))" }}
+            dot={{ r: 3.5, fill: "#07090d", stroke: CYAN, strokeWidth: 2 }} activeDot={{ r: 5, fill: CYAN, stroke: "#07090d", strokeWidth: 2 }} />
           <Tooltip
+            cursor={{ stroke: "rgba(255,255,255,0.15)", strokeWidth: 1 }}
             labelFormatter={(d) => shortDate(String(d))}
             formatter={(v, name) => [Array.isArray(v) ? `${usd(Number(v[0]))} – ${usd(Number(v[1]))}` : usd(Number(v)), String(name)]}
-            contentStyle={{ background: "#0b0c10", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, fontSize: 11, fontFamily: "var(--font-mono)" }}
-            itemStyle={{ color: "#e5e7eb" }} labelStyle={{ color: "#fbbf24" }} />
+            contentStyle={{ background: "rgba(7,9,13,0.92)", border: "1px solid rgba(52,211,153,0.25)", borderRadius: 10, fontSize: 11,
+              fontFamily: "var(--font-mono)", backdropFilter: "blur(12px)", boxShadow: "0 10px 40px -10px rgba(0,0,0,0.8)" }}
+            itemStyle={{ color: "#e5e7eb" }} labelStyle={{ color: EMERALD }} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

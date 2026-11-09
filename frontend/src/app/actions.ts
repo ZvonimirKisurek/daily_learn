@@ -84,11 +84,11 @@ export async function loadNotebookAction(taskId: string): Promise<ActionResult<{
  * worker; the client then polls with router.refresh() until a newer prediction id appears. `queued: false` means the
  * backend's cooldown declined (a forecast was just made) - we refresh so the page shows the latest data anyway.
  */
-export async function generateBitcoinAction(): Promise<ActionResult<{ queued: boolean; reason: string | null }>> {
+export async function generateBitcoinAction(): Promise<ActionResult<{ queued: boolean; reason: string | null; runId: string | null }>> {
   try {
     const r = await queueBitcoin();
-    if (!r.queued) refresh();
-    return { ok: true, data: r };
+    refresh(); // re-render with the new run's status (queued) or, on a cooldown refusal, the latest data
+    return { ok: true, data: { queued: r.queued, reason: r.reason, runId: r.run_id } };
   } catch (e) {
     return { ok: false, error: message(e) };
   }

@@ -50,13 +50,13 @@ def summarize_recent_articles_task(self) -> dict:
     bind=True, name="app.tasks.generate_bitcoin_daily_insight",
     autoretry_for=_TRANSIENT, retry_backoff=True, retry_backoff_max=900, max_retries=3,
 )
-def generate_bitcoin_daily_insight(self, trigger: str = "beat") -> dict:
+def generate_bitcoin_daily_insight(self, trigger: str = "beat", run_id: str | None = None) -> dict:
     """09:00 daily (see celery_app.py) and the dashboard's Refresh button: price, news, indicators, then the AI forecast.
     PriceUnavailable is not retried by Celery (CoinGecko and Coinbase already retried and both failed). The next
     day's run, or a manual refresh, tries again."""
     from app.bitcoin.predictor import generate_prediction
 
-    return generate_prediction(trigger=trigger)
+    return generate_prediction(trigger=trigger, run_id=run_id)
 
 
 @app.task(name="app.tasks.prune_old_data")

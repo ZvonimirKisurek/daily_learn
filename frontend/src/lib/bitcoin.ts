@@ -29,10 +29,19 @@ export const shortDate = (ymd: string) =>
  * Confidence = probability the forecast DIRECTION is right (50 = coin flip), so the bands are relative to 50, not 100:
  * 65+ is a genuinely strong call for BTC; 55-64 is a mild edge; below 55 is essentially a coin flip.
  */
-export function confidenceTone(c: number): { label: string; className: string; bar: string } {
-  if (c >= 65) return { label: "High", className: "border-emerald-400/40 bg-emerald-400/10 text-emerald-300", bar: "bg-emerald-400" };
-  if (c >= 55) return { label: "Moderate", className: "border-amber-400/40 bg-amber-400/10 text-amber-300", bar: "bg-amber-400" };
-  return { label: "Low", className: "border-rose-400/40 bg-rose-400/10 text-rose-300", bar: "bg-rose-400" };
+export interface Tone { label: string; text: string; stroke: string; from: string; to: string; glow: string }
+export function confidenceTone(c: number): Tone {
+  if (c >= 65) return { label: "High", text: "text-emerald-300", stroke: "#34d399", from: "#34d399", to: "#22d3ee", glow: "rgba(52,211,153,0.35)" };
+  if (c >= 55) return { label: "Moderate", text: "text-amber-300", stroke: "#fbbf24", from: "#fbbf24", to: "#f97316", glow: "rgba(251,191,36,0.3)" };
+  return { label: "Low", text: "text-rose-300", stroke: "#fb7185", from: "#fb7185", to: "#f59e0b", glow: "rgba(251,113,133,0.3)" };
+}
+
+/** A stable neon colour per news source (hash of the name), so a source keeps its badge colour across renders. */
+const SOURCE_COLORS = ["#34d399", "#22d3ee", "#a78bfa", "#f472b6", "#fbbf24", "#60a5fa", "#fb923c"];
+export function sourceColor(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return SOURCE_COLORS[h % SOURCE_COLORS.length];
 }
 
 /** Feed URLs are untrusted: only http(s) may become a link (blocks javascript: and data: URLs). */

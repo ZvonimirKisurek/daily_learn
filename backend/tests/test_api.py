@@ -319,7 +319,7 @@ async def test_generate_endpoint_queues_only_when_needed(client, db):
     calls = []
     client.app.dependency_overrides[get_enqueue] = lambda: calls.append
     r = await client.post("/api/briefing/generate")
-    assert r.status_code == 202 and r.json() == {"queued": True, "reason": None} and calls == ["app.tasks.generate_daily_briefing"]
+    assert r.status_code == 202 and r.json() == {"queued": True, "reason": None, "run_id": None} and calls == ["app.tasks.generate_daily_briefing"]
 
     def broken(name):
         raise ConnectionError("redis down")

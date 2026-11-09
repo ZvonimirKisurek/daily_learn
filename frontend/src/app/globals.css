@@ -133,3 +133,25 @@
 .code-block pre { margin: 0; padding: 1rem 1.1rem; overflow-x: auto; font-family: var(--font-mono); font-size: .86rem; line-height: 1.65; }
 .code-block pre code { background: none !important; padding: 0 !important; border: 0 !important; font-family: inherit; color: #e6edf3; }
 .code-block .hljs { background: transparent !important; padding: 0 !important; }
+
+/* ---------------------------------------------------------------------------------------------
+   Bitcoin terminal (Phase 11). Shimmer = a light band sweeping across a skeleton block; the glow helpers give the
+   numerals a soft neon bloom. Pure CSS, so skeletons animate even before React hydrates.
+   --------------------------------------------------------------------------------------------- */
+@keyframes btc-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.shimmer { position: relative; overflow: hidden; background: rgb(255 255 255 / 0.04); }
+.shimmer::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(52 211 153 / 0.08) 40%, rgb(103 232 249 / 0.12) 50%, transparent 70%);
+  animation: btc-shimmer 1.8s ease-in-out infinite;
+}
+.glow-emerald { text-shadow: 0 0 24px rgb(52 211 153 / 0.35), 0 0 2px rgb(52 211 153 / 0.4); }
+.glow-amber { text-shadow: 0 0 28px rgb(251 191 36 / 0.35), 0 0 2px rgb(251 191 36 / 0.5); }
+.glow-text { text-shadow: 0 0 32px rgb(167 243 208 / 0.28), 0 0 1px rgb(255 255 255 / 0.6); }
+.terminal-grid {
+  background-image: linear-gradient(rgb(52 211 153 / 0.05) 1px, transparent 1px), linear-gradient(90deg, rgb(52 211 153 / 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer::after { animation: none; }
+}

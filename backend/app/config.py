@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     # "celery": enqueue to a worker via Redis. "inline": run in a background thread of the API process
     # (single-user deployments with no Redis; jobs are lost if the process restarts mid-run - just click again).
     task_backend: str = "celery"
+    # With TASK_BACKEND=celery: if Redis is unreachable when a button is pressed, run that job inline (in the API process)
+    # instead of failing. Scheduled jobs are unaffected. Set false to get a clean 503 instead.
+    task_inline_fallback: bool = True
 
     # --- 4-week roadmap steering (off unless ROADMAP_START is set to the Monday you begin) ---
     roadmap_file: str = "curriculum/roadmap.yaml"

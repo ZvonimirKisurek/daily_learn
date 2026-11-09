@@ -167,6 +167,7 @@ class FeedPage(BaseModel):
 class QueueOut(BaseModel):
     queued: bool
     reason: str | None = None
+    run_id: UUID | None = None  # Bitcoin runs: poll /api/bitcoin/latest and watch `run` for this id
 
 
 class ReadingDetail(ReadingOut):
@@ -270,7 +271,19 @@ class BitcoinPredictionOut(BaseModel):
     cited_news: list[BitcoinCitedNewsOut]
 
 
+class BitcoinRunOut(BaseModel):
+    id: UUID
+    trigger: str
+    status: Literal["queued", "running", "succeeded", "failed"]
+    error: str | None
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    stalled: bool = Field(description="queued for over 2 minutes: nothing is consuming the task queue (is the Celery worker running?)")
+
+
 class BitcoinLatestOut(BaseModel):
+    run: BitcoinRunOut | None = Field(default=None, description="the most recent forecast run (any status)")
     price: BitcoinPriceOut | None
     prediction: BitcoinPredictionOut | None
     news: list[BitcoinNewsOut]
