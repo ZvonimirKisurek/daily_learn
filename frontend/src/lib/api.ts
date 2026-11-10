@@ -46,6 +46,8 @@ export const getToday = () => request<Today>("/api/today");
 /** Every YYYY-MM-DD that has a stored briefing (oldest first). Drives which calendar cells are clickable. */
 export const getHistory = () => request<string[]>("/api/briefings/history");
 /** One day's briefing, same shape as getToday(). Rejects with ApiError(status 404) for a date with no stored briefing. */
+/** Every YYYY-MM-DD whose lesson is fully finished. The calendar shows these green, unfinished ones yellow. */
+export const getDoneDays = () => request<string[]>("/api/briefings/done");
 export const getDay = (date: string) => request<Today>(`/api/briefings/${date}`);
 export const getSkills = () => request<Skill[]>("/api/skills");
 export const completeTask = (id: string) => request<Completion>(`/api/tasks/${id}/complete`, { method: "POST" });

@@ -93,6 +93,11 @@ async def list_briefing_days(conn: AsyncConnection) -> list[date]:
     return [r["day"] for r in rows]
 
 
+async def list_completed_days(conn: AsyncConnection) -> list[date]:
+    rows = await (await conn.execute("select day from daily_briefings where completed_at is not null order by day")).fetchall()
+    return [r["day"] for r in rows]
+
+
 async def briefing_exists(conn: AsyncConnection, day: date) -> bool:
     return (await (await conn.execute("select 1 from daily_briefings where day=%s", (day,))).fetchone()) is not None
 

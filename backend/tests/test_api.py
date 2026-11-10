@@ -569,3 +569,12 @@ async def test_regenerating_a_week_gives_consecutive_topics_backs_up_and_past_le
     detail = (await client.get(f"/api/tasks/{reading}")).json()
     assert detail["archived"] is False and detail["lesson"]["topic"] == level1[0]               # catch-up: still doable
     assert (await client.post(f"/api/tasks/{reading}/quiz", json={"answers": answer_key(db, "select quiz from daily_tasks where id = %s", reading)})).json()["passed"]
+
+
+async def test_done_days_lists_only_fully_finished_lessons(client, db):
+    seed_articles()
+    generate_today()
+    assert (await client.get("/api/briefings/done")).json() == []
+    with psycopg.connect(db) as conn:
+        conn.execute("update daily_briefings set completed_at = now()")
+    assert (await client.get("/api/briefings/done")).json() == [TODAY.isoformat()]

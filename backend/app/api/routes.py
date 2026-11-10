@@ -43,6 +43,13 @@ async def briefing_history(conn: Conn):
     return await queries.list_briefing_days(conn)
 
 
+@router.get("/briefings/done", response_model=list[date])
+async def briefing_done_days(conn: Conn):
+    """Days whose lesson is fully finished (every task done). The calendar paints them green, the others yellow.
+    Declared before /briefings/{day} for the same reason as /history."""
+    return await queries.list_completed_days(conn)
+
+
 @router.get("/briefings/{day}", response_model=TodayOut)
 async def briefing_for_day(day: date, conn: Conn, cfg: Cfg):
     """One day's briefing, same shape as /api/today. Today behaves exactly like /api/today (a missing briefing is a 200 'pending').

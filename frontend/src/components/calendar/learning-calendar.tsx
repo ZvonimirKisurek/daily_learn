@@ -21,8 +21,9 @@ const monthLabel = (y: number, m: number) =>
  * calendar opened from another timezone still agrees with the scheduler about which day is "today".
  * All date maths is done on UTC calendar fields, so a browser's local DST/offset can never shift a cell by a day.
  */
-export function LearningCalendar({ days, today }: { days: string[]; today: string }) {
+export function LearningCalendar({ days, done, today }: { days: string[]; done: string[]; today: string }) {
   const have = useMemo(() => new Set(days), [days]);
+  const finished = useMemo(() => new Set(done), [done]);
   const [ty, tm] = [Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1];
   const [view, setView] = useState({ y: ty, m: tm });
 
@@ -62,15 +63,19 @@ export function LearningCalendar({ days, today }: { days: string[]; today: strin
           const isToday = key === today;
           const has = have.has(key);
           const base = "relative grid aspect-square place-items-center rounded-lg text-sm tabular-nums";
-          const dot = has && <span aria-hidden className="absolute bottom-1.5 size-1 rounded-full bg-primary" />;
+          const ok = finished.has(key);  // green = whole lesson done, yellow = still open
+          const dot = has && <span aria-hidden className={cn("absolute bottom-1.5 size-1 rounded-full", ok ? "bg-primary" : "bg-warn")} />;
           // Today always links home (its briefing may still be pending, and "/" handles that state). A past day is a link
           // only if a briefing exists; otherwise it is plain, dimmed text, so there is nothing to click.
           if (isToday || has)
             return (
               <Link key={key} href={isToday ? "/" : `/day/${key}`} aria-current={isToday ? "date" : undefined}
-                aria-label={`${key}${isToday ? " (today)" : ""}`}
-                className={cn(base, "font-medium transition-colors", has ? "bg-primary/10 text-foreground hover:bg-primary/20" : "text-foreground hover:bg-white/10",
-                  isToday && "ring-1 ring-primary")}>
+                aria-label={`${key}${isToday ? " (today)" : ""}${has ? (ok ? ", finished" : ", not finished") : ""}`}
+                className={cn(base, "font-medium transition-colors",
+                  !has ? "text-foreground hover:bg-white/10"
+                    : ok ? "bg-primary/20 text-primary ring-1 ring-inset ring-primary/40 hover:bg-primary/30"
+                    : "bg-warn/15 text-warn ring-1 ring-inset ring-warn/40 hover:bg-warn/25",
+                  isToday && "ring-2 ring-foreground/70")}>
                 {d}{dot}
               </Link>
             );
@@ -79,8 +84,9 @@ export function LearningCalendar({ days, today }: { days: string[]; today: strin
       </div>
 
       <div className="mt-4 flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-primary" /> briefing</span>
-        <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded-[5px] ring-1 ring-primary" /> today</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded-[5px] bg-primary/30 ring-1 ring-primary/50" /> finished</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded-[5px] bg-warn/25 ring-1 ring-warn/50" /> not finished</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded-[5px] ring-2 ring-foreground/70" /> today</span>
       </div>
     </section>
   );
