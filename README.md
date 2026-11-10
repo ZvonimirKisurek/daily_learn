@@ -68,7 +68,16 @@ Daily lessons follow a **21-level path from "What is AI?" to expert** ([`backend
 - **Intelligence Feed "For you"** (the default sort) ranks stories by embedding similarity to your current level, not just your skill gaps.
 - All grading is deterministic code against answer keys stored server-side ([`app/curriculum/levels.py`](backend/app/curriculum/levels.py)); the LLM writes questions, never grades them. Apply migration `20261109000010_learning_path.sql`; regenerate today's lesson with `python -m app.cli generate-daily --force` to get the new format.
 
- (read this to learn the ML concepts)
+## Bitcoin bet advisor (daily binary up/down)
+On the Bitcoin page: enter your balance on the prediction site, the target price ("BTC above $K at settlement") and the YES share price. [`backend/app/bitcoin/betting.py`](backend/app/bitcoin/betting.py) answers with plain arithmetic, no LLM: bet UP (buy YES), bet DOWN (buy NO) or no bet, the number of shares, and take-profit / stop-loss prices.
+
+- **Probability**: the 1-day forecast's direction and confidence become a drift on a random walk with the measured daily volatility, giving P(price > K at settlement) for any strike and time left. The stated confidence is first scaled toward 50% by how often past 1-day forecasts were right (no proven edge = no directional view), and the result is clamped to 2-98%.
+- **Edge and size**: bet only if the probability beats the price by 5 points; size = quarter-Kelly on the active bankroll, capped at 10%, floored at the $1 minimum order.
+- **Vault**: each time the balance sets a new high, half of the gain is locked in a vault that is never bet again. Losses never pull from it; an active bankroll below the minimum order means stop.
+- **During the day**: "Sell or hold?" applies the exit rules (market pays more than the model's value, 70% of the upside captured, 40% of the cost lost).
+- Settings: `BITCOIN_BET_*` in `app/config.py` (edge, Kelly share, cap, fee, settlement hour and timezone). Apply migration `20261110000011_bitcoin_bets.sql`. Experimental and not financial advice: it never places a bet.
+
+## How the intelligence layer works (read this to learn the ML concepts)
 
 ```
 skills ──embed──► query vectors ─┐
