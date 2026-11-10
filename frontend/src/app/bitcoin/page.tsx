@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { ArrowDownRight, ArrowUpRight, Bitcoin, ShieldAlert } from "lucide-react";
 import { ApiProblem } from "@/components/api-problem";
 import { AnimatedNumber } from "@/components/bitcoin/animated-number";
+import { BetAdvisor } from "@/components/bitcoin/bet-advisor";
 import { CitedText } from "@/components/bitcoin/cited-text";
 import { NewsFeed } from "@/components/bitcoin/news-feed";
 import { PredictionCard } from "@/components/bitcoin/prediction-card";
@@ -11,7 +12,7 @@ import { BitcoinRefreshButton } from "@/components/bitcoin/refresh-button";
 import { Standby } from "@/components/bitcoin/standby";
 import { Stat, TerminalPanel } from "@/components/bitcoin/terminal-panel";
 import { Reveal } from "@/components/motion";
-import { attempt, getBitcoinLatest } from "@/lib/api";
+import { ApiError, attempt, getBitcoinBet, getBitcoinLatest } from "@/lib/api";
 import { pct, stamp, trendClass, usd } from "@/lib/bitcoin";
 import type { BitcoinLatest, BitcoinPrediction } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,8 @@ export default function BitcoinPage() {
 }
 
 async function BitcoinDesk() {
-  const [data, err] = await attempt(getBitcoinLatest());
+  // In parallel. The bet advisor is optional: if its table is not migrated yet the rest of the desk still renders.
+  const [[data, err], [bet, betErr]] = await Promise.all([attempt(getBitcoinLatest()), attempt(getBitcoinBet())]);
   if (!data) return <><HeaderShell /><ApiProblem error={err} /></>;
   const { prediction, price, news, run, disclaimer } = data;
 
@@ -82,6 +84,12 @@ async function BitcoinDesk() {
           ))}
         </div>
       </section>
+
+      {bet ? <BetAdvisor overview={bet} spot={price?.price_usd ?? null} /> : (
+        <TerminalPanel title="Bet advisor · daily up/down">
+          <p className="text-sm text-muted-foreground">{betErr instanceof ApiError ? betErr.message : "The bet advisor is unavailable right now."}</p>
+        </TerminalPanel>
+      )}
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-5">

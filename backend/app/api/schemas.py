@@ -459,4 +459,91 @@ class BitcoinLatestOut(BaseModel):
     disclaimer: str = BITCOIN_DISCLAIMER
 
 
+# ----------------------------------------------------------------------------------------------- Bitcoin bet advisor
+class BetIn(BaseModel):
+    balance: float = Field(ge=0, le=1e9, description="total balance on the prediction platform right now (USD)")
+    strike: float = Field(gt=0, le=1e8, description="the price in the question: 'BTC above $strike at settlement'")
+    yes_ask: float = Field(gt=0, lt=1, description="price to BUY one YES share (0-1)")
+    yes_bid: float | None = Field(default=None, gt=0, lt=1, description="price to SELL one YES share; defaults to yes_ask")
+    hours_to_settle: float | None = Field(default=None, gt=0, le=72, description="default: until the next daily settlement")
+    reset: bool = Field(default=False, description="start a fresh bankroll (after a deposit or withdrawal): vault 0, peak = balance")
+
+
+class BetCheckIn(BaseModel):
+    sell_price: float = Field(gt=0, lt=1, description="what the market pays right now for one share you hold (0-1)")
+
+
+class BetAdviceOut(BaseModel):
+    """The recommendation plus every number behind it (see bitcoin/betting.py). Deterministic arithmetic, not LLM text."""
+    model_config = ConfigDict(extra="allow")
+    id: UUID
+    created_at: datetime
+    action: Literal["BUY_YES", "BUY_NO", "HOLD_CASH", "HALT"]
+    reason: str
+    shares: int
+    cost: float
+    entry_price: float | None
+    prob_win: float | None
+    edge_yes: float
+    edge_no: float
+    kelly_full: float | None
+    fraction: float
+    take_profit: float | None
+    stop_loss: float | None
+    max_profit: float
+    expected_profit: float
+    inputs: dict
+    market: dict
+    model: dict
+    bankroll: dict
+    warnings: list[str]
+
+
+class BetCheckOut(BaseModel):
+    action: Literal["SELL", "HOLD"]
+    rule: Literal["exit", "take_profit", "stop_loss", "hold"]
+    reason: str
+    side: Literal["BUY_YES", "BUY_NO"]
+    sell_price: float
+    entry_price: float
+    prob_win_now: float
+    unrealized: float
+    shares: int
+    spot: float
+    strike: float
+    hours_left: float
+
+
+class BetStateOut(BaseModel):
+    balance: float
+    active: float
+    vault: float
+    peak: float
+    updated_at: datetime
+
+
+class BetHistoryRow(BaseModel):
+    id: UUID
+    created_at: datetime
+    balance: float
+    vault: float
+    pnl: float | None
+    action: str
+    shares: int
+    entry_price: float | None
+    cost: float
+    strike: float
+    is_reset: bool
+
+
+class BetOverviewOut(BaseModel):
+    state: BetStateOut | None
+    last: BetAdviceOut | None
+    open_position: bool
+    history: list[BetHistoryRow]
+    defaults: dict
+    params: dict
+    disclaimer: str = BITCOIN_DISCLAIMER
+
+
 TaskDetailOut.model_rebuild()  # it references PublicQuestion, declared further down

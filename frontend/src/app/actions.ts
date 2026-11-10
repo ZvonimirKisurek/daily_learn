@@ -1,8 +1,8 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { ApiError, completeTask, getTask, queueBitcoin, queueBriefing, saveNotes, startExam, submitExam, submitQuiz, submitTask } from "@/lib/api";
-import type { Completion, Exam, ExamKind, ExamResult, QuizResult, SubmissionResult } from "@/lib/types";
+import { adviseBitcoinBet, ApiError, checkBitcoinBet, completeTask, getTask, queueBitcoin, queueBriefing, saveNotes, startExam, submitExam, submitQuiz, submitTask } from "@/lib/api";
+import type { BetAdvice, BetCheck, BetInput, Completion, Exam, ExamKind, ExamResult, QuizResult, SubmissionResult } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -125,6 +125,34 @@ export async function generateBitcoinAction(): Promise<ActionResult<{ queued: bo
     const r = await queueBitcoin();
     refresh(); // re-render with the new run's status (queued) or, on a cooldown refusal, the latest data
     return { ok: true, data: { queued: r.queued, reason: r.reason, runId: r.run_id } };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+const price01 = (v: unknown): v is number => typeof v === "number" && v > 0 && v < 1;
+
+/** Bet advisor check-in: report balance + market price, get direction and size. refresh() updates bankroll and history. */
+export async function adviseBetAction(input: BetInput): Promise<ActionResult<BetAdvice>> {
+  const { balance, strike, yes_ask, yes_bid, hours_to_settle, reset } = input;
+  if (!(typeof balance === "number" && balance >= 0 && balance <= 1e9)) return { ok: false, error: "Enter your balance in dollars." };
+  if (!(typeof strike === "number" && strike > 0)) return { ok: false, error: "Enter the Bitcoin price the bet is about." };
+  if (!price01(yes_ask)) return { ok: false, error: "The YES price must be between 0.01 and 0.99 (or 1-99 cents)." };
+  if (yes_bid !== undefined && !price01(yes_bid)) return { ok: false, error: "The YES sell price must be between 0.01 and 0.99." };
+  if (hours_to_settle !== undefined && !(hours_to_settle > 0 && hours_to_settle <= 72)) return { ok: false, error: "Hours to settlement must be between 0 and 72." };
+  try {
+    const data = await adviseBitcoinBet({ balance, strike, yes_ask, yes_bid, hours_to_settle, reset: reset === true });
+    refresh();
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+export async function checkBetAction(sellPrice: number): Promise<ActionResult<BetCheck>> {
+  if (!price01(sellPrice)) return { ok: false, error: "The sell price must be between 0.01 and 0.99 (or 1-99 cents)." };
+  try {
+    return { ok: true, data: await checkBitcoinBet(sellPrice) };
   } catch (e) {
     return { ok: false, error: message(e) };
   }

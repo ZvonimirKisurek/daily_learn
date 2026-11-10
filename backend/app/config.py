@@ -106,6 +106,18 @@ class Settings(BaseSettings):
     bitcoin_news_retention_days: int = 30
     bitcoin_accuracy_window_days: int = 14  # self-correction: score forecasts whose target fell in this window
     bitcoin_accuracy_tolerance_hours: float = 12  # a spot fetch this close to the target instant counts as the actual price
+    # --- Bitcoin bet advisor (bitcoin/betting.py): a daily binary bet "BTC above $K at settlement" ---
+    bitcoin_bet_min_edge: float = 0.05  # model probability must beat the market price by this much
+    bitcoin_bet_kelly: float = 0.25  # quarter-Kelly
+    bitcoin_bet_max_fraction: float = 0.10  # hard cap per bet, as a share of the active bankroll
+    bitcoin_bet_vault_share: float = 0.50  # share of every new balance peak moved to the vault
+    bitcoin_bet_take_profit: float = 0.70
+    bitcoin_bet_stop_loss: float = 0.40
+    bitcoin_bet_min_trade: float = 1.0  # the platform's minimum order (USD)
+    bitcoin_bet_fee: float = 0.0  # round-trip taker fee as a fraction, e.g. 0.02
+    bitcoin_bet_settle_hour: int = 18  # the daily cycle settles at this hour...
+    bitcoin_bet_timezone: str = "Europe/Berlin"  # ...in this timezone (CET/CEST)
+    bitcoin_bet_calibration_days: int = 30  # track-record window used to calibrate the forecast's confidence
     temp_bitcoin: float = 0.4  # the confluence rules are arithmetic now: less sampling noise, fewer repair round-trips
 
 

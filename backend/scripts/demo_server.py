@@ -142,8 +142,9 @@ def main():
         """
         def generate(self, *, system, user, output_model, grounding, **_):
             name = output_model.__name__
-            if name == "BitcoinPredictionOutput":
-                return output_model.model_validate(demo_bitcoin_dict(grounding), context=grounding)
+            if name == "BitcoinPredictionOutput":  # the test suite's fake plays by the confluence rules the validator enforces
+                from tests.test_bitcoin import FakeBtcLLM
+                return FakeBtcLLM().generate(system=system, user=user, output_model=output_model, grounding=grounding)
             ids = sorted(grounding.article_ids, key=lambda x: (len(x), x))
             if name == "WeeklyThemeOutput":
                 d = F.weekly_dict(ids, skills=tuple(sorted(grounding.required_focus or {"rag", "vector-db"})))
@@ -165,23 +166,6 @@ def main():
             assert not problems, problems
             return text
 
-    def demo_bitcoin_dict(g) -> dict:
-        """A schema-valid forecast from the real inputs: a small drift sized at ~0.3 sigma per horizon."""
-        refs = sorted(g.news_ids, key=lambda x: int(x[1:]))[:3] or []
-        cite = (lambda i: f" [{refs[i % len(refs)]}]") if refs else (lambda i: "")
-        d = {"sentiment_summary": f"DEMO OUTPUT (no LLM was called). Headlines are mixed, with ETF flow and macro stories dominating{cite(0)}; "
-                                  f"few items carry clear directional information{cite(1)}.",
-             "sentiment_score": -12,
-             "technical_summary": "DEMO OUTPUT. Price trades below its 30-day average with RSI in the high 30s [T]; realised volatility is moderate, "
-                                  "so trend signals carry limited weight at short horizons.",
-        }
-        for i, (key, days, sign, conf) in enumerate((("1d", 1, 1, 52), ("3d", 3, -1, 54), ("7d", 7, 1, 56), ("14d", 14, 1, 58))):
-            move = sign * 0.3 * g.daily_sigma * days ** 0.5
-            d |= {f"predicted_price_{key}": round(g.current_price * (1 + move), 2), f"confidence_{key}": conf,
-                  f"reasoning_{key}": f"DEMO OUTPUT. The base rate dominates at {days} day(s): momentum is soft below SMA-30 [T], "
-                                      f"while recent headlines{cite(i)} offer no decisive catalyst, so only a small move is assumed."}
-        return d
-
     s = Settings(timezone="UTC", min_candidates=5)
     if not args.no_bitcoin:
         try:  # live CoinGecko/Coinbase + RSS; a network failure just leaves the Bitcoin page in its empty state
@@ -189,7 +173,20 @@ def main():
 
             print("bitcoin:", generate_prediction(trigger="cli", llm=DemoLLM(), settings=s), flush=True)
         except Exception as exc:  # noqa: BLE001
-            print(f"bitcoin demo skipped: {exc!r}", flush=True)
+            print(f"live bitcoin data unavailable ({exc!r}); using a synthetic price series", flush=True)
+            from app.bitcoin import ingest as btc_ingest, technicals as btc_tech
+
+            walk = 75_000 * np.exp(np.cumsum(rng.normal(0, 0.02, 120)))  # offline: a seeded random walk, clearly not real prices
+            start = datetime.now(timezone.utc).date() - timedelta(days=len(walk))
+            btc_ingest.fetch_spot_price = lambda s=None: (float(walk[-1]), "demo")
+            btc_ingest.fetch_daily_ohlc = lambda days, s=None: btc_tech.as_candles([(start + timedelta(days=i), float(v)) for i, v in enumerate(walk)])
+            btc_ingest.ingest_news = lambda s=None: {"inserted": 0}
+            with get_pool().connection() as conn:  # the fake forecast cites [N1]..[N3], so three headlines must exist
+                for i, title in enumerate(("DEMO: Bitcoin ETFs see outflows", "DEMO: Miners expand capacity", "DEMO: Macro data due this week")):
+                    conn.execute("insert into bitcoin_news (source_name, title, url, url_hash, summary, btc_relevant, published_at) "
+                                 "values ('Demo Wire', %s, %s, %s, 'Made-up headline for the offline demo.', true, now() - %s * interval '1 hour')",
+                                 (title, f"https://example.test/btc/{i}", f"demo-btc-{i}", i + 1))
+            print("bitcoin:", generate_prediction(trigger="cli", llm=DemoLLM(), settings=s), flush=True)
     if not args.no_briefing:
         generators.generate_daily_briefing(llm=DemoLLM(), embedder=None, settings=s)
     # optional fake history; by default skills start at 0 like a fresh learner

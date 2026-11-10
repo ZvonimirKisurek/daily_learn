@@ -13,8 +13,9 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.api import queries
 from app.api.deps import Cfg, Conn, Pool, QueueUnavailable, get_enqueue, get_llm, require_token
-from app.api.schemas import (AnswersIn, BitcoinLatestOut, CompletionOut, ExamOut, ExamResultOut, ExamStartIn, NotesIn, NotesOut, FeedPage,
+from app.api.schemas import (AnswersIn, BetAdviceOut, BetCheckIn, BetCheckOut, BetIn, BetOverviewOut, BitcoinLatestOut, CompletionOut, ExamOut, ExamResultOut, ExamStartIn, NotesIn, NotesOut, FeedPage,
                              ProgressOut, QueueOut, QuizOut, SkillOut, SubmissionIn, SubmissionOut, TaskDetailOut, TodayOut)
+from app.bitcoin import advisor
 from app.curriculum import levels
 from app.curriculum.errors import LLMBudgetExceeded, LLMError
 from app.curriculum.evaluation import evaluate
@@ -270,3 +271,35 @@ async def bitcoin_generate(pool: Pool, cfg: Cfg, enqueue: Annotated[Callable[...
             await queries.fail_bitcoin_run(conn, run_id, msg)
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, msg) from exc
     return QueueOut(queued=True, run_id=run_id)
+
+
+_BET_MISSING = "The bet advisor's table is missing. Apply supabase/migrations/20261110000011_bitcoin_bets.sql, then reload."
+
+
+async def _advisor(fn, *args, **kw):
+    """The advisor is synchronous (one outbound price request + small queries): run it in a worker thread."""
+    try:
+        return await run_in_threadpool(fn, *args, **kw)
+    except advisor.AdvisorError as exc:
+        raise HTTPException(exc.status, exc.detail) from None
+    except psycopg.errors.UndefinedTable:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _BET_MISSING) from None
+
+
+@router.get("/bitcoin/bet", response_model=BetOverviewOut)
+async def bitcoin_bet_overview(cfg: Cfg):
+    """Bankroll state (active / vault / peak), the latest recommendation, recent history and the rule parameters."""
+    return await _advisor(advisor.overview, cfg)
+
+
+@router.post("/bitcoin/bet", response_model=BetAdviceOut)
+async def bitcoin_bet_advise(body: BetIn, cfg: Cfg):
+    """The daily check-in: report your balance and the market's price for 'BTC above $strike'; get direction and size.
+    Pure arithmetic on the latest forecast (betting.py): edge vs price, quarter-Kelly, a hard cap, and the vault sweep."""
+    return await _advisor(advisor.advise, cfg, **body.model_dump())
+
+
+@router.post("/bitcoin/bet/check", response_model=BetCheckOut)
+async def bitcoin_bet_check(body: BetCheckIn, cfg: Cfg):
+    """Before settlement: sell the open position at the current price, or keep holding? Nothing is stored."""
+    return await _advisor(advisor.check, cfg, sell_price=body.sell_price)

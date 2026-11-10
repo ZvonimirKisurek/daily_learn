@@ -216,7 +216,7 @@ def btc_db(db, monkeypatch):
     from app.bitcoin import ingest
 
     with psycopg.connect(db, autocommit=True) as conn:
-        conn.execute("truncate bitcoin_runs, bitcoin_predictions, bitcoin_prices, bitcoin_news cascade")
+        conn.execute("truncate bitcoin_bets, bitcoin_runs, bitcoin_predictions, bitcoin_prices, bitcoin_news cascade")
         now = datetime.now(timezone.utc)
         for i, (src, title, rel) in enumerate([("CoinDesk", "Bitcoin ETFs shed $430M", True), ("The Block", "Ether upgrade", False),
                                                ("Decrypt", "BTC miners pivot to AI", True)]):

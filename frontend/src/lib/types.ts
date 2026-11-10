@@ -174,3 +174,34 @@ export interface BitcoinRun {
   stalled: boolean;
 }
 export interface BitcoinLatest { run: BitcoinRun | null; price: BitcoinPrice | null; prediction: BitcoinPrediction | null; news: BitcoinNews[]; disclaimer: string }
+
+// ------------------------------------------------------------------------------------------------ Bitcoin bet advisor
+export type BetAction = "BUY_YES" | "BUY_NO" | "HOLD_CASH" | "HALT";
+export interface BetAdvice {
+  id: string; created_at: string; action: BetAction; reason: string; shares: number; cost: number;
+  /** Price per share of the side to buy (0-1); null when there is no bet. */
+  entry_price: number | null; prob_win: number | null; edge_yes: number; edge_no: number; kelly_full: number | null; fraction: number;
+  take_profit: number | null; stop_loss: number | null; max_profit: number; expected_profit: number;
+  inputs: { balance: number; strike: number; yes_ask: number; yes_bid: number; hours_to_settle: number; settle_at: string };
+  market: { spot: number; spot_at: string };
+  model: {
+    forecast_at: string; forecast_age_hours: number; sigma_daily: number; stated_up_1d: number; shrink: number;
+    calibrated_up_1d: number; calibration_note: string; p_yes: number;
+  };
+  bankroll: { balance: number; active: number; vault: number; peak: number; swept: number; pnl: number | null };
+  warnings: string[];
+}
+export interface BetCheck {
+  action: "SELL" | "HOLD"; rule: "exit" | "take_profit" | "stop_loss" | "hold"; reason: string; side: "BUY_YES" | "BUY_NO";
+  sell_price: number; entry_price: number; prob_win_now: number; unrealized: number; shares: number; spot: number; strike: number; hours_left: number;
+}
+export interface BetOverview {
+  state: { balance: number; active: number; vault: number; peak: number; updated_at: string } | null;
+  last: BetAdvice | null; open_position: boolean;
+  history: { id: string; created_at: string; balance: number; vault: number; pnl: number | null; action: BetAction; shares: number;
+             entry_price: number | null; cost: number; strike: number; is_reset: boolean }[];
+  defaults: { hours_to_settle: number; settle_at: string; settle_label: string };
+  params: { min_edge: number; kelly: number; max_fraction: number; vault_share: number; take_profit: number; stop_loss: number; min_trade: number; fee: number };
+  disclaimer: string;
+}
+export interface BetInput { balance: number; strike: number; yes_ask: number; yes_bid?: number; hours_to_settle?: number; reset?: boolean }
