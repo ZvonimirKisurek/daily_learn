@@ -91,9 +91,9 @@ def generate_prediction(*, trigger: str = "beat", llm=None, settings: Settings |
 def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool) -> dict:
     s = settings or get_settings()
     if llm is None:
-        from app.curriculum.llm import StructuredLLM
+        from app.curriculum.llm import make_llm
 
-        llm = StructuredLLM(s)
+        llm = make_llm(s)
 
     # 1. Data. News failures are logged and tolerated; a price failure aborts.
     price_row = ingest.ingest_price(s)

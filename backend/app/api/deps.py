@@ -131,9 +131,9 @@ def _enqueue_celery(task_name: str, **kwargs) -> None:
 
 def get_llm(settings: Cfg):
     """The grader. A dependency so tests and the demo server can substitute a fake without touching OpenAI."""
-    from app.curriculum.llm import StructuredLLM
+    from app.curriculum.llm import make_llm
 
-    return StructuredLLM(settings)
+    return make_llm(settings)
 
 
 def get_enqueue(settings: Cfg) -> Callable[..., None]:

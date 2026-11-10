@@ -11,13 +11,22 @@ COPY pyproject.toml ./
 RUN python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" > /tmp/requirements.txt \
  && pip install -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
+# curl: used once below to install Claude Code (and handy for debugging inside the container)
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
+
 COPY app ./app
 COPY sources ./sources
 COPY curriculum ./curriculum
 
-# Never run as root in a container.
-RUN useradd --system --uid 10001 --no-create-home app && chown -R app /srv
+# Never run as root in a container. The user gets a home directory because Claude Code keeps its files there.
+RUN useradd --system --uid 10001 --create-home app && chown -R app /srv
 USER app
+
+# Claude Code (the official program), so LLM_PROVIDER=claude_code can run the site's AI on your Claude subscription
+# instead of an API key. It only starts when that setting is on. Skip with: --build-arg INSTALL_CLAUDE_CODE=0
+ARG INSTALL_CLAUDE_CODE=1
+ENV PATH="/home/app/.local/bin:${PATH}" DISABLE_AUTOUPDATER=1
+RUN if [ "$INSTALL_CLAUDE_CODE" = "1" ]; then curl -fsSL https://claude.ai/install.sh | bash && claude --version; fi
 
 EXPOSE 8000
 # Platforms like Render/Railway/Fly inject $PORT; fall back to 8000 elsewhere. `exec` makes uvicorn PID 1 so it

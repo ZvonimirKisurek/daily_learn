@@ -186,3 +186,14 @@ class StructuredLLM:
                  + "\nReturn the COMPLETE corrected text (not just the changed parts), in the same markdown format, with no preamble."},
             ]
         raise LLMValidationFailed(f"{purpose} still failing after {s.llm_max_repairs} repairs:\n" + "\n".join(problems))
+
+
+def make_llm(settings: Settings):
+    """The configured text-generation backend (LLM_PROVIDER). Both expose generate() and generate_text()."""
+    if settings.llm_provider == "claude_code":
+        from app.curriculum.claude_code import ClaudeCodeLLM
+
+        return ClaudeCodeLLM(settings)
+    if settings.llm_provider != "openai":
+        raise ValueError(f"LLM_PROVIDER must be 'openai' or 'claude_code', got {settings.llm_provider!r}")
+    return StructuredLLM(settings)

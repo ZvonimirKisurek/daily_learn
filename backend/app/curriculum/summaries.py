@@ -16,7 +16,7 @@ import logging
 
 from app.config import Settings, get_settings
 from app.curriculum.errors import LLMBudgetExceeded
-from app.curriculum.llm import LLMError, StructuredLLM
+from app.curriculum.llm import LLMError, StructuredLLM, make_llm
 from app.curriculum.prompts import _esc
 from app.curriculum.schemas import GroundingContext, SummaryBatch
 from app.db import get_pool
@@ -45,7 +45,7 @@ def _pending(limit: int) -> list[dict]:
 def summarize_pending(*, llm: StructuredLLM | None = None, settings: Settings | None = None, limit: int | None = None) -> dict:
     settings = settings or get_settings()
     rows = _pending(limit or settings.summary_max_per_run)
-    llm = llm or StructuredLLM(settings)
+    llm = llm or make_llm(settings)
     done = failed = 0
     for i in range(0, len(rows), settings.summary_batch_size):
         batch = rows[i : i + settings.summary_batch_size]

@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     sources_file: str = "sources/sources.yaml"
 
     # --- LLM / curriculum engine ---
+    # Which backend writes lessons, grades work, summarises and forecasts:
+    #   "openai"      pay-per-token API (OPENAI_API_KEY)
+    #   "claude_code" your Claude SUBSCRIPTION, through the official Claude Code program (curriculum/claude_code.py).
+    #                 Needs CLAUDE_CODE_OAUTH_TOKEN (made once with `claude setup-token`). Embeddings still use OpenAI.
+    llm_provider: str = "openai"
+    claude_code_bin: str = "claude"
+    claude_code_model: str = ""  # empty = your plan's default model; or an alias such as "sonnet", "opus", "haiku"
+    claude_code_effort: str = ""  # empty = default; "low" answers faster and uses less of your plan
+    claude_code_timeout_seconds: float = 600.0
     llm_model: str = "gpt-4o"  # must support Structured Outputs (gpt-4o-2024-08-06 or later). Check your account's model list
     llm_timeout_seconds: float = 120.0  # per OpenAI request (the SDK default of 600 s let one stalled call block a run)
     llm_max_tokens: int = 8000  # max completion tokens per call (gpt-4o allows up to 16k)

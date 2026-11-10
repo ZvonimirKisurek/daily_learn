@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 from app.config import Settings, get_settings
 from app.curriculum import content_checks as cc, levels, prompts, repository, roadmap as roadmap_mod
-from app.curriculum.llm import StructuredLLM
+from app.curriculum.llm import StructuredLLM, make_llm
 from app.curriculum.ranking import rank_articles
 from app.curriculum.schemas import DailyPlanOutput, GroundingContext, LevelExamOutput, WeeklyThemeOutput
 from app.curriculum.types import RankedArticle, Skill
@@ -96,7 +96,7 @@ def generate_weekly_theme(
     grounding = _grounding(articles, skills)
     if active:  # the repair loop will make the model fix a plan that drifts from the roadmap
         grounding = GroundingContext(grounding.article_ids, grounding.skill_slugs, frozenset(active[1].focus_skills))
-    out = (llm or StructuredLLM(settings)).generate(system=system, user=user, output_model=WeeklyThemeOutput, grounding=grounding,
+    out = (llm or make_llm(settings)).generate(system=system, user=user, output_model=WeeklyThemeOutput, grounding=grounding,
                                                   temperature=settings.temp_weekly)
     by_id = {a.short_id: a for a in articles}
     payload = out.model_dump()
@@ -167,7 +167,7 @@ def generate_daily_briefing(
         return {"system": prompts.DAILY_PLAN_SYSTEM, "user": user, "articles": len(articles)}
     ensure_level_embedding(lesson, embedder, repo, settings)
 
-    llm = llm or StructuredLLM(settings)
+    llm = llm or make_llm(settings)
     by_id = {a.short_id: a for a in articles}
     window = settings.candidate_window_days
 
