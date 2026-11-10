@@ -1,8 +1,8 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { adviseBitcoinBet, ApiError, checkBitcoinBet, completeTask, getTask, queueBitcoin, queueBriefing, saveNotes, startExam, submitExam, submitQuiz, submitTask } from "@/lib/api";
-import type { BetAdvice, BetCheck, BetInput, Completion, Exam, ExamKind, ExamResult, QuizResult, SubmissionResult } from "@/lib/types";
+import { adviseBitcoinBet, ApiError, checkBitcoinBet, completeTask, pulseBitcoin, getTask, queueBitcoin, queueBriefing, saveNotes, startExam, submitExam, submitQuiz, submitTask } from "@/lib/api";
+import type { BetAdvice, BetCheck, BetInput, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, QuizResult, SubmissionResult } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -153,6 +153,20 @@ export async function checkBetAction(sellPrice: number): Promise<ActionResult<Be
   if (!price01(sellPrice)) return { ok: false, error: "The sell price must be between 0.01 and 0.99 (or 1-99 cents)." };
   try {
     return { ok: true, data: await checkBitcoinBet(sellPrice) };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+/**
+ * Live mode heartbeat, sent by the Bitcoin page only while its tab is visible. The API refreshes price and news and may
+ * start a forecast; we re-render the page only when something actually changed.
+ */
+export async function bitcoinPulseAction(): Promise<ActionResult<BitcoinPulse>> {
+  try {
+    const data = await pulseBitcoin();
+    if (data.price_updated || data.news_added > 0 || data.forecast === "started") refresh();
+    return { ok: true, data };
   } catch (e) {
     return { ok: false, error: message(e) };
   }

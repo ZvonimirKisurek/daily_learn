@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowUpRight, Bitcoin, ShieldAlert } from "lucide-react
 import { ApiProblem } from "@/components/api-problem";
 import { AnimatedNumber } from "@/components/bitcoin/animated-number";
 import { BetAdvisor } from "@/components/bitcoin/bet-advisor";
+import { LivePulse } from "@/components/bitcoin/live-pulse";
 import { CitedText } from "@/components/bitcoin/cited-text";
 import { NewsFeed } from "@/components/bitcoin/news-feed";
 import { PredictionCard } from "@/components/bitcoin/prediction-card";
@@ -114,6 +115,7 @@ function Header({ data }: { data: BitcoinLatest }) {
     <div className="flex flex-wrap items-center justify-between gap-4">
       <HeaderTitle live={!!p} />
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <LivePulse />
         {p && (
           <span className="hidden font-mono text-[10px] uppercase tracking-wider text-muted-foreground md:block">
             Forecast {stamp(p.created_at)}

@@ -107,7 +107,7 @@ def _enqueue_inline(task_name: str, **kwargs) -> None:
 
                 from app.bitcoin.predictor import generate_prediction
 
-                job = partial(generate_prediction, trigger="manual", run_id=kwargs.get("run_id"))
+                job = partial(generate_prediction, trigger=kwargs.get("trigger", "manual"), run_id=kwargs.get("run_id"))
             else:
                 raise ValueError(f"unknown task {task_name}")
             job()

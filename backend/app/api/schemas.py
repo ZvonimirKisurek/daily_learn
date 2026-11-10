@@ -459,6 +459,14 @@ class BitcoinLatestOut(BaseModel):
     disclaimer: str = BITCOIN_DISCLAIMER
 
 
+class BitcoinPulseOut(BaseModel):
+    price_updated: bool
+    news_added: int
+    forecast: Literal["current", "started", "running", "cooldown", "busy", "error"]
+    reason: str | None
+    run_id: UUID | None
+
+
 # ----------------------------------------------------------------------------------------------- Bitcoin bet advisor
 class BetIn(BaseModel):
     balance: float = Field(ge=0, le=1e9, description="total balance on the prediction platform right now (USD)")
@@ -536,7 +544,17 @@ class BetHistoryRow(BaseModel):
     is_reset: bool
 
 
+class BetLiveOut(BaseModel):
+    """The last check-in re-evaluated at the current price (same market prices as entered)."""
+    spot: float
+    p_yes: float
+    action: Literal["BUY_YES", "BUY_NO", "HOLD_CASH", "HALT"]
+    changed: bool = Field(description="the rules would now say something different from the stored recommendation")
+    hours_left: float
+
+
 class BetOverviewOut(BaseModel):
+    live: BetLiveOut | None = None
     state: BetStateOut | None
     last: BetAdviceOut | None
     open_position: bool

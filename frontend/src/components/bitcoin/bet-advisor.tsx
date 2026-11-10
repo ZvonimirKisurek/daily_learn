@@ -89,7 +89,7 @@ export function BetAdvisor({ overview, spot }: { overview: BetOverview; spot: nu
         </form>
 
         <div className="min-w-0 space-y-4">
-          {advice ? <Verdict a={advice} /> : (
+          {advice ? <Verdict a={advice} live={fresh ? null : overview.live} /> : (
             <div className="grid h-full min-h-40 place-items-center rounded-lg border border-dashed border-white/10 px-6 text-center text-sm text-muted-foreground">
               Fill in the form to get today&apos;s recommendation. Your first balance becomes the starting bankroll.
             </div>
@@ -128,7 +128,7 @@ const VERDICT = {
   HALT: { icon: Ban, tone: "border-amber-400/40 bg-amber-400/[0.07] text-amber-300", head: "Stop trading" },
 } as const;
 
-function Verdict({ a }: { a: BetAdvice }) {
+function Verdict({ a, live }: { a: BetAdvice; live: BetOverview["live"] }) {
   const v = VERDICT[a.action];
   const Icon = v.icon;
   const bet = a.action === "BUY_YES" || a.action === "BUY_NO";
@@ -146,6 +146,16 @@ function Verdict({ a }: { a: BetAdvice }) {
           {bet && <>Cost <span className="font-mono">{usd(a.cost, true)}</span> ({pc(a.fraction, 1)} of your active bankroll). </>}{a.reason}
         </p>
       </div>
+
+      {live && (
+        <p className={cn("rounded-lg border px-3 py-2 text-[12px] leading-snug", live.changed ? "border-amber-400/40 bg-amber-400/[0.07] text-amber-200" : "border-white/[0.07] bg-white/[0.02] text-muted-foreground")}>
+          <span className="mr-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-300/90">Live</span>
+          BTC is now {usd(live.spot)}: the model gives {pc(live.p_yes)} for &quot;above target&quot; with {live.hours_left.toFixed(1)} h left.{" "}
+          {live.changed
+            ? <span className="font-medium">At the prices you entered, the rules would now say: {VERDICT[live.action].head}. Enter the current YES price to re-check.</span>
+            : "The recommendation above still stands at the prices you entered."}
+        </p>
+      )}
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3 sm:grid-cols-4">
         <Stat label="Model: above target" value={pc(a.model.p_yes)} />

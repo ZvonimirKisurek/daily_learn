@@ -159,7 +159,21 @@ def overview(s: Settings, history: int = 14) -> dict:
     p = params(s)
     last = rows[0] if rows else None
     open_position = bool(last and last["action"] in ("BUY_YES", "BUY_NO") and datetime.fromisoformat(last["detail"]["inputs"]["settle_at"]) > now)
+    live = None
+    if open_position or (last and last["action"] == "HOLD_CASH" and datetime.fromisoformat(last["detail"]["inputs"]["settle_at"]) > now):
+        try:  # the same question, re-asked at the current stored price (the page's pulse keeps that price fresh)
+            d = last["detail"]
+            with get_pool().connection() as conn:
+                price = conn.execute("select price_usd from bitcoin_prices order by fetched_at desc limit 1").fetchone()
+            hours = (datetime.fromisoformat(d["inputs"]["settle_at"]) - now).total_seconds() / 3600
+            spot = float(price["price_usd"])
+            m = _model(s, spot, float(d["inputs"]["strike"]), hours)
+            rec = betting.advise(m["p_yes"], float(d["inputs"]["yes_ask"]), float(d["inputs"]["yes_bid"]), float(last["active"]), p)
+            live = {"spot": spot, "p_yes": m["p_yes"], "action": rec["action"], "changed": rec["action"] != last["action"], "hours_left": round(hours, 2)}
+        except Exception:  # noqa: BLE001 - the live line is a convenience; never break the panel over it
+            log.exception("bet advisor: live re-evaluation failed")
     return {
+        "live": live,
         "state": None if last is None else {k: float(last[k]) for k in ("balance", "active", "vault", "peak")} | {"updated_at": last["created_at"]},
         "last": None if last is None else {"id": last["id"], "created_at": last["created_at"], **last["detail"]},
         "open_position": open_position,

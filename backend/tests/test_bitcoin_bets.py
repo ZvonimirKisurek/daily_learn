@@ -146,3 +146,49 @@ async def test_daily_check_in_flow(btc_db, monkeypatch):  # noqa: F811
 
 def test_the_model_is_never_certain_even_far_from_the_strike():
     assert betting.prob_above(75_000, 60_000, 0.02, 24, 0.5) == 0.98 and betting.prob_above(75_000, 95_000, 0.02, 24, 0.5) == 0.02
+
+
+# ------------------------------------------------------------------ live while the page is open
+@pytest.mark.integration
+def test_pulse_refreshes_cheaply_and_forecasts_only_on_news_or_staleness(btc_db, monkeypatch):  # noqa: F811
+    from app.bitcoin import ingest, live
+    from app.bitcoin.predictor import generate_prediction
+    from app.config import Settings
+    from app.tasks import generate_bitcoin_daily_insight
+
+    s = Settings(bitcoin_live_price_seconds=0, bitcoin_live_news_minutes=0, bitcoin_live_min_minutes=30)
+    jobs = []
+    enqueue = lambda name, **kw: jobs.append((name, kw))  # noqa: E731
+    monkeypatch.setattr(live, "_last_news_fetch", 0.0)
+
+    first = live.pulse(s, enqueue)                                   # no forecast yet: fetch the price, start one
+    assert first["price_updated"] and first["forecast"] == "started" and "no forecast" in first["reason"]
+    assert jobs == [("app.tasks.generate_bitcoin_daily_insight", {"trigger": "live", "run_id": str(first["run_id"])})]
+    assert live.pulse(s, enqueue)["forecast"] == "running" and len(jobs) == 1   # a second tab joins the run in flight
+
+    generate_prediction(trigger="live", llm=FakeBtcLLM(), run_id=str(first["run_id"]))
+    assert live.pulse(s, enqueue)["forecast"] == "current" and len(jobs) == 1   # nothing new: no AI call
+
+    def news(n):
+        with psycopg.connect(btc_db, autocommit=True) as conn:
+            conn.execute("insert into bitcoin_news (source_name, title, url, url_hash, btc_relevant, published_at) values ('X', 'BTC jumps', %s, %s, true, now())",
+                         (f"https://n.test/new{n}", f"new{n}"))
+    news(1)
+    cool = live.pulse(s, enqueue)                                    # news, but the last forecast is minutes old
+    assert cool["forecast"] == "cooldown" and len(jobs) == 1
+    with psycopg.connect(btc_db, autocommit=True) as conn:
+        conn.execute("update bitcoin_predictions set created_at = created_at - interval '2 hours'")
+        conn.execute("update bitcoin_runs set finished_at = finished_at - interval '2 hours', started_at = started_at - interval '2 hours'")
+        conn.execute("update bitcoin_news set fetched_at = now() where url_hash = 'new1'")
+    hit = live.pulse(s, enqueue)
+    assert hit["forecast"] == "started" and "new Bitcoin headline" in hit["reason"] and len(jobs) == 2 and jobs[1][1]["trigger"] == "live"
+
+    monkeypatch.setattr(ingest, "fetch_spot_price", lambda s=None: (_ for _ in ()).throw(RuntimeError("exchanges down")))
+    assert live.pulse(s, enqueue)["price_updated"] is False          # a failed price fetch is survivable
+
+    # nobody looking = nothing happens: the scheduled run is a no-op unless explicitly enabled
+    monkeypatch.setenv("BITCOIN_BACKGROUND_FORECAST", "false")
+    from app.config import get_settings
+    get_settings.cache_clear()
+    assert "skipped" in generate_bitcoin_daily_insight.run(trigger="beat")
+    get_settings.cache_clear()

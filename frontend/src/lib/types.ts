@@ -196,6 +196,8 @@ export interface BetCheck {
   sell_price: number; entry_price: number; prob_win_now: number; unrealized: number; shares: number; spot: number; strike: number; hours_left: number;
 }
 export interface BetOverview {
+  /** The last check-in re-evaluated at the current BTC price (market prices as you entered them). */
+  live: { spot: number; p_yes: number; action: BetAction; changed: boolean; hours_left: number } | null;
   state: { balance: number; active: number; vault: number; peak: number; updated_at: string } | null;
   last: BetAdvice | null; open_position: boolean;
   history: { id: string; created_at: string; balance: number; vault: number; pnl: number | null; action: BetAction; shares: number;
@@ -203,5 +205,9 @@ export interface BetOverview {
   defaults: { hours_to_settle: number; settle_at: string; settle_label: string };
   params: { min_edge: number; kelly: number; max_fraction: number; vault_share: number; take_profit: number; stop_loss: number; min_trade: number; fee: number };
   disclaimer: string;
+}
+export interface BitcoinPulse {
+  price_updated: boolean; news_added: number; forecast: "current" | "started" | "running" | "cooldown" | "busy" | "error";
+  reason: string | null; run_id: string | null;
 }
 export interface BetInput { balance: number; strike: number; yes_ask: number; yes_bid?: number; hours_to_settle?: number; reset?: boolean }

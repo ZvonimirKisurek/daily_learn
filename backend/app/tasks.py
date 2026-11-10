@@ -55,7 +55,11 @@ def generate_bitcoin_daily_insight(self, trigger: str = "beat", run_id: str | No
     PriceUnavailable is not retried by Celery (CoinGecko and Coinbase already retried and both failed). The next
     day's run, or a manual refresh, tries again."""
     from app.bitcoin.predictor import generate_prediction
+    from app.config import get_settings
 
+    if trigger == "beat" and not get_settings().bitcoin_background_forecast:
+        # Forecasts are made on demand while the Bitcoin page is open (bitcoin/live.py), not on a timer.
+        return {"skipped": "background forecast is off (BITCOIN_BACKGROUND_FORECAST=false)"}
     return generate_prediction(trigger=trigger, run_id=run_id)
 
 

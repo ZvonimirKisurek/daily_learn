@@ -13,9 +13,9 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.api import queries
 from app.api.deps import Cfg, Conn, Pool, QueueUnavailable, get_enqueue, get_llm, require_token
-from app.api.schemas import (AnswersIn, BetAdviceOut, BetCheckIn, BetCheckOut, BetIn, BetOverviewOut, BitcoinLatestOut, CompletionOut, ExamOut, ExamResultOut, ExamStartIn, NotesIn, NotesOut, FeedPage,
+from app.api.schemas import (AnswersIn, BitcoinPulseOut, BetAdviceOut, BetCheckIn, BetCheckOut, BetIn, BetOverviewOut, BitcoinLatestOut, CompletionOut, ExamOut, ExamResultOut, ExamStartIn, NotesIn, NotesOut, FeedPage,
                              ProgressOut, QueueOut, QuizOut, SkillOut, SubmissionIn, SubmissionOut, TaskDetailOut, TodayOut)
-from app.bitcoin import advisor
+from app.bitcoin import advisor, live
 from app.curriculum import levels
 from app.curriculum.errors import LLMBudgetExceeded, LLMError
 from app.curriculum.evaluation import evaluate
@@ -271,6 +271,19 @@ async def bitcoin_generate(pool: Pool, cfg: Cfg, enqueue: Annotated[Callable[...
             await queries.fail_bitcoin_run(conn, run_id, msg)
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, msg) from exc
     return QueueOut(queued=True, run_id=run_id)
+
+
+@router.post("/bitcoin/pulse", response_model=BitcoinPulseOut)
+async def bitcoin_pulse(cfg: Cfg, enqueue: Annotated[Callable[..., None], Depends(get_enqueue)]):
+    """Called by the Bitcoin page on open and about once a minute while its tab is visible: refresh the price and the
+    news, and start a forecast when fresh Bitcoin headlines arrived since the last one. No visitor, no work."""
+    try:
+        return await run_in_threadpool(live.pulse, cfg, enqueue)
+    except psycopg.errors.UndefinedTable:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _BTC_MISSING) from None
+    except psycopg.errors.CheckViolation:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "Apply supabase/migrations/20261111000012_bitcoin_live.sql, then reload.") from None
 
 
 _BET_MISSING = "The bet advisor's table is missing. Apply supabase/migrations/20261110000011_bitcoin_bets.sql, then reload."

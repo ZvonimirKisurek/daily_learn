@@ -115,6 +115,12 @@ class Settings(BaseSettings):
     bitcoin_news_retention_days: int = 30
     bitcoin_accuracy_window_days: int = 14  # self-correction: score forecasts whose target fell in this window
     bitcoin_accuracy_tolerance_hours: float = 12  # a spot fetch this close to the target instant counts as the actual price
+    # --- Bitcoin page live mode (bitcoin/live.py): work happens only while the page is open ---
+    bitcoin_live_price_seconds: int = 45  # refetch the spot price when the stored one is older than this
+    bitcoin_live_news_minutes: int = 5  # refetch the news feeds at most this often
+    bitcoin_live_min_minutes: int = 30  # never start live forecasts closer together than this
+    bitcoin_live_max_age_hours: float = 6  # with the page open, refresh a forecast older than this even without news
+    bitcoin_background_forecast: bool = False  # true = also run the 09:00 scheduled forecast when nobody is looking
     # --- Bitcoin bet advisor (bitcoin/betting.py): a daily binary bet "BTC above $K at settlement" ---
     bitcoin_bet_min_edge: float = 0.05  # model probability must beat the market price by this much
     bitcoin_bet_kelly: float = 0.25  # quarter-Kelly
