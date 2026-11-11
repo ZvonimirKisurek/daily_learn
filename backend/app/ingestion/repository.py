@@ -17,13 +17,13 @@ def upsert_sources(specs: Iterable[SourceSpec]) -> int:
         for s in specs:
             conn.execute(
                 """
-                insert into sources (slug, name, category, kind, url, config, weight, enabled)
-                values (%s,%s,%s,%s,%s,%s,%s,%s)
+                insert into sources (slug, name, category, kind, url, config, weight, enabled, track)
+                values (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 on conflict (slug) do update set
                   name=excluded.name, category=excluded.category, kind=excluded.kind, url=excluded.url,
-                  config=excluded.config, weight=excluded.weight, enabled=excluded.enabled, updated_at=now()
+                  config=excluded.config, weight=excluded.weight, enabled=excluded.enabled, track=excluded.track, updated_at=now()
                 """,
-                (s.slug, s.name, s.category, s.kind, s.url, Jsonb(s.config), s.weight, s.enabled),
+                (s.slug, s.name, s.category, s.kind, s.url, Jsonb(s.config), s.weight, s.enabled, s.track),
             )
             n += 1
     return n

@@ -61,7 +61,7 @@ async def test_today_pending_before_generation(client):
     assert r.status_code == 200
     body = r.json()
     assert body["state"] == "pending" and body["briefing"] is None and body["weekly_theme"] is None
-    assert len(body["skills"]) == 8
+    assert len(body["skills"]) == 16 and {s["track"] for s in body["skills"]} == {"ai", "management"}
 
 
 async def test_today_ready_has_tasks_theme_and_resolved_urls(client, db):
@@ -74,8 +74,8 @@ async def test_today_ready_has_tasks_theme_and_resolved_urls(client, db):
     assert body["briefing"]["payload"]["market_insight"]["word_count"] >= 450 and "content" not in body["briefing"]["payload"]["morning_reading"]
     assert [t["has_content"] for t in body["briefing"]["tasks"]] == [True, False, False]  # the chapter is fetched on demand, not in /today
     assert body["weekly_theme"]["theme"]["title"] and len(body["weekly_theme"]["theme"]["daily_plan"]) == 7
-    assert set(body) == {"date", "state", "briefing", "weekly_theme", "skills"}  # response_model fixes the contract
-    assert set(body["briefing"]) == {"id", "day", "completed_at", "level", "payload", "tasks"}
+    assert set(body) == {"date", "track", "state", "briefing", "weekly_theme", "skills"}  # response_model fixes the contract
+    assert set(body["briefing"]) == {"id", "day", "completed_at", "level", "track", "payload", "tasks"}
 
 
 # --------------------------------------------------------------------------------------------- completion
@@ -578,3 +578,83 @@ async def test_done_days_lists_only_fully_finished_lessons(client, db):
     with psycopg.connect(db) as conn:
         conn.execute("update daily_briefings set completed_at = now()")
     assert (await client.get("/api/briefings/done")).json() == [TODAY.isoformat()]
+
+
+# --------------------------------------------------------------------------------------------- tracks (AI + management)
+def generate_management_today():
+    """Today's management lesson. The seeded articles become management sources (a track is defined by its sources)."""
+    from app.db import get_pool
+    with get_pool().connection() as conn:
+        conn.execute("update sources set track = 'management'")
+    s = Settings(timezone="UTC", min_candidates=10, prompt_article_count=20)
+    return generators.generate_daily_briefing(day=TODAY, llm=FakeLLM(), embedder=FakeEmbedder(), settings=s, track="management")
+
+
+async def test_management_track_has_its_own_lesson_path_and_progress(client, db):
+    seed_articles()
+    generate_today(level=1, legacy=False)                      # the AI lesson, from AI sources
+    out = generate_management_today()                          # same day, second track
+    assert out["payload"]["lesson"]["track"] == "management" and out["payload"]["lesson"]["title"] == "From maker to manager"
+
+    ai = (await client.get("/api/today")).json()
+    mg = (await client.get("/api/today", params={"track": "management"})).json()
+    assert ai["track"] == "ai" and ai["briefing"]["track"] == "ai" and ai["weekly_theme"] is not None
+    assert mg["track"] == "management" and mg["briefing"]["id"] != ai["briefing"]["id"] and mg["weekly_theme"] is None
+    assert mg["briefing"]["payload"]["lesson"]["topic"] == "A manager's output is the output of the team"
+    assert {t["skill_slug"] for t in mg["briefing"]["tasks"]} == {"mgmt-people"}
+    assert (await client.get("/api/today", params={"track": "cooking"})).status_code == 422
+
+    with psycopg.connect(db) as conn:                           # finish the management lesson: quiz -> exercise -> essay
+        ids = {k: str(i) for i, k in conn.execute("select t.id, t.kind from daily_tasks t join daily_briefings b on b.id = t.briefing_id where b.track = 'management'")}
+    key = answer_key(db, "select quiz from daily_tasks where id = %s", ids["reading"])
+    assert (await client.post(f"/api/tasks/{ids['reading']}/quiz", json={"answers": key})).json()["passed"]
+    assert (await client.post(f"/api/tasks/{ids['hands_on']}/submit", json={"submission": GOOD_SUBMISSION})).json()["passed"]
+    assert (await client.post(f"/api/tasks/{ids['insight']}/complete")).json()["briefing_completed"]
+    detail = (await client.get(f"/api/tasks/{ids['reading']}")).json()
+    assert detail["track"] == "management" and detail["lesson"]["track"] == "management"
+
+    pm = (await client.get("/api/progress", params={"track": "management"})).json()
+    pa = (await client.get("/api/progress")).json()
+    assert pm["track"] == "management" and pm["track_label"] == "Management & Leadership" and pm["lessons_done"] == 1
+    assert pm["level"]["title"] == "From maker to manager" and pm["level"]["tier_name"] == "Team Lead" and len(pm["path"]) == 22
+    assert pa["track"] == "ai" and pa["lessons_done"] == 0 and len(pa["path"]) == 21          # the AI path did not move
+    assert (await client.get("/api/briefings/done", params={"track": "management"})).json() == [TODAY.isoformat()]
+    assert (await client.get("/api/briefings/done")).json() == []
+    skills = {s["slug"]: s for s in (await client.get("/api/skills")).json()}
+    assert skills["mgmt-people"]["track"] == "management" and skills["mgmt-people"]["level"] > 20 and skills["rag"]["track"] == "ai"
+
+
+async def test_management_exams_and_placement_are_separate_from_the_ai_track(client, db):
+    exam = (await client.post("/api/exams/start", json={"kind": "placement", "track": "management"})).json()
+    assert exam["track"] == "management" and exam["total"] == 18 and any("SLA" in q["question"] for q in exam["questions"])
+    with psycopg.connect(db) as conn:
+        qs = conn.execute("select questions from exams where id = %s", (exam["id"],)).fetchone()[0]
+    answers = [q["answer"] if q["tier"] == 1 else (q["answer"] + 1) % len(q["options"]) for q in qs]     # knows the Team Lead tier only
+    out = (await client.post(f"/api/exams/{exam['id']}/submit", json={"answers": answers})).json()
+    assert out["track"] == "management" and out["new_level"] == 5 and out["new_level_title"] == "Hiring and building a team"
+    assert (await client.get("/api/progress", params={"track": "management"})).json()["level"]["index"] == 5
+    assert (await client.get("/api/progress")).json()["level"]["index"] == 1                              # AI untouched
+    assert (await client.post("/api/exams/start", json={"kind": "placement"})).status_code == 200         # AI placement still available today
+
+    with psycopg.connect(db) as conn:                           # four finished management lessons on level 5 unlock ITS exam only
+        for d in range(1, 5):
+            conn.execute("insert into daily_briefings (day, payload, level, track, completed_at) values (current_date - %s, '{}', 5, 'management', now())", (d,))
+    assert (await client.post("/api/exams/start", json={"kind": "level"})).status_code == 409
+    lvl = (await client.post("/api/exams/start", json={"kind": "level", "track": "management"})).json()
+    assert lvl["track"] == "management" and lvl["level"] == 5
+    key = answer_key(db, "select questions from exams where id = %s", lvl["id"])
+    ok = (await client.post(f"/api/exams/{lvl['id']}/submit", json={"answers": key})).json()
+    assert ok["passed"] and ok["new_level"] == 6 and ok["new_level_title"] == "Project and program management"
+
+
+async def test_feed_is_split_by_track(client, db):
+    seed_articles(8)
+    with_skill_embeddings(db)
+    with psycopg.connect(db, autocommit=True) as conn:
+        conn.execute("update sources set track = 'management' where id in (select id from sources order by slug limit 1)")
+        n_mgmt = conn.execute("select count(*) from articles a join sources s on s.id = a.source_id where s.track = 'management'").fetchone()[0]
+    ai = (await client.get("/api/feed", params={"limit": 50})).json()["items"]
+    mg = (await client.get("/api/feed", params={"limit": 50, "track": "management", "sort": "for_you"})).json()
+    assert 0 < n_mgmt < 8 and len(mg["items"]) == n_mgmt and len(ai) == 8 - n_mgmt
+    assert mg["for_level"]["title"] == "From maker to manager" and {i["skill_match"]["skill_slug"][:5] for i in mg["items"]} == {"mgmt-"}
+    assert all(not i["skill_match"]["skill_slug"].startswith("mgmt-") for i in ai)

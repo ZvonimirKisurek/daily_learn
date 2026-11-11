@@ -242,7 +242,7 @@ def test_migration_zeroes_skills_and_adds_the_columns(db):
         c.execute("update skills set level = 33")
         c.execute("insert into skill_history (skill_id, level, delta) select id, 1, 1 from skills limit 1")
         c.execute(data_part)
-        assert c.execute("select max(level), count(*) from skills").fetchone() == (0, 8)
+        assert c.execute("select max(level), count(*) from skills").fetchone() == (0, 16)
         assert c.execute("select count(*) from skill_history").fetchone()[0] == 0
         cols = {r[0] for r in c.execute("select column_name from information_schema.columns where table_name='daily_tasks'")}
     assert {"reading_content", "evaluation_rubric", "user_submission", "ai_evaluation_feedback", "evaluation_result",
@@ -259,6 +259,6 @@ def test_reset_progress_cli_requires_confirmation(db):
     with psycopg.connect(db) as c:
         assert c.execute("select min(level) from skills").fetchone()[0] == 40
     yes = subprocess.run([sys.executable, "-m", "app.cli", "reset-progress", "--yes"], env=env, capture_output=True, text=True)
-    assert yes.returncode == 0 and "8 skills reset to 0" in yes.stdout
+    assert yes.returncode == 0 and "16 skills reset to 0" in yes.stdout
     with psycopg.connect(db) as c:
         assert c.execute("select max(level) from skills").fetchone()[0] == 0

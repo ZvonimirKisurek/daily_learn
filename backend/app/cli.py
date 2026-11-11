@@ -8,7 +8,7 @@ import sys
 
 from app.config import get_settings
 from app.ingestion.models import SourceState
-from app.ingestion.sources import load_sources
+from app.ingestion.sources import load_all_sources
 
 
 def _regenerate_lessons(args) -> int:
@@ -28,7 +28,7 @@ def _regenerate_lessons(args) -> int:
         if conn.execute("select to_regclass('public.learner_progress') is not null as ok").fetchone()["ok"] is False:
             print("the learning-path tables are missing: apply supabase/migrations/20261109000010_learning_path.sql first")
             return 2
-    old = repository.briefings_between(start, end)
+    old = repository.briefings_between(start, end, args.track)
     n_days = (end - start).days + 1
     done = sum(1 for b in old for t in b["tasks"] if t["completed_at"])
     print(f"{n_days} day(s) {start}..{end}: {len(old)} existing lesson(s) will be replaced ({done} completed task(s); "
@@ -37,17 +37,17 @@ def _regenerate_lessons(args) -> int:
     if not args.yes:
         print("Re-run with --yes to confirm.")
         return 2
-    r = generators.regenerate_lessons(start, end, settings=settings, backup_path=args.backup)
+    r = generators.regenerate_lessons(start, end, settings=settings, backup_path=args.backup, track=args.track)
     print(json.dumps(r, indent=2, default=str))
     return 1 if r["failed"] else 0
 
 
-def _dry_run(only: list[str] | None) -> int:
+def _dry_run(only: list[str] | None, track: str | None = None) -> int:
     """Fetch + parse every source without touching the DB or OpenAI. Doubles as a source-liveness check."""
     from app.ingestion.pipeline import fetch_all
 
     settings = get_settings()
-    specs = [s for s in load_sources(settings.sources_file) if not only or s.slug in only]
+    specs = [s for s in load_all_sources(settings) if (not only or s.slug in only) and (not track or s.track == track)]
     outcomes = asyncio.run(fetch_all(specs, {s.slug: SourceState() for s in specs}, settings))
     ok = failed = skipped = 0
     kinds: dict[str, int] = {}
@@ -76,6 +76,7 @@ def main() -> int:
     ing = sub.add_parser("ingest", help="run the ingestion pipeline once")
     ing.add_argument("--dry-run", action="store_true", help="fetch+parse only; no DB, no embeddings")
     ing.add_argument("--source", action="append", help="limit to slug (repeatable)")
+    ing.add_argument("--track", choices=("ai", "management"), help="limit to one track's sources (handy with --dry-run to check a catalogue)")
     lim = sub.add_parser("summarize", help="write AI summaries for recent articles that lack one")
     lim.add_argument("--limit", type=int)
     sub.add_parser("usage", help="LLM spend ledger (last 7 days) and the daily cap")
@@ -97,11 +98,14 @@ def main() -> int:
         g.add_argument("--force", action="store_true", help="regenerate even if one exists")
         g.add_argument("--dry-run", action="store_true", help="print the exact prompt; no LLM call, nothing stored")
         g.add_argument("--date", help="YYYY-MM-DD (default: auto)")
+        if name == "generate-daily":
+            g.add_argument("--track", choices=("ai", "management"), default="ai", help="which learning track's lesson")
     rg = sub.add_parser("regenerate-lessons", help="remake the daily lessons of a date range in the learning-path format (destructive, backed up first)")
     rg.add_argument("--from", dest="start", required=True, help="first day, YYYY-MM-DD")
     rg.add_argument("--to", dest="end", help="last day, YYYY-MM-DD (default: today)")
     rg.add_argument("--backup", default="/tmp/lessons_backup.json", help="where the old lessons (tasks, submissions, notes) are saved first")
     rg.add_argument("--yes", action="store_true", help="required: confirm replacing the lessons in that range")
+    rg.add_argument("--track", choices=("ai", "management"), default="ai", help="which learning track's lessons")
     btc = sub.add_parser("bitcoin", help="Phase 11: fetch BTC price + news and generate the AI forecast")
     btc.add_argument("--ingest-only", action="store_true", help="fetch price + news only; no LLM call")
     btc.add_argument("--dry-run", action="store_true", help="fetch data and print the exact prompt; no LLM call, nothing stored")
@@ -111,7 +115,7 @@ def main() -> int:
     if args.cmd == "sync-sources":
         from app.ingestion import repository
 
-        specs = load_sources(get_settings().sources_file)
+        specs = load_all_sources(get_settings())
         print(f"synced {repository.upsert_sources(specs)} sources")
         return 0
     if args.cmd == "usage":
@@ -227,17 +231,17 @@ def main() -> int:
         if args.cmd == "generate-weekly":
             r = generators.generate_weekly_theme(week_start=d, force=args.force, dry_run=args.dry_run)
         else:
-            r = generators.generate_daily_briefing(day=d, force=args.force, dry_run=args.dry_run)
+            r = generators.generate_daily_briefing(day=d, force=args.force, dry_run=args.dry_run, track=args.track)
         if args.dry_run:
             print(f"=== SYSTEM ===\n{r['system']}\n\n=== USER ({r['articles']} articles) ===\n{r['user']}")
         else:
             print(json.dumps(r, indent=2, default=str))
         return 0
     if args.dry_run:
-        return _dry_run(args.source)
+        return _dry_run(args.source, args.track)
     from app.ingestion.pipeline import run_ingestion
 
-    print(run_ingestion(trigger="manual", only=args.source))
+    print(run_ingestion(trigger="manual", only=args.source, track=args.track))
     return 0
 
 

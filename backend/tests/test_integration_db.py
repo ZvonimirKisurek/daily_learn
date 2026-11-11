@@ -44,7 +44,8 @@ class FakeLLM:
         if name == "WeeklyThemeOutput":
             d = weekly_dict(ids, skills=("rag", "vector-db"))
         elif name == "DailyPlanOutput":
-            d = daily_dict(ids[0], skill=grounding.required_skill or "rag", evidence=ids[:2])
+            skill = grounding.required_skill or "rag"
+            d = daily_dict(ids[0], skill=skill, evidence=ids[:2], insight_skill="vector-db" if "vector-db" in grounding.skill_slugs else skill)
         elif name == "LevelExamOutput":
             d = {"questions": [{**q, "question": f"Exam question {i}?"} for i, q in enumerate(quiz_dict(10))]}
         elif name == "TaskEvaluationSchema":
@@ -65,7 +66,7 @@ def test_migrations_applied(db):
     with psycopg.connect(db) as conn:
         tables = {r[0] for r in conn.execute("select tablename from pg_tables where schemaname='public'")}
         assert {"sources", "articles", "ingestion_runs", "skills", "skill_history", "weekly_themes", "daily_briefings", "daily_tasks"} <= tables
-        assert conn.execute("select count(*) from skills").fetchone()[0] == 8
+        assert conn.execute("select count(*) from skills").fetchone()[0] == 16
         assert conn.execute("select data_type from information_schema.columns where table_name='skills' and column_name='level'").fetchone()[0] == "real"
         assert conn.execute("select bool_and(relrowsecurity) from pg_class where relname in ('articles','daily_tasks','skills')").fetchone()[0]
 
@@ -109,7 +110,7 @@ def test_weekly_then_daily_end_to_end(db):
         rub = conn.execute("select evaluation_rubric from daily_tasks where kind='hands_on'").fetchone()[0]
         assert rub["pass_score"] == 6 and len(rub["criteria"]) == 3             # the rubric is stored on the hands-on task
         assert conn.execute("select count(*) from daily_tasks where kind='insight' and reading_content is null and evaluation_rubric is null").fetchone()[0] == 1
-        assert conn.execute("select count(*) from skills where embedding is not null").fetchone()[0] == 8
+        assert conn.execute("select count(*) from skills where embedding is not null and track = 'ai'").fetchone()[0] == 8
 
     # next day must not reuse yesterday's reading
     used = crepo.used_reading_ids()

@@ -394,7 +394,8 @@ def build_chapter_prompt(plan: dict, lesson: dict, inspiration: list[RankedArtic
         f"{i}. {_esc(s['heading'])} (~{s['target_words']} words): {_esc(s['key_points'])}" for i, s in enumerate(plan["sections"], 1))
     goals = "\n".join(f"- {_esc(g)}" for g in plan["learning_goals"])
     quiz = "\n".join(f"- {_esc(q['question'])}" for q in plan.get("quiz", []))
-    code = ("Include at least one short, runnable ```python example." if lesson["level"] >= 5
+    code = ("Do not include code." if lesson.get("track") == "management"
+            else "Include at least one short, runnable ```python example." if lesson["level"] >= 5
             else "Code is optional at this level; keep it maths-free.")
     return (
         f"{render_learner_level(lesson)}\n<reading_plan>\ntitle: {_esc(plan['chapter_title'])}\nskill: {plan['skill_slug']}\n"
@@ -455,6 +456,15 @@ def build_evaluation_prompt(task: dict, rubric: dict, submission: str, max_chars
         f"<submission>\n{_esc_block(submission, max_chars)}\n</submission>\n\n"
         "Grade the submission against the rubric now."
     )
+
+
+def lesson_systems(track: str) -> dict[str, str]:
+    """The four system prompts of a daily lesson for one track: plan, chapter, insight, exam."""
+    if track == "management":
+        from app.curriculum import prompts_management as pm
+
+        return {"plan": pm.DAILY_PLAN_SYSTEM, "chapter": pm.CHAPTER_SYSTEM, "insight": pm.INSIGHT_SYSTEM, "exam": pm.LEVEL_EXAM_SYSTEM}
+    return {"plan": DAILY_PLAN_SYSTEM, "chapter": CHAPTER_SYSTEM, "insight": INSIGHT_SYSTEM, "exam": LEVEL_EXAM_SYSTEM}
 
 
 # =========================================================================================== Phase 11: Bitcoin forecast

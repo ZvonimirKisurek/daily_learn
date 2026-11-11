@@ -52,6 +52,7 @@ class InsightOut(BaseModel):
 
 
 class LessonInfo(BaseModel):
+    track: str = "ai"
     level: int
     of: int
     tier: int
@@ -95,6 +96,7 @@ class BriefingOut(BaseModel):
     day: date
     completed_at: datetime | None
     level: int | None = Field(default=None, description="learning-path level; null = a legacy briefing whose tasks are not gated")
+    track: str = "ai"
     payload: BriefingPayloadOut
     tasks: list[TaskOut]
 
@@ -127,6 +129,7 @@ class HistoryPoint(BaseModel):
 class SkillOut(BaseModel):
     slug: str
     name: str
+    track: str = Field(default="ai", description="which learning track (and so which skill graph) the skill belongs to")
     level: float
     target: float
     percent_to_target: float = Field(description="level / target * 100, capped at 100")
@@ -136,6 +139,7 @@ class SkillOut(BaseModel):
 
 class TodayOut(BaseModel):
     date: date
+    track: str = "ai"
     state: Literal["ready", "pending"] = Field(description="'pending' = no briefing generated yet for today")
     briefing: BriefingOut | None
     weekly_theme: WeeklyThemeOut | None
@@ -217,6 +221,7 @@ class TaskDetailOut(BaseModel):
     quiz: list["PublicQuestion"] | None = Field(default=None, description="the reading quiz, WITHOUT answers")
     lesson: LessonInfo | None = None
     locked: str | None = Field(default=None, description="why this task cannot be done yet (lesson order), or null")
+    track: str = "ai"
 
 
 class NotesIn(BaseModel):
@@ -319,6 +324,8 @@ class PlacementStatus(BaseModel):
 
 
 class ProgressOut(BaseModel):
+    track: str = "ai"
+    track_label: str = ""
     level: CurrentLevel
     levels_total: int
     lessons_done: int = Field(description="lessons fully finished on the current level")
@@ -334,11 +341,13 @@ class ProgressOut(BaseModel):
 
 class ExamStartIn(BaseModel):
     kind: Literal["placement", "level"]
+    track: Literal["ai", "management"] = "ai"
 
 
 class ExamOut(BaseModel):
     id: UUID
     kind: Literal["placement", "level"]
+    track: str = "ai"
     level: int | None
     level_title: str | None
     questions: list[PublicQuestion]
@@ -367,6 +376,7 @@ class PlacementOut(BaseModel):
 class ExamResultOut(BaseModel):
     id: UUID
     kind: Literal["placement", "level"]
+    track: str = "ai"
     level: int | None
     correct: int
     total: int

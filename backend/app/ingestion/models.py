@@ -21,6 +21,7 @@ class SourceSpec(BaseModel):
     weight: float = Field(default=1.0, ge=0, le=2)
     enabled: bool = True
     config: dict[str, Any] = Field(default_factory=dict)
+    track: Literal["ai", "management"] = "ai"  # which learning track the source feeds (set per file, see sources.py)
 
 
 class RawItem(BaseModel):

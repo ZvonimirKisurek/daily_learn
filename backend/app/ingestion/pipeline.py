@@ -15,7 +15,7 @@ from app.ingestion.fetchers import FETCHERS
 from app.ingestion.http import PoliteClient, RobotsDisallowed
 from app.ingestion.models import RawItem, SourceOutcome, SourceSkipped, SourceSpec, SourceState
 from app.ingestion.parsers import canonicalize_url, url_hash
-from app.ingestion.sources import load_sources
+from app.ingestion.sources import load_all_sources
 
 log = logging.getLogger(__name__)
 
@@ -130,13 +130,15 @@ def store(outcomes: list[SourceOutcome], settings: Settings, embedder: Embedder)
 
 def run_ingestion(
     *, trigger: str = "manual", only: list[str] | None = None, embedder: Embedder | None = None,
-    settings: Settings | None = None,
+    settings: Settings | None = None, track: str | None = None,
 ) -> dict:
     settings = settings or get_settings()
-    specs = load_sources(settings.sources_file)
+    specs = load_all_sources(settings)
     repo.upsert_sources(specs)
     if only:
         specs = [s for s in specs if s.slug in only]
+    if track:
+        specs = [s for s in specs if s.track == track]
     states = repo.load_source_states()
     run_id = repo.start_run(trigger)
     try:

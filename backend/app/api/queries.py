@@ -47,7 +47,7 @@ TASK_COLS = ("id, kind, skill_slug, difficulty, title, completed_at, points_awar
 
 # ----------------------------------------------------------------------------------------------- skills
 async def fetch_skills(conn: AsyncConnection) -> list[dict]:
-    skills = await (await conn.execute("select slug, name, level, target from skills order by name")).fetchall()
+    skills = await (await conn.execute("select slug, name, level, target, track from skills order by track, name")).fetchall()
     hist = await (await conn.execute(
         """select s.slug, h.level, h.recorded_at, h.delta from skill_history h join skills s on s.id = h.skill_id
            where h.recorded_at > now() - interval '30 days' order by h.recorded_at""")).fetchall()
@@ -56,7 +56,7 @@ async def fetch_skills(conn: AsyncConnection) -> list[dict]:
     for s in skills:
         points = [h for h in hist if h["slug"] == s["slug"]]
         out.append({
-            "slug": s["slug"], "name": s["name"], "level": round(s["level"], 2), "target": s["target"],
+            "slug": s["slug"], "name": s["name"], "track": s["track"], "level": round(s["level"], 2), "target": s["target"],
             "percent_to_target": round(min(100.0, s["level"] / max(s["target"], 1) * 100), 1),
             "delta_7d": round(sum((h["delta"] or 0) for h in points if h["recorded_at"] >= week_ago), 3),
             "history": [{"at": h["recorded_at"], "level": h["level"]} for h in points],
@@ -73,33 +73,34 @@ async def _tasks(conn: AsyncConnection, briefing_id) -> list[dict]:
     return [{**r, "completed": r["completed_at"] is not None} for r in rows]
 
 
-async def fetch_today(conn: AsyncConnection, day: date) -> dict:
-    b = await (await conn.execute("select id, day, completed_at, payload, theme_id, level from daily_briefings where day=%s", (day,))).fetchone()
+async def fetch_today(conn: AsyncConnection, day: date, track: str = "ai") -> dict:
+    b = await (await conn.execute("select id, day, completed_at, payload, theme_id, level, track from daily_briefings where day=%s and track=%s",
+                                  (day, track))).fetchone()
     week_start = day - timedelta(days=day.weekday())
     t = await (await conn.execute("select id, week_start, payload from weekly_themes where week_start=%s", (week_start,))).fetchone()
     return {
-        "date": day,
+        "date": day, "track": track,
         "state": "ready" if b else "pending",
-        "briefing": None if b is None else {"id": b["id"], "day": b["day"], "completed_at": b["completed_at"], "level": b["level"],
+        "briefing": None if b is None else {"id": b["id"], "day": b["day"], "completed_at": b["completed_at"], "level": b["level"], "track": b["track"],
                                             "payload": b["payload"], "tasks": await _tasks(conn, b["id"])},
-        "weekly_theme": None if t is None else {"id": t["id"], "week_start": t["week_start"], "theme": t["payload"]},
+        "weekly_theme": None if t is None or track != "ai" else {"id": t["id"], "week_start": t["week_start"], "theme": t["payload"]},
         "skills": await fetch_skills(conn),
     }
 
 
-async def list_briefing_days(conn: AsyncConnection) -> list[date]:
-    """Every day that has a stored briefing, oldest first. `day` is the primary key, so this is an index scan."""
-    rows = await (await conn.execute("select day from daily_briefings order by day")).fetchall()
+async def list_briefing_days(conn: AsyncConnection, track: str = "ai") -> list[date]:
+    """Every day that has a stored lesson on this track, oldest first."""
+    rows = await (await conn.execute("select day from daily_briefings where track=%s order by day", (track,))).fetchall()
     return [r["day"] for r in rows]
 
 
-async def list_completed_days(conn: AsyncConnection) -> list[date]:
-    rows = await (await conn.execute("select day from daily_briefings where completed_at is not null order by day")).fetchall()
+async def list_completed_days(conn: AsyncConnection, track: str = "ai") -> list[date]:
+    rows = await (await conn.execute("select day from daily_briefings where completed_at is not null and track=%s order by day", (track,))).fetchall()
     return [r["day"] for r in rows]
 
 
-async def briefing_exists(conn: AsyncConnection, day: date) -> bool:
-    return (await (await conn.execute("select 1 from daily_briefings where day=%s", (day,))).fetchone()) is not None
+async def briefing_exists(conn: AsyncConnection, day: date, track: str = "ai") -> bool:
+    return (await (await conn.execute("select 1 from daily_briefings where day=%s and track=%s", (day, track))).fetchone()) is not None
 
 
 # ----------------------------------------------------------------------------------------------- completion
@@ -176,7 +177,7 @@ async def get_task_detail(conn: AsyncConnection, task_id: UUID, max_attempts: in
         """select t.id, t.kind, t.skill_slug, t.difficulty, t.title, t.completed_at, t.points_awarded, t.attempt_count,
                   t.evaluation_score, t.evaluation_passed, (t.reading_content is not null) as has_content,
                   t.reading_content, t.notes, t.user_submission, t.evaluation_result, t.quiz, t.quiz_attempts, t.quiz_score,
-                  t.xp_awarded, b.day, b.payload, b.level
+                  t.xp_awarded, b.day, b.payload, b.level, b.track
            from daily_tasks t join daily_briefings b on b.id = t.briefing_id where t.id = %s""", (task_id,))).fetchone()
     if row is None:
         return None
@@ -200,7 +201,7 @@ async def get_task_detail(conn: AsyncConnection, task_id: UUID, max_attempts: in
         "insight": payload["market_insight"] if kind == "insight" else None,
         "notes": row["notes"], "submission": row["user_submission"], "evaluation": row["evaluation_result"],
         "quiz": lv.public_questions(row["quiz"]) if row["quiz"] and kind == "reading" else None,
-        "lesson": payload.get("lesson"), "locked": locked,
+        "lesson": payload.get("lesson"), "locked": locked, "track": row["track"],
     }
 
 
@@ -266,10 +267,6 @@ async def finish_submission(conn: AsyncConnection, task_id: UUID, evaluation: di
             "xp": completion["xp"] if completion and not completion["already_completed"] else 0}
 
 
-async def briefing_exists(conn: AsyncConnection, day: date) -> bool:
-    return await (await conn.execute("select 1 from daily_briefings where day=%s", (day,))).fetchone() is not None
-
-
 # ----------------------------------------------------------------------------------------------- feed
 def _encode(sort: str, key, row_id) -> str:
     return base64.urlsafe_b64encode(json.dumps([sort, key.isoformat() if isinstance(key, datetime) else key, str(row_id)]).encode()).decode()
@@ -291,7 +288,7 @@ def _strength(sim: float, s: Settings) -> str:
 
 async def fetch_feed(
     conn: AsyncConnection, settings: Settings, *, category: str | None, skill: str | None, sort: str,
-    limit: int, cursor: str | None, days: int, min_strength: str | None = None, level_vec=None,
+    limit: int, cursor: str | None, days: int, min_strength: str | None = None, level_vec=None, track: str = "ai",
 ) -> dict:
     """Keyset-paginated feed of canonical (de-duplicated) articles.
 
@@ -313,8 +310,8 @@ async def fetch_feed(
     for_you = sort == "for_you" and level_vec is not None
     relevance_sql = ("coalesce((1 - (a.embedding <=> %(lvec)s))::double precision, 0)" if for_you
                      else "coalesce(best.sim * (0.5 + 0.5 * best.gap), 0)::double precision")
-    params: dict = {"since": datetime.now(timezone.utc) - timedelta(days=days), "limit": limit + 1}
-    inner = ["a.duplicate_of is null", "coalesce(a.published_at, a.fetched_at) >= %(since)s"]
+    params: dict = {"since": datetime.now(timezone.utc) - timedelta(days=days), "limit": limit + 1, "track": track}
+    inner = ["a.duplicate_of is null", "coalesce(a.published_at, a.fetched_at) >= %(since)s", "s.track = %(track)s"]
     outer = []
     if category:
         inner.append("s.category = %(category)s")
@@ -342,7 +339,7 @@ async def fetch_feed(
         left join lateral (
           select k.slug, k.name, 1 - (a.embedding <=> k.embedding) as sim,
                  greatest(0, least(1, (k.target - k.level) / greatest(k.target, 1))) as gap
-          from skills k where k.embedding is not null and a.embedding is not null
+          from skills k where k.embedding is not null and a.embedding is not null and k.track = %(track)s
           order by a.embedding <=> k.embedding limit 1
         ) best on true
         where {' and '.join(inner)}
@@ -429,13 +426,15 @@ async def bitcoin_generated_recently(conn: AsyncConnection, minutes: int) -> boo
 
 
 # ----------------------------------------------------------------------------------------------- learning path
-async def submit_quiz(conn: AsyncConnection, task_id: UUID, answers: list[int], pass_percent: int) -> dict:
+async def submit_quiz(conn: AsyncConnection, task_id: UUID, answers: list[int]) -> dict:
     """Grade the reading quiz. Pass (>= pass_percent) completes the reading, which unlocks the hands-on exercise.
     A failed attempt says WHICH answers were wrong but not the right options: the fix is in the chapter, not in guessing."""
     row = await (await conn.execute(
-        "select kind, quiz, quiz_attempts, completed_at from daily_tasks where id=%s for update", (task_id,))).fetchone()
+        """select t.kind, t.quiz, t.quiz_attempts, t.completed_at, b.track from daily_tasks t
+           join daily_briefings b on b.id = t.briefing_id where t.id=%s for update of t""", (task_id,))).fetchone()
     if row is None:
         raise SubmissionRejected(404, "task not found")
+    pass_percent = lv.ladder(row["track"]).pass_percent
     if row["kind"] != "reading" or not row["quiz"]:
         raise SubmissionRejected(409, "this task has no quiz")
     if row["completed_at"] is not None:
@@ -462,23 +461,24 @@ def _tz_day(col: str) -> str:
     return f"({col} at time zone %(tz)s)::date"
 
 
-async def _level_state(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladder) -> dict:
-    p = await (await conn.execute("select current_level, placement_taken_at from learner_progress where id = 1")).fetchone()
-    if p is None:  # the migration inserts the row; recreate it if someone deleted it
-        await conn.execute("insert into learner_progress default values on conflict do nothing")
+async def _level_state(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladder, track: str = "ai") -> dict:
+    p = await (await conn.execute("select current_level, placement_taken_at from learner_progress where track = %s", (track,))).fetchone()
+    if p is None:  # the migration inserts the rows; recreate one if someone deleted it
+        await conn.execute("insert into learner_progress (id, track) values ((select coalesce(max(id), 0) + 1 from learner_progress), %s) "
+                           "on conflict do nothing", (track,))
         p = {"current_level": 1, "placement_taken_at": None}
     level = lad.level(p["current_level"])
     done = (await (await conn.execute(
-        "select count(*) as n from daily_briefings where level = %s and completed_at is not null", (level.index,))).fetchone())["n"]
+        "select count(*) as n from daily_briefings where level = %s and track = %s and completed_at is not null", (level.index, track))).fetchone())["n"]
     attempts = (await (await conn.execute(
-        f"select count(*) as n from exams where kind = 'level' and level = %(l)s and submitted_at is not null and {_tz_day('submitted_at')} = %(d)s",
-        {"l": level.index, "tz": tz, "d": today})).fetchone())["n"]
-    completions = await (await conn.execute("select level, via, score, total, completed_at from level_completions")).fetchall()
+        f"select count(*) as n from exams where kind = 'level' and track = %(t)s and level = %(l)s and submitted_at is not null "
+        f"and {_tz_day('submitted_at')} = %(d)s", {"l": level.index, "t": track, "tz": tz, "d": today})).fetchone())["n"]
+    completions = await (await conn.execute("select level, via, score, total, completed_at from level_completions where track = %s", (track,))).fetchall()
     return {"p": p, "level": level, "done": done, "attempts_today": attempts, "completions": {c["level"]: c for c in completions}}
 
 
-async def fetch_progress(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladder, cooldown_hours: int) -> dict:
-    st = await _level_state(conn, today, tz, lad)
+async def fetch_progress(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladder, cooldown_hours: int, track: str = "ai") -> dict:
+    st = await _level_state(conn, today, tz, lad, track)
     level, done, comps = st["level"], st["done"], st["completions"]
     graduated = level.index == lad.levels[-1].index and level.index in comps
     xp = await (await conn.execute(
@@ -487,19 +487,20 @@ async def fetch_progress(conn: AsyncConnection, today: date, tz: str, lad: lv.La
     days = await (await conn.execute(
         "select day from daily_briefings where completed_at is not null and day > %s", (today - timedelta(days=400),))).fetchall()
     last = await (await conn.execute(
-        """select correct, total, passed, submitted_at from exams where kind = 'level' and level = %s and submitted_at is not null
-           order by submitted_at desc limit 1""", (level.index,))).fetchone()
+        """select correct, total, passed, submitted_at from exams where kind = 'level' and track = %s and level = %s and submitted_at is not null
+           order by submitted_at desc limit 1""", (track, level.index))).fetchone()
     open_exam = await (await conn.execute(
-        """select id from exams where kind = 'level' and level = %s and submitted_at is null
-           and created_at > now() - make_interval(hours => %s) order by created_at desc limit 1""", (level.index, cooldown_hours))).fetchone()
+        """select id from exams where kind = 'level' and track = %s and level = %s and submitted_at is null
+           and created_at > now() - make_interval(hours => %s) order by created_at desc limit 1""", (track, level.index, cooldown_hours))).fetchone()
     placement_today = (await (await conn.execute(
-        f"select exists(select 1 from exams where kind = 'placement' and submitted_at is not null and {_tz_day('submitted_at')} = %(d)s) as e",
-        {"tz": tz, "d": today})).fetchone())["e"]
+        f"select exists(select 1 from exams where kind = 'placement' and track = %(t)s and submitted_at is not null "
+        f"and {_tz_day('submitted_at')} = %(d)s) as e", {"tz": tz, "d": today, "t": track})).fetchone())["e"]
 
     def status(i: int) -> str:
         return "completed" if i in comps else "current" if i == level.index else "locked"
 
     return {
+        "track": track, "track_label": lv.TRACK_LABEL[track],
         "level": {**level.model_dump(), "tier_name": lad.tier_name(level.tier), "lessons_required": level.lessons_required},
         "levels_total": len(lad.levels), "lessons_done": done, "graduated": graduated,
         "exam": {"unlocked": done >= level.lessons_required and not graduated, "attempts_today": st["attempts_today"],
@@ -518,28 +519,28 @@ async def fetch_progress(conn: AsyncConnection, today: date, tz: str, lad: lv.La
 
 def _exam_out(row: dict, lad: lv.Ladder) -> dict:
     total = row["total"]
-    return {"id": row["id"], "kind": row["kind"], "level": row["level"],
+    return {"id": row["id"], "kind": row["kind"], "level": row["level"], "track": row["track"],
             "level_title": lad.level(row["level"]).title if row["level"] else None,
             "questions": lv.public_questions(row["questions"]), "total": total,
             "pass_mark": lv.pass_mark(total, lad.pass_percent) if row["kind"] == "level" else None}
 
 
 async def prepare_exam(conn: AsyncConnection, kind: str, today: date, tz: str, lad: lv.Ladder, cooldown_hours: int,
-                       placement_questions: list[dict] | None = None) -> dict:
+                       placement_questions: list[dict] | None = None, track: str = "ai") -> dict:
     """Either an exam to serve now ({"exam": ...}) or, for a level exam that must be written by the LLM, what to write
     ({"generate": level, "titles": [...]}). The slow LLM call happens OUTSIDE any transaction (see routes)."""
     if kind == "placement":
-        st = await _level_state(conn, today, tz, lad)
+        st = await _level_state(conn, today, tz, lad, track)
         taken_today = (await (await conn.execute(
-            f"select exists(select 1 from exams where kind='placement' and submitted_at is not null and {_tz_day('submitted_at')} = %(d)s) as e",
-            {"tz": tz, "d": today})).fetchone())["e"]
+            f"select exists(select 1 from exams where kind='placement' and track = %(t)s and submitted_at is not null "
+            f"and {_tz_day('submitted_at')} = %(d)s) as e", {"tz": tz, "d": today, "t": track})).fetchone())["e"]
         if taken_today:
             raise SubmissionRejected(429, "you already took the placement exam today; try again tomorrow")
         row = await (await conn.execute(
-            "insert into exams (kind, questions, total) values ('placement', %s, %s) returning *",
-            (Jsonb(placement_questions), len(placement_questions)))).fetchone()
+            "insert into exams (kind, track, questions, total) values ('placement', %s, %s, %s) returning *",
+            (track, Jsonb(placement_questions), len(placement_questions)))).fetchone()
         return {"exam": _exam_out(row, lad) | {"current_level": st["level"].index}}
-    st = await _level_state(conn, today, tz, lad)
+    st = await _level_state(conn, today, tz, lad, track)
     level, done = st["level"], st["done"]
     if level.index == lad.levels[-1].index and level.index in st["completions"]:
         raise SubmissionRejected(409, "you have completed the whole path")
@@ -548,27 +549,29 @@ async def prepare_exam(conn: AsyncConnection, kind: str, today: date, tz: str, l
     if st["attempts_today"] >= lad.exam_attempts_per_day:
         raise SubmissionRejected(429, f"{lad.exam_attempts_per_day} exam attempts used today; review today's lesson and try again tomorrow")
     row = await (await conn.execute(
-        """select * from exams where kind = 'level' and level = %s and submitted_at is null
-           and created_at > now() - make_interval(hours => %s) order by created_at desc limit 1""", (level.index, cooldown_hours))).fetchone()
+        """select * from exams where kind = 'level' and track = %s and level = %s and submitted_at is null
+           and created_at > now() - make_interval(hours => %s) order by created_at desc limit 1""", (track, level.index, cooldown_hours))).fetchone()
     if row:
         return {"exam": _exam_out(row, lad)}
     titles = await (await conn.execute(
         """select t.title from daily_tasks t join daily_briefings b on b.id = t.briefing_id
-           where b.level = %s and t.kind = 'reading' order by b.day desc limit 8""", (level.index,))).fetchall()
+           where b.level = %s and b.track = %s and t.kind = 'reading' order by b.day desc limit 8""", (level.index, track))).fetchall()
     return {"generate": level.index, "titles": [t["title"] for t in titles]}
 
 
-async def store_level_exam(conn: AsyncConnection, level: int, questions: list[dict], lad: lv.Ladder) -> dict:
+async def store_level_exam(conn: AsyncConnection, level: int, questions: list[dict], lad: lv.Ladder, track: str = "ai") -> dict:
     row = await (await conn.execute(
-        "insert into exams (kind, level, questions, total) values ('level', %s, %s, %s) returning *",
-        (level, Jsonb(questions), len(questions)))).fetchone()
+        "insert into exams (kind, track, level, questions, total) values ('level', %s, %s, %s, %s) returning *",
+        (track, level, Jsonb(questions), len(questions)))).fetchone()
     return _exam_out(row, lad)
 
 
-async def submit_exam(conn: AsyncConnection, exam_id: UUID, answers: list[int], lad: lv.Ladder, tier_pass: int) -> dict:
+async def submit_exam(conn: AsyncConnection, exam_id: UUID, answers: list[int]) -> dict:
     exam = await (await conn.execute("select * from exams where id = %s for update", (exam_id,))).fetchone()
     if exam is None:
         raise SubmissionRejected(404, "exam not found")
+    track = exam["track"]  # the exam knows its own track: its ladder and placement rules come from there
+    lad, tier_pass = lv.ladder(track), lv.placement_bank(track).tier_pass
     if exam["submitted_at"] is not None:
         raise SubmissionRejected(409, "this exam was already submitted; start a new one")
     questions = exam["questions"]
@@ -577,41 +580,43 @@ async def submit_exam(conn: AsyncConnection, exam_id: UUID, answers: list[int], 
     except ValueError as exc:
         raise SubmissionRejected(422, str(exc)) from None
     detailed = [{"question": q["question"], "options": q["options"], **r} for q, r in zip(questions, results)]
-    prog = await (await conn.execute("select current_level from learner_progress where id = 1 for update")).fetchone()
+    prog = await (await conn.execute("select current_level from learner_progress where track = %s for update", (track,))).fetchone()
     before = prog["current_level"] if prog else 1
     after, xp, placement, passed = before, 0, None, None
     if exam["kind"] == "placement":
         placement = lv.place(questions, answers, tier_pass, lad)
         after = max(before, placement["start_level"])
         for i in range(1, placement["start_level"]):
-            await conn.execute("insert into level_completions (level, via) values (%s, 'placement') on conflict (level) do nothing", (i,))
-        await conn.execute("update learner_progress set current_level = %s, placement_taken_at = now(), updated_at = now() where id = 1", (after,))
+            await conn.execute("insert into level_completions (track, level, via) values (%s, %s, 'placement') on conflict (track, level) do nothing",
+                               (track, i))
+        await conn.execute("update learner_progress set current_level = %s, placement_taken_at = now(), updated_at = now() where track = %s",
+                           (after, track))
     else:
         mark = lv.pass_mark(len(questions), lad.pass_percent)
         passed = correct >= mark
         if passed:
             await conn.execute(
-                """insert into level_completions (level, via, score, total) values (%s, 'exam', %s, %s)
-                   on conflict (level) do update set via = 'exam', score = excluded.score, total = excluded.total, completed_at = now()""",
-                (exam["level"], correct, len(questions)))
+                """insert into level_completions (track, level, via, score, total) values (%s, %s, 'exam', %s, %s)
+                   on conflict (track, level) do update set via = 'exam', score = excluded.score, total = excluded.total, completed_at = now()""",
+                (track, exam["level"], correct, len(questions)))
             after = max(before, min(exam["level"] + 1, lad.levels[-1].index))
-            await conn.execute("update learner_progress set current_level = %s, updated_at = now() where id = 1", (after,))
+            await conn.execute("update learner_progress set current_level = %s, updated_at = now() where track = %s", (after, track))
             xp = lv.XP_EXAM_PASS + correct
             await award_xp(conn, xp, f"level {exam['level']} exam passed", exam_id=exam_id)
     await conn.execute(
         "update exams set answers = %s, results = %s, correct = %s, passed = %s, submitted_at = now() where id = %s",
         (Jsonb(answers), Jsonb(detailed), correct, passed, exam_id))
-    return {"id": exam_id, "kind": exam["kind"], "level": exam["level"], "correct": correct, "total": len(questions),
+    return {"id": exam_id, "kind": exam["kind"], "track": track, "level": exam["level"], "correct": correct, "total": len(questions),
             "passed": passed, "pass_mark": lv.pass_mark(len(questions), lad.pass_percent) if exam["kind"] == "level" else None,
             "results": detailed, "previous_level": before, "new_level": after,
             "new_level_title": lad.level(after).title, "xp": xp, "placement": placement}
 
 
-async def level_query_vector(conn: AsyncConnection, lad: lv.Ladder) -> tuple[dict, object | None]:
+async def level_query_vector(conn: AsyncConnection, lad: lv.Ladder, track: str = "ai") -> tuple[dict, object | None]:
     """The Intelligence Feed's "For you" query: the current level's own embedding, else its skill's embedding."""
-    p = await (await conn.execute("select current_level from learner_progress where id = 1")).fetchone()
+    p = await (await conn.execute("select current_level from learner_progress where track = %s", (track,))).fetchone()
     level = lad.level(p["current_level"] if p else 1)
     row = await (await conn.execute(
-        """select coalesce((select embedding from level_embeddings where level = %s),
-                           (select embedding from skills where slug = %s)) as v""", (level.index, level.skill))).fetchone()
+        """select coalesce((select embedding from level_embeddings where level = %s and track = %s),
+                           (select embedding from skills where slug = %s)) as v""", (level.index, track, level.skill))).fetchone()
     return {"index": level.index, "title": level.title, "tier_name": lad.tier_name(level.tier), "skill": level.skill}, row["v"] if row else None

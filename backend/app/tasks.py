@@ -32,11 +32,17 @@ def generate_weekly_theme_task(self) -> dict:
 
 
 @app.task(bind=True, name="app.tasks.generate_daily_briefing", autoretry_for=_TRANSIENT, retry_backoff=True, retry_backoff_max=900, max_retries=4)
-def generate_daily_briefing_task(self) -> dict:
-    from app.curriculum.generators import generate_daily_briefing
+def generate_daily_briefing_task(self, track: str = "ai") -> dict:
+    from app.curriculum.generators import NotEnoughData, generate_daily_briefing
 
-    r = generate_daily_briefing()
-    return {"day": r["day"], "cached": r["cached"]}
+    try:
+        r = generate_daily_briefing(track=track)
+    except NotEnoughData as exc:
+        if track == "ai":
+            raise
+        log.warning("no %s lesson today: %s", track, exc)  # a new track has no articles until its sources were ingested
+        return {"track": track, "skipped": str(exc)}
+    return {"day": r["day"], "track": track, "cached": r["cached"]}
 
 
 @app.task(bind=True, name="app.tasks.summarize_recent_articles", autoretry_for=_TRANSIENT, retry_backoff=True, max_retries=3)

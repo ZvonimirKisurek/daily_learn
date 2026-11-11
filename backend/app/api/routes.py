@@ -24,6 +24,8 @@ from app.ingestion.models import Category
 
 # Auth applies to the whole router; /health lives outside it.
 router = APIRouter(prefix="/api", dependencies=[Depends(require_token)])
+# Which learning track a request is about: the AI/ML path (default) or the management path.
+Track = Annotated[Literal["ai", "management"], Query(description="learning track")]
 
 
 def _today(cfg) -> "datetime.date":
@@ -31,33 +33,33 @@ def _today(cfg) -> "datetime.date":
 
 
 @router.get("/today", response_model=TodayOut)
-async def today(conn: Conn, cfg: Cfg):
+async def today(conn: Conn, cfg: Cfg, track: Track = "ai"):
     """Everything the Command Center needs in one round trip. `state="pending"` (briefing null) is a normal,
     expected response before 06:30 or if generation failed - it is NOT an error, so it is a 200."""
-    return await queries.fetch_today(conn, _today(cfg))
+    return await queries.fetch_today(conn, _today(cfg), track)
 
 
 @router.get("/briefings/history", response_model=list[date])
-async def briefing_history(conn: Conn):
+async def briefing_history(conn: Conn, track: Track = "ai"):
     """Every date (YYYY-MM-DD, oldest first) that has a generated briefing. The calendar uses it to know which days are clickable.
     Declared BEFORE /briefings/{day}: FastAPI matches routes in registration order, and 'history' must not be parsed as a date."""
-    return await queries.list_briefing_days(conn)
+    return await queries.list_briefing_days(conn, track)
 
 
 @router.get("/briefings/done", response_model=list[date])
-async def briefing_done_days(conn: Conn):
+async def briefing_done_days(conn: Conn, track: Track = "ai"):
     """Days whose lesson is fully finished (every task done). The calendar paints them green, the others yellow.
     Declared before /briefings/{day} for the same reason as /history."""
-    return await queries.list_completed_days(conn)
+    return await queries.list_completed_days(conn, track)
 
 
 @router.get("/briefings/{day}", response_model=TodayOut)
-async def briefing_for_day(day: date, conn: Conn, cfg: Cfg):
+async def briefing_for_day(day: date, conn: Conn, cfg: Cfg, track: Track = "ai"):
     """One day's briefing, same shape as /api/today. Today behaves exactly like /api/today (a missing briefing is a 200 'pending').
     Any other day must have a stored briefing: past-without-data and future dates are a 404, so the UI never offers an empty page."""
-    if day != _today(cfg) and not await queries.briefing_exists(conn, day):
+    if day != _today(cfg) and not await queries.briefing_exists(conn, day, track):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no briefing for that date")
-    return await queries.fetch_today(conn, day)
+    return await queries.fetch_today(conn, day, track)
 
 
 @router.post("/tasks/{task_id}/complete", response_model=CompletionOut)
@@ -140,50 +142,51 @@ async def submit_quiz(task_id: UUID, body: AnswersIn, conn: Conn):
     """Grade the reading quiz (deterministic: answer keys never leave the server). Passing completes the reading and
     unlocks the hands-on exercise. Unlimited attempts, but a failed attempt does not reveal the right options."""
     try:
-        return await queries.submit_quiz(conn, task_id, body.answers, levels.ladder().pass_percent)
+        return await queries.submit_quiz(conn, task_id, body.answers)
     except queries.SubmissionRejected as exc:
         raise HTTPException(exc.status, exc.detail) from None
 
 
 # ----------------------------------------------------------------------------------------------- learning path
 @router.get("/progress", response_model=ProgressOut)
-async def progress(conn: Conn, cfg: Cfg):
-    """Level, XP, streak, knowledge score, exam status and the whole path (completed / current / locked)."""
-    return await queries.fetch_progress(conn, _today(cfg), cfg.timezone, levels.ladder(), cfg.exam_cooldown_hours)
+async def progress(conn: Conn, cfg: Cfg, track: Track = "ai"):
+    """Level, XP, streak, knowledge score, exam status and the whole path (completed / current / locked) of one track."""
+    return await queries.fetch_progress(conn, _today(cfg), cfg.timezone, levels.ladder(track), cfg.exam_cooldown_hours, track)
 
 
 @router.post("/exams/start", response_model=ExamOut)
 async def start_exam(body: ExamStartIn, pool: Pool, cfg: Cfg, llm: Annotated[object, Depends(get_llm)]):
     """Placement: a shuffled copy of the static question bank. Level: unlocks after the level's lessons are finished;
     an unanswered exam is reused, otherwise the LLM writes a fresh one (10-40 s, outside any transaction)."""
-    lad, today = levels.ladder(), _today(cfg)
+    track = body.track
+    lad, today = levels.ladder(track), _today(cfg)
     bank = None
     if body.kind == "placement":
         import random
         rng = random.Random()
-        bank = [levels.shuffle_question(q.model_dump(), rng) for q in levels.placement_bank().questions]
+        bank = [levels.shuffle_question(q.model_dump(), rng) for q in levels.placement_bank(track).questions]
     try:
         async with pool.connection() as conn:
-            prep = await queries.prepare_exam(conn, body.kind, today, cfg.timezone, lad, cfg.exam_cooldown_hours, bank)
+            prep = await queries.prepare_exam(conn, body.kind, today, cfg.timezone, lad, cfg.exam_cooldown_hours, bank, track)
     except queries.SubmissionRejected as exc:
         raise HTTPException(exc.status, exc.detail) from None
     if "exam" in prep:
         return prep["exam"]
     try:
-        questions = await run_in_threadpool(generate_level_exam, prep["generate"], prep["titles"], llm=llm, settings=cfg, lad=lad)
+        questions = await run_in_threadpool(generate_level_exam, prep["generate"], prep["titles"], llm=llm, settings=cfg, lad=lad, track=track)
     except LLMBudgetExceeded as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"AI budget reached: {exc}") from None
     except (LLMError, openai.OpenAIError) as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"could not write the exam ({exc.__class__.__name__}); try again") from None
     async with pool.connection() as conn:
-        return await queries.store_level_exam(conn, prep["generate"], questions, lad)
+        return await queries.store_level_exam(conn, prep["generate"], questions, lad, track)
 
 
 @router.post("/exams/{exam_id}/submit", response_model=ExamResultOut)
 async def submit_exam(exam_id: UUID, body: AnswersIn, conn: Conn):
     """Grade an exam by its stored answer key. Placement can only move you UP; a passed level exam unlocks the next level."""
     try:
-        return await queries.submit_exam(conn, exam_id, body.answers, levels.ladder(), levels.placement_bank().tier_pass)
+        return await queries.submit_exam(conn, exam_id, body.answers)
     except queries.SubmissionRejected as exc:
         raise HTTPException(exc.status, exc.detail) from None
 
@@ -203,28 +206,30 @@ async def feed(
     cursor: Annotated[str | None, Query(max_length=200)] = None,
     days: Annotated[int, Query(ge=1, le=60)] = 14,
     min_strength: Annotated[Literal["moderate", "strong"] | None, Query(description="hide articles weaker than this skill-match bucket")] = None,
+    track: Track = "ai",
 ):
     for_level, vec = (None, None)
     if sort == "for_you":
-        for_level, vec = await queries.level_query_vector(conn, levels.ladder())
+        for_level, vec = await queries.level_query_vector(conn, levels.ladder(track), track)
     try:
         page = await queries.fetch_feed(conn, cfg, category=category, skill=skill, sort=sort, limit=limit, cursor=cursor, days=days,
-                                        min_strength=min_strength, level_vec=vec)
+                                        min_strength=min_strength, level_vec=vec, track=track)
         return {**page, "for_level": for_level if vec is not None else None}
     except queries.BadCursor as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
 
 @router.post("/briefing/generate", response_model=QueueOut, status_code=status.HTTP_202_ACCEPTED)
-async def generate_briefing(conn: Conn, cfg: Cfg, enqueue: Annotated[Callable[[str], None], Depends(get_enqueue)]):
+async def generate_briefing(conn: Conn, cfg: Cfg, enqueue: Annotated[Callable[..., None], Depends(get_enqueue)], track: Track = "ai"):
     """For the empty state: ask a Celery worker to generate today's briefing now. Returns immediately (202);
     the UI polls /api/today. LLM generation takes tens of seconds - never do that inside a request."""
-    if await queries.briefing_exists(conn, _today(cfg)):
+    if await queries.briefing_exists(conn, _today(cfg), track):
         return QueueOut(queued=False, reason="already generated")
     try:
         # `enqueue` is blocking network I/O (a Redis connection). Calling it directly inside `async def` would
         # freeze the event loop - and every other request - while it waits. Offload blocking calls to a thread.
-        await run_in_threadpool(enqueue, "app.tasks.generate_daily_briefing")
+        # the AI track keeps the original one-argument call; other tracks say which lesson they want
+        await run_in_threadpool(lambda: enqueue("app.tasks.generate_daily_briefing", **({} if track == "ai" else {"track": track})))
     except Exception as exc:  # broker down and inline fallback disabled
         msg = str(exc) if isinstance(exc, QueueUnavailable) else "task queue unavailable"
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, msg) from exc

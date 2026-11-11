@@ -24,8 +24,13 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-LEVELS_FILE = Path(__file__).resolve().parents[2] / "curriculum" / "levels.yaml"
-PLACEMENT_FILE = Path(__file__).resolve().parents[2] / "curriculum" / "placement.yaml"
+_DIR = Path(__file__).resolve().parents[2] / "curriculum"
+# A TRACK is an independent subject with its own path, skills, sources and daily lesson.
+TRACKS = ("ai", "management")
+TRACK_LABEL = {"ai": "AI & Machine Learning", "management": "Management & Leadership"}
+_FILES = {"ai": ("levels.yaml", "placement.yaml"), "management": ("management_levels.yaml", "management_placement.yaml")}
+LEVELS_FILE = _DIR / "levels.yaml"
+PLACEMENT_FILE = _DIR / "placement.yaml"
 
 # XP: a motivation signal (Duolingo-style), separate from the skill matrix. Building and passing exams earn the most.
 XP_QUIZ = 10
@@ -92,14 +97,20 @@ class PlacementBank(_Strict):
     questions: list[PlacementQuestion]
 
 
-@lru_cache
-def ladder(path: str | None = None) -> Ladder:
-    return Ladder.model_validate(yaml.safe_load(Path(path or LEVELS_FILE).read_text()))
+def check_track(track: str) -> str:
+    if track not in TRACKS:
+        raise ValueError(f"unknown track {track!r}; expected one of {TRACKS}")
+    return track
 
 
 @lru_cache
-def placement_bank(path: str | None = None) -> PlacementBank:
-    return PlacementBank.model_validate(yaml.safe_load(Path(path or PLACEMENT_FILE).read_text()))
+def ladder(track: str = "ai") -> Ladder:
+    return Ladder.model_validate(yaml.safe_load((_DIR / _FILES[check_track(track)][0]).read_text()))
+
+
+@lru_cache
+def placement_bank(track: str = "ai") -> PlacementBank:
+    return PlacementBank.model_validate(yaml.safe_load((_DIR / _FILES[check_track(track)][1]).read_text()))
 
 
 # ----------------------------------------------------------------------------------------------- lessons

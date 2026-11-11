@@ -99,7 +99,11 @@ def _enqueue_inline(task_name: str, **kwargs) -> None:
             return
         try:
             if task_name == "app.tasks.generate_daily_briefing":
-                from app.curriculum.generators import generate_daily_briefing as job
+                from functools import partial
+
+                from app.curriculum.generators import generate_daily_briefing
+
+                job = partial(generate_daily_briefing, track=kwargs["track"]) if kwargs.get("track") else generate_daily_briefing
             elif task_name == "app.tasks.generate_weekly_theme":
                 from app.curriculum.generators import generate_weekly_theme as job
             elif task_name == "app.tasks.generate_bitcoin_daily_insight":

@@ -113,7 +113,7 @@ def test_export_progress_and_retro_fetch_work_on_real_schema(db, tmp_path):
     seed_articles()
     generators.generate_daily_briefing(llm=FakeLLM(), embedder=FakeEmbedder(), settings=Settings(timezone="UTC", min_candidates=10))
     out = retro.export_progress(tmp_path / "p.json")
-    assert out["skills"] == 8 and out["daily_tasks"] == 3 and out["daily_briefings"] == 1
+    assert out["skills"] == 16 and out["daily_tasks"] == 3 and out["daily_briefings"] == 1
     dumped = json.loads((tmp_path / "p.json").read_text())
     assert "embedding" not in dumped["skills"][0] and dumped["daily_tasks"][0]["kind"] in ("reading", "hands_on", "insight")
     a = retro.analyze(retro.fetch_rows())

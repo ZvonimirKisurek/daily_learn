@@ -20,9 +20,9 @@ def _skill(r: dict) -> Skill:
                  None if r["embedding"] is None else _vec(r["embedding"]))
 
 
-def load_skills() -> list[Skill]:
+def load_skills(track: str = "ai") -> list[Skill]:
     with get_pool().connection() as conn:
-        return [_skill(r) for r in conn.execute("select * from skills order by name").fetchall()]
+        return [_skill(r) for r in conn.execute("select * from skills where track = %s order by name", (track,)).fetchall()]
 
 
 def set_skill_embedding(slug: str, vec: list[float]) -> None:
@@ -30,7 +30,7 @@ def set_skill_embedding(slug: str, vec: list[float]) -> None:
         conn.execute("update skills set embedding=%s where slug=%s", (np.asarray(vec, dtype=np.float32), slug))
 
 
-def fetch_candidates(window_days: int) -> list[Candidate]:
+def fetch_candidates(window_days: int, track: str = "ai") -> list[Candidate]:
     """Canonical (non-duplicate) articles from the last N days that have an embedding."""
     since = datetime.now(timezone.utc) - timedelta(days=window_days)
     with get_pool().connection() as conn:
@@ -40,8 +40,9 @@ def fetch_candidates(window_days: int) -> list[Candidate]:
                    a.embedding, s.slug as source_slug, s.name as source_name, s.category, s.weight
             from articles a join sources s on s.id = a.source_id
             where a.duplicate_of is null and a.embedding is not null and coalesce(a.published_at, a.fetched_at) >= %s
+              and s.track = %s
             """,
-            (since,),
+            (since, track),
         ).fetchall()
     return [
         Candidate(str(r["id"]), r["title"], r["summary"] or "", r["url"], r["ts"], r["source_slug"], r["source_name"],
@@ -67,19 +68,20 @@ def save_weekly_theme(week_start: date, payload: dict, replace: bool = False) ->
     return str(row["id"])
 
 
-def get_briefing(day: date) -> dict | None:
+def get_briefing(day: date, track: str = "ai") -> dict | None:
     with get_pool().connection() as conn:
-        return conn.execute("select * from daily_briefings where day=%s", (day,)).fetchone()
+        return conn.execute("select * from daily_briefings where day=%s and track=%s", (day, track)).fetchone()
 
 
-def save_briefing(day: date, theme_id: str, payload: dict, tasks: list[dict], replace: bool = False, level: int | None = None) -> str:
+def save_briefing(day: date, theme_id: str | None, payload: dict, tasks: list[dict], replace: bool = False, level: int | None = None,
+                  track: str = "ai") -> str:
     """One transaction: the briefing row and its three task rows appear together or not at all."""
     with get_pool().connection() as conn:
         if replace:
-            conn.execute("delete from daily_briefings where day=%s", (day,))  # cascades to daily_tasks
+            conn.execute("delete from daily_briefings where day=%s and track=%s", (day, track))  # cascades to daily_tasks
         bid = conn.execute(
-            "insert into daily_briefings (day, theme_id, payload, level) values (%s,%s,%s,%s) returning id",
-            (day, theme_id, Jsonb(payload), level),
+            "insert into daily_briefings (day, theme_id, payload, level, track) values (%s,%s,%s,%s,%s) returning id",
+            (day, theme_id, Jsonb(payload), level, track),
         ).fetchone()["id"]
         for t in tasks:
             conn.execute(
@@ -91,40 +93,41 @@ def save_briefing(day: date, theme_id: str, payload: dict, tasks: list[dict], re
     return str(bid)
 
 
-def learner_level(before: date) -> tuple[int, int]:
+def learner_level(before: date, track: str = "ai") -> tuple[int, int]:
     """(current level, lessons already GENERATED on it for days before `before`). The count picks the next topic, so
     consecutive days get consecutive topics even when generated in one go; FINISHED lessons are what unlock the exam."""
     with get_pool().connection() as conn:
-        row = conn.execute("select current_level from learner_progress where id = 1").fetchone()
+        row = conn.execute("select current_level from learner_progress where track = %s", (track,)).fetchone()
         level = row["current_level"] if row else 1
-        n = conn.execute("select count(*) as n from daily_briefings where level = %s and day < %s", (level, before)).fetchone()["n"]
+        n = conn.execute("select count(*) as n from daily_briefings where level = %s and day < %s and track = %s", (level, before, track)).fetchone()["n"]
     return level, n
 
 
-def briefings_between(start: date, end: date) -> list[dict]:
+def briefings_between(start: date, end: date, track: str = "ai") -> list[dict]:
     """Full copies (tasks, submissions, notes, grades) of the briefings in a date range: the backup before a regeneration."""
     with get_pool().connection() as conn:
-        rows = conn.execute("select id, day, level, payload, completed_at, created_at from daily_briefings where day between %s and %s order by day",
-                            (start, end)).fetchall()
+        rows = conn.execute("select id, day, level, payload, completed_at, created_at from daily_briefings "
+                            "where day between %s and %s and track = %s order by day", (start, end, track)).fetchall()
         for r in rows:
             r["tasks"] = conn.execute("select * from daily_tasks where briefing_id = %s order by kind", (r["id"],)).fetchall()
     return rows
 
 
-def delete_briefings_between(start: date, end: date) -> int:
+def delete_briefings_between(start: date, end: date, track: str = "ai") -> int:
     with get_pool().connection() as conn:  # cascades to daily_tasks; XP and skill history keep their rows (task_id -> null)
-        return conn.execute("delete from daily_briefings where day between %s and %s", (start, end)).rowcount
+        return conn.execute("delete from daily_briefings where day between %s and %s and track = %s", (start, end, track)).rowcount
 
 
-def has_level_embedding(level: int) -> bool:
+def has_level_embedding(level: int, track: str = "ai") -> bool:
     with get_pool().connection() as conn:
-        return conn.execute("select 1 from level_embeddings where level = %s", (level,)).fetchone() is not None
+        return conn.execute("select 1 from level_embeddings where level = %s and track = %s", (level, track)).fetchone() is not None
 
 
-def set_level_embedding(level: int, vec: list[float]) -> None:
+def set_level_embedding(level: int, vec: list[float], track: str = "ai") -> None:
     with get_pool().connection() as conn:
-        conn.execute("insert into level_embeddings (level, embedding) values (%s, %s) on conflict (level) do update set embedding = excluded.embedding",
-                     (level, np.asarray(vec, dtype=np.float32)))
+        conn.execute("insert into level_embeddings (level, track, embedding) values (%s, %s, %s) "
+                     "on conflict (track, level) do update set embedding = excluded.embedding",
+                     (level, track, np.asarray(vec, dtype=np.float32)))
 
 
 def used_reading_ids(days: int = 30) -> set[str]:
@@ -137,12 +140,12 @@ def used_reading_ids(days: int = 30) -> set[str]:
     return {r["aid"] for r in rows if r["aid"]}
 
 
-def recent_work(before: date, days: int = 5) -> list[dict]:
+def recent_work(before: date, days: int = 5, track: str = "ai") -> list[dict]:
     with get_pool().connection() as conn:
         rows = conn.execute(
             """select b.day, t.kind, t.title, t.completed_at is not null as completed
                from daily_tasks t join daily_briefings b on b.id = t.briefing_id
-               where b.day < %s and b.day >= %s order by b.day, t.kind""",
-            (before, before - timedelta(days=days)),
+               where b.day < %s and b.day >= %s and b.track = %s order by b.day, t.kind""",
+            (before, before - timedelta(days=days), track),
         ).fetchall()
     return [{"day": r["day"].isoformat(), "kind": r["kind"], "title": r["title"], "completed": r["completed"]} for r in rows]

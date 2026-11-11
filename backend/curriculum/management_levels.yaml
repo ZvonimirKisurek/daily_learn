@@ -1,0 +1,241 @@
+# The MANAGEMENT learning path: from first-time team lead to C-level executive. Same mechanics as levels.yaml
+# (one topic a day, a quiz that gates the exercise, a level exam that gates the next level, a placement exam).
+# Tiers are job levels, so "Level 14, Director" means: you are studying what a director is expected to know.
+# Every lesson defines the acronyms it uses (SLA, OKR, P&L...) in a "Terms to know" section.
+pass_percent: 80
+exam_questions: 10
+exam_attempts_per_day: 3
+tiers:
+  1: Team Lead
+  2: Manager
+  3: Senior Manager
+  4: Director
+  5: Vice President
+  6: C-Level
+levels:
+  # ------------------------------------------------------------------ Tier 1: Team Lead
+  - index: 1
+    tier: 1
+    skill: mgmt-people
+    title: "From maker to manager"
+    summary: "What a manager is actually for, how the job differs from doing the work yourself, and how to survive the first 90 days."
+    topics:
+      - "A manager's output is the output of the team"
+      - "Maker's schedule vs manager's schedule: where your time now goes"
+      - "Delegation basics: what to hand over, to whom, and how to check on it"
+      - "Your first 90 days leading a team"
+  - index: 2
+    tier: 1
+    skill: mgmt-people
+    title: "One-on-ones and feedback"
+    summary: "The two tools a people manager uses every week: the one-on-one meeting and honest, usable feedback."
+    topics:
+      - "One-on-ones: purpose, agenda and cadence"
+      - "Giving feedback with the SBI model (Situation, Behaviour, Impact)"
+      - "Coaching vs directing: situational leadership"
+      - "Difficult conversations without drama"
+  - index: 3
+    tier: 1
+    skill: mgmt-execution
+    title: "The language of management"
+    summary: "The acronyms and terms you hear in every management meeting, decoded: goals, service levels, roles, product and money."
+    topics:
+      - "Goals and measures: KPI, OKR, North Star metric, SMART goals"
+      - "Service terms: SLA, SLO, SLI, uptime and error budgets"
+      - "Who does what: RACI, DRI, DACI and escalation paths"
+      - "Money and product terms: P&L, ROI, ARR and MRR, CAC and LTV, MVP, PMF, GTM"
+  - index: 4
+    tier: 1
+    skill: mgmt-execution
+    title: "Running a team's work"
+    summary: "Turning a pile of requests into a plan the team can deliver: prioritising, estimating, rituals and meetings."
+    topics:
+      - "Prioritisation: the Eisenhower matrix, RICE and saying no"
+      - "Planning and estimation without lying to yourself"
+      - "Agile rituals that earn their time: stand-up, planning, review, retro"
+      - "Meetings that work: purpose, agenda, decisions, owners"
+  # ------------------------------------------------------------------ Tier 2: Manager
+  - index: 5
+    tier: 2
+    skill: mgmt-people
+    title: "Hiring and building a team"
+    summary: "The full people cycle: hire well, onboard fast, manage performance, and part ways properly when you must."
+    topics:
+      - "A hiring process: scorecards and structured interviews"
+      - "Onboarding: the first 30, 60 and 90 days"
+      - "Performance management: expectations, reviews, PIPs"
+      - "Letting someone go: fairly, legally, humanely"
+  - index: 6
+    tier: 2
+    skill: mgmt-execution
+    title: "Project and program management"
+    summary: "Delivering work bigger than one team: scope, schedule, risk, stakeholders and honest status reporting."
+    topics:
+      - "The triple constraint (scope, time, cost) and the critical path"
+      - "Risk management: risk registers and RAID logs"
+      - "Stakeholder mapping and communication plans"
+      - "Status reports, RAG status and when to escalate"
+  - index: 7
+    tier: 2
+    skill: mgmt-operations
+    title: "Goals and metrics"
+    summary: "Setting goals people can act on and choosing numbers that tell the truth about the business."
+    topics:
+      - "OKRs done right (and the common ways they fail)"
+      - "KPIs and the metric tree under a North Star"
+      - "Leading vs lagging indicators"
+      - "Dashboards, Goodhart's law and gaming of metrics"
+  - index: 8
+    tier: 2
+    skill: mgmt-communication
+    title: "Communicating like a leader"
+    summary: "Writing and speaking so that busy senior people understand you and decide quickly."
+    topics:
+      - "Writing for executives: BLUF and the Amazon six-pager"
+      - "Presenting to senior leaders: answer first"
+      - "Managing up: making your boss effective"
+      - "Running a decision: options, recommendation, DACI"
+  # ------------------------------------------------------------------ Tier 3: Senior Manager
+  - index: 9
+    tier: 3
+    skill: mgmt-finance
+    title: "Business finance for managers"
+    summary: "Reading the three financial statements and the unit economics every budget conversation rests on."
+    topics:
+      - "Reading a P&L: revenue, COGS, gross margin, OPEX, EBITDA"
+      - "Balance sheet and cash flow: why profit is not cash"
+      - "Budgeting and forecasting: plan vs actuals"
+      - "Unit economics: CAC, LTV, payback period, contribution margin"
+  - index: 10
+    tier: 3
+    skill: mgmt-people
+    title: "Managing managers"
+    summary: "Leading through other leaders: skip-levels, delegation at scale, succession and culture as a system."
+    topics:
+      - "Skip-level meetings and reading the health of an organisation"
+      - "Delegating outcomes, not tasks"
+      - "Building a leadership bench and succession plans"
+      - "Culture is what you tolerate and reward"
+  - index: 11
+    tier: 3
+    skill: mgmt-operations
+    title: "Operations and service management"
+    summary: "Running reliable operations: bottlenecks, service levels and contracts, incidents, and continuous improvement."
+    topics:
+      - "Process design and the theory of constraints"
+      - "SLAs, SLOs and vendor contracts in practice"
+      - "Incident management and blameless postmortems"
+      - "Lean and continuous improvement: kaizen, waste, PDCA"
+  - index: 12
+    tier: 3
+    skill: mgmt-product-gtm
+    title: "Product and customers"
+    summary: "How a product finds its market, what to charge, how it is sold and how customers are kept."
+    topics:
+      - "Product-market fit: what it is and how to tell"
+      - "Pricing and packaging"
+      - "Go-to-market motions: product-led, sales-led, channel"
+      - "Retention: churn, NPS, customer success"
+  # ------------------------------------------------------------------ Tier 4: Director
+  - index: 13
+    tier: 4
+    skill: mgmt-strategy
+    title: "Strategy fundamentals"
+    summary: "What strategy really is, how competitive advantage works, and why a plan is not a strategy."
+    topics:
+      - "The kernel of good strategy: diagnosis, guiding policy, coherent actions"
+      - "Competitive advantage and Porter's five forces"
+      - "Positioning and moats: the 7 Powers"
+      - "Strategy vs planning vs goals"
+  - index: 14
+    tier: 4
+    skill: mgmt-operations
+    title: "Organisation design and scaling"
+    summary: "Structuring a growing organisation and changing it without breaking it."
+    topics:
+      - "Org structures: functional, divisional, matrix"
+      - "Span of control, layers and Conway's law"
+      - "Scaling process without bureaucracy"
+      - "Change management: Kotter's eight steps and ADKAR"
+  - index: 15
+    tier: 4
+    skill: mgmt-communication
+    title: "Negotiation and influence"
+    summary: "Getting agreement when you cannot order it: negotiation, influence without authority, politics and presence."
+    topics:
+      - "Negotiation basics: BATNA, ZOPA, interests vs positions"
+      - "Influence without authority"
+      - "Cross-functional politics and stakeholder alignment"
+      - "Executive presence"
+  - index: 16
+    tier: 4
+    skill: mgmt-strategy
+    title: "Decision-making under uncertainty"
+    summary: "Making and owning big calls with incomplete information."
+    topics:
+      - "One-way and two-way doors: reversible vs irreversible decisions"
+      - "Expected value, base rates and probabilistic thinking"
+      - "Cognitive biases and the pre-mortem"
+      - "Data, judgement and when to stop analysing"
+  # ------------------------------------------------------------------ Tier 5: Vice President
+  - index: 17
+    tier: 5
+    skill: mgmt-finance
+    title: "Corporate finance and capital"
+    summary: "How companies are valued, funded and bought, and how leaders decide where capital goes."
+    topics:
+      - "Valuation basics: DCF and multiples"
+      - "Fundraising: stages, dilution and term sheets"
+      - "Capital allocation, ROIC and the cost of capital"
+      - "Mergers and acquisitions: rationale, diligence, integration"
+  - index: 18
+    tier: 5
+    skill: mgmt-execution
+    title: "Leading a function"
+    summary: "Running a whole department: annual planning, the portfolio, the executive team and the operating rhythm."
+    topics:
+      - "Annual planning and the budgeting cycle"
+      - "Portfolio management and resource allocation"
+      - "Your first team is the executive team"
+      - "Operating cadence: weekly, monthly and quarterly business reviews (QBRs)"
+  - index: 19
+    tier: 5
+    skill: mgmt-product-gtm
+    title: "Sales, marketing and revenue"
+    summary: "The revenue engine a general manager must understand: pipeline maths, sales organisations, brand and partners."
+    topics:
+      - "The revenue engine: funnel, pipeline coverage, win rate"
+      - "Sales organisation, quotas and compensation"
+      - "Brand, demand generation and marketing attribution"
+      - "Partnerships and channels"
+  # ------------------------------------------------------------------ Tier 6: C-Level
+  - index: 20
+    tier: 6
+    skill: mgmt-governance
+    title: "Governance and the board"
+    summary: "How a company is governed: what boards do, how to work with one, and the duties that come with the top jobs."
+    topics:
+      - "What a board does: fiduciary duties and committees"
+      - "Board meetings and the board deck"
+      - "Investor relations and reporting"
+      - "Compliance, risk and audit: what an executive must know"
+  - index: 21
+    tier: 6
+    skill: mgmt-strategy
+    title: "The chief executive's job"
+    summary: "The work only the CEO can do, and what the rest of the C-suite (CFO, COO, CTO, CPO, CMO) is there for."
+    topics:
+      - "What only the CEO can do: direction, capital, people"
+      - "The C-suite roles: CFO, COO, CTO, CPO, CMO, CHRO"
+      - "Culture and values at scale"
+      - "Crisis leadership"
+  - index: 22
+    tier: 6
+    skill: mgmt-governance
+    title: "Technology and AI strategy for executives"
+    summary: "The technology decisions that reach the top table: build or buy, AI adoption, transformation and cyber risk."
+    topics:
+      - "Build, buy or partner"
+      - "AI adoption: use cases, ROI and risk"
+      - "Why digital transformations fail"
+      - "Cybersecurity and technology risk as a board topic"

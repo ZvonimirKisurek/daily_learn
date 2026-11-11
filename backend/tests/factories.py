@@ -67,7 +67,7 @@ def quiz_dict(n: int = 4) -> list[dict]:
              "answer": 0, "explanation": "Cosine similarity compares directions, so length does not matter."} for i in range(1, n + 1)]
 
 
-def daily_dict(article_id, skill="rag", evidence=None, minutes=(8, 10)):
+def daily_dict(article_id, skill="rag", evidence=None, minutes=(8, 10), insight_skill="vector-db"):
     """A valid DailyPlanOutput (stage 1 of the daily chain): a short lesson with a quiz."""
     return {
         "reading": {"chapter_title": "Embeddings and Cosine Similarity from Scratch", "skill_slug": skill, "difficulty": 1,
@@ -81,7 +81,7 @@ def daily_dict(article_id, skill="rag", evidence=None, minutes=(8, 10)):
                           "deliverable": "cosine.py that prints similarities", "submission_instructions": "Paste cosine.py and the terminal output.",
                           "docs_to_consult": ["numpy.linalg.norm"], "estimated_minutes": minutes[1], "stretch_goal": None, "rubric": rubric_dict()},
         "market_insight": {"headline": "Postgres is becoming the default vector store", "thesis": "Teams consolidate vector search into Postgres.",
-                           "skill_slug": "vector-db", "evidence_article_ids": evidence or [article_id]},
+                           "skill_slug": insight_skill, "evidence_article_ids": evidence or [article_id]},
     }
 
 
@@ -139,7 +139,7 @@ def lesson_dict(level: int = 1, done: int = 0) -> dict:
 
     class Repo:
         @staticmethod
-        def learner_level(before):
+        def learner_level(before, track="ai"):
             return level, done
 
     from datetime import date

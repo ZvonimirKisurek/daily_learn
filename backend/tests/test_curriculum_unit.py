@@ -168,3 +168,19 @@ def test_ladder_is_valid_and_streaks_and_topics_are_deterministic():
     s = levels.shuffle_question(q, random.Random(3))
     assert s["options"][s["answer"]] == "right" and sorted(s["options"]) == sorted(q["options"])
     assert levels.pass_mark(10, 80) == 8 and levels.pass_mark(4, 80) == 4 and levels.pass_mark(5, 80) == 4
+
+
+def test_management_ladder_bank_and_prompts():
+    from app.curriculum import levels, prompts_management as pm
+    lad = levels.ladder("management")
+    assert lad.levels[0].title == "From maker to manager" and lad.tier_name(lad.levels[-1].tier) == "C-Level"
+    assert {lv.skill for lv in lad.levels} == {"mgmt-people", "mgmt-execution", "mgmt-strategy", "mgmt-finance", "mgmt-product-gtm",
+                                               "mgmt-operations", "mgmt-communication", "mgmt-governance"}
+    bank = levels.placement_bank("management")
+    assert {q.tier for q in bank.questions} == set(lad.tiers) and all(q.answer < len(q.options) for q in bank.questions)
+    assert any("SLA" in t for lv in lad.levels for t in lv.topics)                       # the acronyms the learner asked for are on the path
+    systems = prompts.lesson_systems("management")
+    assert systems["plan"] is pm.DAILY_PLAN_SYSTEM and "Terms to know" in systems["plan"] and "SLA = Service Level Agreement" in systems["plan"]
+    assert "No code" in systems["chapter"] and prompts.lesson_systems("ai")["plan"] is prompts.DAILY_PLAN_SYSTEM
+    with pytest.raises(ValueError, match="unknown track"):
+        levels.ladder("cooking")

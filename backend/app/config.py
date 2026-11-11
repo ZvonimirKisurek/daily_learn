@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     breaker_cooldown_hours: int = 24
 
     sources_file: str = "sources/sources.yaml"
+    extra_sources_files: str = "sources/management_sources.yaml"  # other tracks' catalogues, comma-separated
 
     # --- LLM / curriculum engine ---
     # Which backend writes lessons, grades work, summarises and forecasts:
