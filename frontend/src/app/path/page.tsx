@@ -8,34 +8,47 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { attempt, getProgress } from "@/lib/api";
+import { TrackTabs } from "@/components/track-tabs";
 import { skillLabel } from "@/lib/skills";
+import { parseTrack, withTrack, type Track } from "@/lib/tracks";
 import type { PathLevel, Progress } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Learning Path" };
 
-export default function PathPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default function PathPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight"><span className="gradient-text">Learning Path</span></h1>
-        <p className="mt-1 text-sm text-muted-foreground">From &quot;What is AI?&quot; to expert in 21 levels. Each level: daily lessons (reading + quiz, exercise, essay), then an exam you must pass to move on.</p>
-      </div>
       <Suspense fallback={<div className="space-y-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}</div>}>
-        <Content />
+        <Content searchParams={searchParams} />
       </Suspense>
     </div>
   );
 }
 
-async function Content() {
-  const [p, err] = await attempt(getProgress());
+async function Content({ searchParams }: { searchParams: SearchParams }) {
+  const track: Track = parseTrack((await searchParams).track);
+  const [p, err] = await attempt(getProgress(track));
   if (!p) return <ApiProblem error={err} />;
   const tiers = [...new Set(p.path.map((l) => l.tier))];
   return (
     <>
+      <div className="space-y-4">
+        <TrackTabs track={track} base="/path" />
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight"><span className="gradient-text">Learning Path</span></h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {track === "management"
+              ? `From first-time team lead to C-level in ${p.levels_total} levels. The tiers are job levels: each lesson teaches what that job expects you to know.`
+              : `From "What is AI?" to expert in ${p.levels_total} levels.`}{" "}
+            Each level: daily lessons (reading + quiz, exercise, essay), then an exam you must pass to move on.
+          </p>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat icon={Gauge} value={`${p.knowledge_score}/100`} label="AI knowledge score" tone="text-info" />
+        <Stat icon={Gauge} value={`${p.knowledge_score}/100`} label={track === "management" ? "path proven" : "AI knowledge score"} tone="text-info" />
         <Stat icon={Zap} value={`${p.xp_total} XP`} label={`+${p.xp_today} today`} tone="text-warn" />
         <Stat icon={Flame} value={`${p.streak_days}`} label="day streak" tone="text-orange-400" />
         <Stat icon={Award} value={`${p.path.filter((l) => l.status === "completed").length}/${p.levels_total}`} label="levels passed" tone="text-primary" />
@@ -44,7 +57,7 @@ async function Content() {
         <div className="glass flex flex-wrap items-center gap-3 rounded-2xl p-4 text-sm">
           <GraduationCap className="size-4 text-violet" />
           <span>Not sure where you stand? An 18-question placement exam measures what you already know and skips those levels.</span>
-          {p.placement.available_today && <Button asChild size="sm" variant="outline" className="ml-auto"><Link href="/exam/placement">Take the placement exam</Link></Button>}
+          {p.placement.available_today && <Button asChild size="sm" variant="outline" className="ml-auto"><Link href={withTrack("/exam/placement", track)}>Take the placement exam</Link></Button>}
         </div>
       )}
       {tiers.map((tier) => {
@@ -93,9 +106,9 @@ function LevelRow({ l, p }: { l: PathLevel; p: Progress }) {
           </ol>
           <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
             {p.exam.unlocked && p.exam.attempts_today < p.exam.attempts_max
-              ? <Button asChild size="sm"><Link href="/exam/level"><GraduationCap /> Take the level exam</Link></Button>
+              ? <Button asChild size="sm"><Link href={withTrack("/exam/level", p.track)}><GraduationCap /> Take the level exam</Link></Button>
               : <span className="text-muted-foreground">{p.exam.unlocked ? "No exam attempts left today." : `${p.lessons_done}/${l.topics.length} lessons done · the exam unlocks after ${l.topics.length}.`}</span>}
-            <Link href="/" className="text-info underline-offset-4 hover:underline">Today&apos;s lesson</Link>
+            <Link href={withTrack("/", p.track)} className="text-info underline-offset-4 hover:underline">Today&apos;s lesson</Link>
           </div>
         </>
       )}

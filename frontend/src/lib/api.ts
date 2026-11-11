@@ -1,5 +1,6 @@
 import "server-only";
 
+import { withTrack, type Track } from "./tracks";
 import type { BetAdvice, BetCheck, BetInput, BetOverview, BitcoinLatest, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, FeedPage, FeedQuery, Progress, QuizResult, Skill, SubmissionResult, TaskDetail, Today } from "./types";
 
 /**
@@ -42,13 +43,13 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = 15_0
   return res.json() as Promise<T>;
 }
 
-export const getToday = () => request<Today>("/api/today");
+export const getToday = (track: Track = "ai") => request<Today>(withTrack("/api/today", track));
 /** Every YYYY-MM-DD that has a stored briefing (oldest first). Drives which calendar cells are clickable. */
-export const getHistory = () => request<string[]>("/api/briefings/history");
+export const getHistory = (track: Track = "ai") => request<string[]>(withTrack("/api/briefings/history", track));
 /** One day's briefing, same shape as getToday(). Rejects with ApiError(status 404) for a date with no stored briefing. */
 /** Every YYYY-MM-DD whose lesson is fully finished. The calendar shows these green, unfinished ones yellow. */
-export const getDoneDays = () => request<string[]>("/api/briefings/done");
-export const getDay = (date: string) => request<Today>(`/api/briefings/${date}`);
+export const getDoneDays = (track: Track = "ai") => request<string[]>(withTrack("/api/briefings/done", track));
+export const getDay = (date: string, track: Track = "ai") => request<Today>(withTrack(`/api/briefings/${date}`, track));
 export const getSkills = () => request<Skill[]>("/api/skills");
 export const completeTask = (id: string) => request<Completion>(`/api/tasks/${id}/complete`, { method: "POST" });
 export const getTask = (id: string) => request<TaskDetail>(`/api/tasks/${id}`);
@@ -56,11 +57,12 @@ export const getTask = (id: string) => request<TaskDetail>(`/api/tasks/${id}`);
 export const submitTask = (id: string, submission: string) =>
   request<SubmissionResult>(`/api/tasks/${id}/submit`, { method: "POST", body: JSON.stringify({ submission }) }, 150_000);
 /** Learning path: level, XP, streak, knowledge score, exam status and every level's status. */
-export const getProgress = () => request<Progress>("/api/progress");
+export const getProgress = (track: Track = "ai") => request<Progress>(withTrack("/api/progress", track));
 export const submitQuiz = (id: string, answers: number[]) =>
   request<QuizResult>(`/api/tasks/${id}/quiz`, { method: "POST", body: JSON.stringify({ answers }) });
 /** A level exam may be written by the LLM on the spot (10-40 s): long timeout. */
-export const startExam = (kind: ExamKind) => request<Exam>("/api/exams/start", { method: "POST", body: JSON.stringify({ kind }) }, 150_000);
+export const startExam = (kind: ExamKind, track: Track = "ai") =>
+  request<Exam>("/api/exams/start", { method: "POST", body: JSON.stringify({ kind, track }) }, 150_000);
 export const submitExam = (id: string, answers: number[]) =>
   request<ExamResult>(`/api/exams/${id}/submit`, { method: "POST", body: JSON.stringify({ answers }) });
 export const saveNotes = (id: string, notes: string) =>
@@ -77,11 +79,12 @@ export const getBitcoinBet = () => request<BetOverview>("/api/bitcoin/bet");
 export const adviseBitcoinBet = (body: BetInput) => request<BetAdvice>("/api/bitcoin/bet", { method: "POST", body: JSON.stringify(body) }, 40_000);
 export const checkBitcoinBet = (sell_price: number) =>
   request<BetCheck>("/api/bitcoin/bet/check", { method: "POST", body: JSON.stringify({ sell_price }) }, 40_000);
-export const queueBriefing = () => request<{ queued: boolean; reason: string | null }>("/api/briefing/generate", { method: "POST" });
+export const queueBriefing = (track: Track = "ai") =>
+  request<{ queued: boolean; reason: string | null }>(withTrack("/api/briefing/generate", track), { method: "POST" });
 
 export function getFeed(q: FeedQuery) {
   const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== "") p.set(k, String(v));
+  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== "" && !(k === "track" && v === "ai")) p.set(k, String(v));
   return request<FeedPage>(`/api/feed?${p}`);
 }
 

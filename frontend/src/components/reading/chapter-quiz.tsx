@@ -16,7 +16,7 @@ const LETTERS = ["A", "B", "C", "D", "E"];
  * server against an answer key the browser never sees. A failed try marks WHICH answers are wrong, not the right
  * options, so the fix comes from re-reading, not from guessing.
  */
-export function ChapterQuiz({ taskId, questions, completed, score }: { taskId: string; questions: PublicQuestion[]; completed: boolean; score: number | null }) {
+export function ChapterQuiz({ taskId, questions, completed, score, home = "/" }: { taskId: string; questions: PublicQuestion[]; completed: boolean; score: number | null; home?: string }) {
   const [answers, setAnswers] = useState<(number | null)[]>(() => questions.map(() => null));
   const [result, setResult] = useState<QuizResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export function ChapterQuiz({ taskId, questions, completed, score }: { taskId: s
         <CheckCircle2 className="mx-auto mb-2 size-6 text-primary" />
         <h3 className="text-lg font-semibold">Quiz passed{score !== null && <> · {score}/{questions.length}</>}</h3>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Tomorrow, try to explain today&apos;s idea in two sentences without looking.</p>
-        <Button asChild variant="outline" className="mt-5"><Link href="/">Back to today&apos;s lesson <ArrowRight /></Link></Button>
+        <Button asChild variant="outline" className="mt-5"><Link href={home}>Back to today&apos;s lesson <ArrowRight /></Link></Button>
       </div>
     );
 
@@ -96,7 +96,7 @@ export function ChapterQuiz({ taskId, questions, completed, score }: { taskId: s
             <div className="flex flex-wrap items-center gap-3">
               <PartyPopper className="size-5 text-primary" />
               <p className="font-medium text-primary">Passed {result.correct}/{result.total}{result.completion && <> · +{result.completion.xp} XP</>}. The hands-on exercise is unlocked.</p>
-              <Button asChild className="ml-auto"><Link href="/">Continue the lesson <ArrowRight /></Link></Button>
+              <Button asChild className="ml-auto"><Link href={home}>Continue the lesson <ArrowRight /></Link></Button>
             </div>
           ) : (
             <p className="text-sm"><span className="font-medium text-warn">{result.correct}/{result.total} correct.</span> You need {result.pass_mark} to pass. Fix the answers marked in red and try again.</p>

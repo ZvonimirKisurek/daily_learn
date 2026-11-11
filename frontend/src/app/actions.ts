@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 import { adviseBitcoinBet, ApiError, checkBitcoinBet, completeTask, pulseBitcoin, getTask, queueBitcoin, queueBriefing, saveNotes, startExam, submitExam, submitQuiz, submitTask } from "@/lib/api";
+import { parseTrack, type Track } from "@/lib/tracks";
 import type { BetAdvice, BetCheck, BetInput, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, QuizResult, SubmissionResult } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,10 +42,10 @@ export async function submitQuizAction(taskId: string, answers: number[]): Promi
   }
 }
 
-export async function startExamAction(kind: ExamKind): Promise<ActionResult<Exam>> {
+export async function startExamAction(kind: ExamKind, track: Track = "ai"): Promise<ActionResult<Exam>> {
   if (kind !== "placement" && kind !== "level") return { ok: false, error: "Unknown exam" };
   try {
-    return { ok: true, data: await startExam(kind) };
+    return { ok: true, data: await startExam(kind, parseTrack(track)) };
   } catch (e) {
     return { ok: false, error: message(e) };
   }
@@ -62,9 +63,9 @@ export async function submitExamAction(examId: string, answers: number[]): Promi
   }
 }
 
-export async function generateBriefingAction(): Promise<ActionResult<{ queued: boolean }>> {
+export async function generateBriefingAction(track: Track = "ai"): Promise<ActionResult<{ queued: boolean }>> {
   try {
-    const r = await queueBriefing();
+    const r = await queueBriefing(parseTrack(track));
     if (!r.queued) refresh(); // "already generated": the page just needs to re-render
     return { ok: true, data: { queued: r.queued } };
   } catch (e) {

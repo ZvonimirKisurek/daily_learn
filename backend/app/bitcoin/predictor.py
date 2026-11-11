@@ -39,7 +39,9 @@ def describe_failure(exc: BaseException) -> str:
     if isinstance(exc, ingest.PriceUnavailable):
         return "Price feeds unreachable (CoinGecko and Coinbase both failed). No forecast is made without a real price."
     if isinstance(exc, LLMBudgetExceeded):
-        return "Daily AI budget reached (LLM_DAILY_BUDGET_USD). The next scheduled run will try again."
+        if "Claude usage limit" in str(exc):
+            return "Your Claude plan's usage limit is reached for now. Forecasts resume when it resets."
+        return "Daily AI budget reached (LLM_DAILY_BUDGET_USD). The next run will try again."
     if isinstance(exc, LLMValidationFailed):
         # Say WHICH rules failed: "field: problem" lines from the last attempt, minus Pydantic's "Value error, " prefix.
         lines = [ln.lstrip("- ").replace("Value error, ", "") for ln in (exc.errors or "").splitlines() if ln.strip()]
@@ -141,6 +143,7 @@ def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool)
         raise
 
     # 3. Store, with an exact record of what the model saw.
+    model_label = s.llm_model if s.llm_provider == "openai" else f"claude ({s.claude_code_model or 'plan default'})"
     inputs = {
         "technicals": td,
         "history": [{"date": c.day.isoformat(), "open": round(c.open, 2), "high": round(c.high, 2), "low": round(c.low, 2),
@@ -148,7 +151,7 @@ def _predict(*, trigger: str, llm, settings: Settings | None, ingest_news: bool)
         "accuracy": track,
         "news": [{"ref": n["ref"], "id": str(n["id"]), "title": n["title"], "url": n["url"], "source": n["source_name"]} for n in news],
     }
-    cols = {"price_id": price_row["id"], "current_price": round(current, 2), "model": s.llm_model, "trigger": trigger, "inputs": Jsonb(inputs),
+    cols = {"price_id": price_row["id"], "current_price": round(current, 2), "model": model_label, "trigger": trigger, "inputs": Jsonb(inputs),
             "sentiment_score": out.sentiment_score, "sentiment_summary": out.sentiment_summary, "technical_summary": out.technical_summary}
     for key, _ in HORIZONS:
         price, conf, why = out.horizon(key)

@@ -8,6 +8,7 @@ import { MissionBoard } from "@/components/mission/mission-board";
 import { PendingBriefing } from "@/components/mission/pending-briefing";
 import { CommandCenterSkeleton } from "@/components/mission/skeletons";
 import { ApiError, attempt, getDay } from "@/lib/api";
+import { parseTrack, withTrack, type Track } from "@/lib/tracks";
 import { longDate } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Past briefing" };
@@ -19,14 +20,17 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
  * Next passes the matched text in `params` - a Promise in this Next version, hence `await params`. The value is
  * untrusted user input (it is whatever someone typed in the URL), so it is validated before it reaches the API.
  */
-export default function DayPage({ params }: { params: Promise<{ date: string }> }) {
-  return <Suspense fallback={<CommandCenterSkeleton />}><Content params={params} /></Suspense>;
+type Props = { params: Promise<{ date: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default function DayPage(props: Props) {
+  return <Suspense fallback={<CommandCenterSkeleton />}><Content {...props} /></Suspense>;
 }
 
-async function Content({ params }: { params: Promise<{ date: string }> }) {
+async function Content({ params, searchParams }: Props) {
   const { date } = await params;
   if (!ISO_DAY.test(date)) notFound();
-  const [day, err] = await attempt(getDay(date));
+  const track: Track = parseTrack((await searchParams).track);
+  const [day, err] = await attempt(getDay(date, track));
   if (err instanceof ApiError && (err.status === 404 || err.status === 422)) notFound(); // no briefing stored (or impossible date like 2026-02-31)
   if (!day) return <ApiProblem error={err} />;
 
@@ -37,10 +41,10 @@ async function Content({ params }: { params: Promise<{ date: string }> }) {
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href="/" className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-sm font-medium text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/25">
+        <Link href={withTrack("/", track)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-sm font-medium text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/25">
           <ArrowLeft className="size-4" /> Back to Today
         </Link>
-        <Link href="/calendar" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"><CalendarDays className="size-4" /> Calendar</Link>
+        <Link href={withTrack("/calendar", track)} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"><CalendarDays className="size-4" /> Calendar</Link>
       </div>
       <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{longDate(date)}</p>
       {catchUp && (
@@ -55,7 +59,7 @@ async function Content({ params }: { params: Promise<{ date: string }> }) {
       )}
       {day.state === "ready" && day.briefing
         ? <MissionBoard briefing={day.briefing} heading={archived ? "Mission archive" : catchUp ? "Catch-up lesson" : "Today's Lesson"} archived={archived} />
-        : <PendingBriefing />}
+        : <PendingBriefing track={track} />}
     </div>
   );
 }

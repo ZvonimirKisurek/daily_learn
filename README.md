@@ -68,6 +68,28 @@ Daily lessons follow a **21-level path from "What is AI?" to expert** ([`backend
 - **Intelligence Feed "For you"** (the default sort) ranks stories by embedding similarity to your current level, not just your skill gaps.
 - All grading is deterministic code against answer keys stored server-side ([`app/curriculum/levels.py`](backend/app/curriculum/levels.py)); the LLM writes questions, never grades them. Apply migration `20261109000010_learning_path.sql`; regenerate today's lesson with `python -m app.cli generate-daily --force` to get the new format.
 
+## Two learning tracks
+The site teaches two subjects side by side, each with its own path, skills (one skill graph each), sources, daily lesson, exams and feed. Switch with the tabs (the track lives in the URL: `?track=management`).
+
+| Track | Path | Sources |
+|---|---|---|
+| `ai` AI & Machine Learning | 21 levels, "What is AI?" to Expert ([`levels.yaml`](backend/curriculum/levels.yaml)) | [`sources/sources.yaml`](backend/sources/sources.yaml) (132) |
+| `management` Management & Leadership | 22 levels, Team Lead to C-Level ([`management_levels.yaml`](backend/curriculum/management_levels.yaml)) | [`sources/management_sources.yaml`](backend/sources/management_sources.yaml) (523) |
+
+Management lessons are written by an executive-coach prompt ([`prompts_management.py`](backend/app/curriculum/prompts_management.py)): every reading has a "Terms to know" section that spells out the acronyms (SLA, OKR, P&L...), and the exercise is a short written decision on your own work. CLI: `--track management` on `ingest`, `generate-daily` and `regenerate-lessons`. The management catalogue was not testable where it was written: run `python -m app.cli ingest --dry-run --track management` to see OK/FAIL per feed (failing feeds are skipped automatically). Apply migration `20261111000013_tracks.sql`.
+
+## Running the AI on a Claude subscription instead of an API key
+`LLM_PROVIDER=claude_code` makes lessons, grading, exams, summaries and the Bitcoin forecast run through the official Claude Code program in headless mode ([`claude_code.py`](backend/app/curriculum/claude_code.py)), signed in with your own Claude account, so usage counts against your plan instead of a per-token bill.
+
+1. On your own computer run `claude setup-token` (opens the browser, prints a one-year token).
+2. Put `LLM_PROVIDER=claude_code` and `CLAUDE_CODE_OAUTH_TOKEN=<token>` in `.env`, rebuild the containers (the backend image installs Claude Code).
+3. Check: `docker compose -f docker-compose.prod.yml exec api claude -p "say ok"`.
+
+Limits: this is for a single-owner site (your own subscription, your own use). Embeddings (de-duplication, ranking, the feed) are not offered by Claude and still use `OPENAI_API_KEY`, which costs cents per month. When the plan's usage limit is hit, generation pauses until it resets.
+
+## Bitcoin page: live while open
+While the Bitcoin page is open and visible it sends a heartbeat about once a minute ([`live.py`](backend/app/bitcoin/live.py)): the price is refreshed, the news feeds are re-read every 5 minutes, and a new forecast starts only when fresh Bitcoin headlines arrived (at most every 30 minutes) or the forecast is over 6 hours old. A closed tab sends nothing, so nothing runs; the 09:00 scheduled forecast is off unless `BITCOIN_BACKGROUND_FORECAST=true`. The bet advisor re-evaluates your last check-in at the live price and flags when the verdict would change. Apply migration `20261111000012_bitcoin_live.sql`.
+
 ## Bitcoin bet advisor (daily binary up/down)
 On the Bitcoin page: enter your balance on the prediction site, the target price ("BTC above $K at settlement") and the YES share price. [`backend/app/bitcoin/betting.py`](backend/app/bitcoin/betting.py) answers with plain arithmetic, no LLM: bet UP (buy YES), bet DOWN (buy NO) or no bet, the number of shares, and take-profit / stop-loss prices.
 

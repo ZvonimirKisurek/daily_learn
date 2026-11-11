@@ -7,13 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { skillLabel } from "@/lib/skills";
 import type { Skill } from "@/lib/types";
 
-export function SkillProgress({ skills }: { skills: Skill[] }) {
+export function SkillProgress({ skills, title = "Skill matrix", accent = "var(--primary)" }: { skills: Skill[]; title?: string; accent?: string }) {
   const data = skills.map((s) => ({ label: skillLabel(s.slug), level: s.level, target: s.target }));
   const empty = skills.every((s) => s.level < 0.05); // everything at ~0: show an invitation, not a broken-looking chart
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><TrendingUp className="size-4 text-primary" /> Skill matrix</CardTitle>
+        <CardTitle className="flex items-center gap-2"><TrendingUp className="size-4" style={{ color: accent }} /> {title}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="relative h-[270px]" role="img" aria-label={`Radar chart of skill levels versus targets: ${data.map((d) => `${d.label} ${d.level.toFixed(1)} of ${d.target}`).join(", ")}`}>
@@ -23,7 +23,7 @@ export function SkillProgress({ skills }: { skills: Skill[] }) {
               <PolarAngleAxis dataKey="label" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
               <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
               <Radar name="Target" dataKey="target" stroke="rgba(255,255,255,0.35)" strokeDasharray="4 4" fill="rgba(255,255,255,0.02)" isAnimationActive={false} />
-              <Radar name="Level" dataKey="level" stroke="var(--primary)" strokeWidth={2.5} fill="var(--primary)" fillOpacity={0.28} />
+              <Radar name="Level" dataKey="level" stroke={accent} strokeWidth={2.5} fill={accent} fillOpacity={0.28} />
               <Tooltip formatter={(v) => (typeof v === "number" ? v.toFixed(1) : String(v))}
                 contentStyle={{ background: "rgba(10,12,18,0.92)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, fontSize: 12 }} itemStyle={{ color: "var(--foreground)" }} />
             </RadarChart>

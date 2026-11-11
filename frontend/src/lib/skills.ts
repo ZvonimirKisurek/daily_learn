@@ -1,5 +1,7 @@
 export const SKILL_LABEL: Record<string, string> = {
   "ai-foundations": "AI Foundations",
+  "mgmt-people": "People", "mgmt-execution": "Execution", "mgmt-strategy": "Strategy", "mgmt-finance": "Finance",
+  "mgmt-product-gtm": "Product", "mgmt-operations": "Operations", "mgmt-communication": "Comms", "mgmt-governance": "Governance",
   pytorch: "PyTorch", "classical-ml": "Classical ML", rag: "RAG", "vector-db": "Vector DB",
   "llm-finetuning": "Fine-tuning", mlops: "MLOps", "llm-evals": "Evals",
 };

@@ -137,7 +137,7 @@ function HeaderTitle({ live }: { live: boolean }) {
         <h1 className="font-mono text-lg font-semibold tracking-tight text-white">BTC/USD <span className="text-muted-foreground">· Terminal</span></h1>
         <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           <span className={cn("size-1.5 rounded-full", live ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" : "bg-amber-400/80")} aria-hidden />
-          {live ? "Online" : "Standby"} · Daily 09:00 · sentiment + technicals
+          {live ? "Online" : "Standby"} · live while open · sentiment + technicals
         </p>
       </div>
     </div>

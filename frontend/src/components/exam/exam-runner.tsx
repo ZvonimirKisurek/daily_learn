@@ -7,13 +7,14 @@ import { ArrowLeft, ArrowRight, CheckCircle2, GraduationCap, Loader2, PartyPoppe
 import { startExamAction, submitExamAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { withTrack, type Track } from "@/lib/tracks";
 import type { Exam, ExamKind, ExamResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const LETTERS = ["A", "B", "C", "D", "E"];
 
 /** One question per screen, Duolingo-style. Start -> answer -> submit -> review every answer with its explanation. */
-export function ExamRunner({ kind, intro }: { kind: ExamKind; intro: React.ReactNode }) {
+export function ExamRunner({ kind, intro, track = "ai" }: { kind: ExamKind; intro: React.ReactNode; track?: Track }) {
   const [exam, setExam] = useState<Exam | null>(null);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [i, setI] = useState(0);
@@ -24,7 +25,7 @@ export function ExamRunner({ kind, intro }: { kind: ExamKind; intro: React.React
   function begin() {
     setError(null);
     start(async () => {
-      const res = await startExamAction(kind);
+      const res = await startExamAction(kind, track);
       if (!res.ok) return setError(res.error);
       setExam(res.data);
       setAnswers(res.data.questions.map(() => null));
@@ -126,8 +127,8 @@ function ExamReport({ r, retry, pending }: { r: ExamResult; retry?: () => void; 
           </ul>
         )}
         <div className="mt-5 flex flex-wrap justify-center gap-3">
-          <Button asChild><Link href="/">Today&apos;s lesson <ArrowRight /></Link></Button>
-          <Button asChild variant="outline"><Link href="/path">See the path</Link></Button>
+          <Button asChild><Link href={withTrack("/", r.track)}>Today&apos;s lesson <ArrowRight /></Link></Button>
+          <Button asChild variant="outline"><Link href={withTrack("/path", r.track)}>See the path</Link></Button>
           {retry && <Button variant="outline" onClick={retry} disabled={pending}>{pending && <Loader2 className="animate-spin" />} Try a new exam</Button>}
         </div>
       </motion.div>

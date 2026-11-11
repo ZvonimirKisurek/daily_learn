@@ -4,7 +4,9 @@ import { ApiProblem } from "@/components/api-problem";
 import { FeedFilters } from "@/components/feed/feed-filters";
 import { FeedList } from "@/components/feed/feed-list";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TrackTabs } from "@/components/track-tabs";
 import { attempt, getFeed, getSkills } from "@/lib/api";
+import { parseTrack } from "@/lib/tracks";
 import type { Category, FeedQuery } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Intelligence Feed" };
@@ -41,17 +43,20 @@ async function FeedContent({ searchParams }: { searchParams: SearchParams }) {
   const skill = one(sp.skill);
   const sort = one(sp.sort);
   const match = one(sp.match);
+  const track = parseTrack(sp.track);
   const params = {
+    track: track === "management" ? track : undefined,  // kept in every filter link, so switching filters never drops the track
     category: category && CATEGORIES.includes(category) ? category : undefined,
     skill: skill && /^[a-z0-9-]{1,40}$/.test(skill) ? skill : undefined,
     sort: sort === "relevance" || sort === "recent" ? sort : undefined,  // no sort = "For you" (matched to your level)
     match: match === "moderate" || match === "strong" ? match : undefined,
   };
-  const q: FeedQuery = { category: params.category as Category | undefined, skill: params.skill, sort: (params.sort ?? "for_you") as FeedQuery["sort"], min_strength: params.match as FeedQuery["min_strength"] };
+  const q: FeedQuery = { track, category: params.category as Category | undefined, skill: params.skill, sort: (params.sort ?? "for_you") as FeedQuery["sort"], min_strength: params.match as FeedQuery["min_strength"] };
 
   const [data, err] = await attempt(Promise.all([getFeed(q), getSkills()])); // parallel, not sequential
   if (!data) return <ApiProblem error={err} />;
-  const [page, skills] = data;
+  const [page, allSkills] = data;
+  const skills = allSkills.filter((s) => s.track === track);
   // The client-side "Load more" calls our /api/feed proxy, which speaks API names: `match` becomes `min_strength`.
   const qp = new URLSearchParams(Object.entries(params).filter(([k, v]) => v && k !== "match") as [string, string][]);
   if (params.match) qp.set("min_strength", params.match);
@@ -59,6 +64,7 @@ async function FeedContent({ searchParams }: { searchParams: SearchParams }) {
   const query = qp.toString();
   return (
     <>
+      <TrackTabs track={track} base="/feed" />
       {page.for_level && (
         <p className="rounded-xl border border-violet/25 bg-violet/5 px-4 py-2.5 text-sm">
           <span className="text-violet">Matched to Level {page.for_level.index} · {page.for_level.title}</span>

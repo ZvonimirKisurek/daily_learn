@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { withTrack, type Track } from "@/lib/tracks";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -21,7 +22,7 @@ const monthLabel = (y: number, m: number) =>
  * calendar opened from another timezone still agrees with the scheduler about which day is "today".
  * All date maths is done on UTC calendar fields, so a browser's local DST/offset can never shift a cell by a day.
  */
-export function LearningCalendar({ days, done, today }: { days: string[]; done: string[]; today: string }) {
+export function LearningCalendar({ days, done, today, track = "ai" }: { days: string[]; done: string[]; today: string; track?: Track }) {
   const have = useMemo(() => new Set(days), [days]);
   const finished = useMemo(() => new Set(done), [done]);
   const [ty, tm] = [Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1];
@@ -47,7 +48,7 @@ export function LearningCalendar({ days, done, today }: { days: string[]; done: 
         </button>
         <div className="text-center">
           <h2 className="font-semibold tracking-tight">{monthLabel(view.y, view.m)}</h2>
-          <p className="font-mono text-[11px] text-muted-foreground">{inMonth} {inMonth === 1 ? "briefing" : "briefings"}</p>
+          <p className="font-mono text-[11px] text-muted-foreground">{inMonth} {inMonth === 1 ? "lesson" : "lessons"}</p>
         </div>
         <button onClick={() => step(1)} disabled={idx >= ty * 12 + tm} aria-label="Next month"
           className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-30">
@@ -69,7 +70,7 @@ export function LearningCalendar({ days, done, today }: { days: string[]; done: 
           // only if a briefing exists; otherwise it is plain, dimmed text, so there is nothing to click.
           if (isToday || has)
             return (
-              <Link key={key} href={isToday ? "/" : `/day/${key}`} aria-current={isToday ? "date" : undefined}
+              <Link key={key} href={withTrack(isToday ? "/" : `/day/${key}`, track)} aria-current={isToday ? "date" : undefined}
                 aria-label={`${key}${isToday ? " (today)" : ""}${has ? (ok ? ", finished" : ", not finished") : ""}`}
                 className={cn(base, "font-medium transition-colors",
                   !has ? "text-foreground hover:bg-white/10"

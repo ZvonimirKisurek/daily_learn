@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Award, Flame, Gauge, GraduationCap, Lock, Map, Sparkles, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { withTrack } from "@/lib/tracks";
 import type { Progress } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +24,7 @@ export function LevelCard({ progress: p }: { progress: Progress }) {
     <section aria-labelledby="level-h" className="glass relative overflow-hidden rounded-2xl p-5">
       <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 size-56 rounded-full bg-gradient-to-br from-violet-400/20 to-transparent blur-2xl" />
       <div className="relative">
-        <div className="eyebrow mb-1.5 flex items-center gap-1.5 !text-violet"><GraduationCap className="size-3.5" /> Learning path · {p.level.tier_name}</div>
+        <div className="eyebrow mb-1.5 flex items-center gap-1.5 !text-violet"><GraduationCap className="size-3.5" /> {p.track_label || "Learning path"} · {p.level.tier_name}</div>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="level-h" className="text-2xl font-semibold tracking-tight">Level {p.level.index} <span className="text-muted-foreground">·</span> {p.level.title}</h2>
           <span className="font-mono text-xs text-muted-foreground">{p.level.index} / {p.levels_total}</span>
@@ -33,7 +34,7 @@ export function LevelCard({ progress: p }: { progress: Progress }) {
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat icon={Zap} value={`${p.xp_total} XP`} label={`+${p.xp_today} today`} tone="text-warn" />
           <Stat icon={Flame} value={`${p.streak_days} day${p.streak_days === 1 ? "" : "s"}`} label="streak" tone="text-orange-400" />
-          <Stat icon={Gauge} value={`${p.knowledge_score}/100`} label="AI knowledge" tone="text-info" />
+          <Stat icon={Gauge} value={`${p.knowledge_score}/100`} label={p.track === "management" ? "path proven" : "AI knowledge"} tone="text-info" />
           <Stat icon={Award} value={`${p.path.filter((l) => l.status === "completed").length}`} label="levels passed" tone="text-primary" />
         </div>
 
@@ -59,7 +60,7 @@ export function LevelCard({ progress: p }: { progress: Progress }) {
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground"><Lock className="size-3.5" /> No exam attempts left today. Review today&apos;s lesson; the exam reopens tomorrow.</p>
           ) : p.exam.unlocked ? (
             <>
-              <Button asChild><Link href="/exam/level"><GraduationCap /> Take the Level {p.level.index} exam <ArrowRight /></Link></Button>
+              <Button asChild><Link href={withTrack("/exam/level", p.track)}><GraduationCap /> Take the Level {p.level.index} exam <ArrowRight /></Link></Button>
               <span className="text-xs text-muted-foreground">
                 {p.exam.questions} questions · pass with {p.exam.pass_percent}% · {Math.max(0, attemptsLeft)} attempt{attemptsLeft === 1 ? "" : "s"} left today
                 {p.exam.last && !p.exam.last.passed && <> · last try {p.exam.last.correct}/{p.exam.last.total}</>}
@@ -68,11 +69,11 @@ export function LevelCard({ progress: p }: { progress: Progress }) {
           ) : (
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground"><Lock className="size-3.5" /> Finish {need} more lesson{need === 1 ? "" : "s"} to unlock the level exam. Each lesson = quiz passed + exercise passed + essay read.</p>
           )}
-          <Link href="/path" className="ml-auto inline-flex items-center gap-1 text-sm text-info underline-offset-4 hover:underline"><Map className="size-3.5" /> Whole path</Link>
+          <Link href={withTrack("/path", p.track)} className="ml-auto inline-flex items-center gap-1 text-sm text-info underline-offset-4 hover:underline"><Map className="size-3.5" /> Whole path</Link>
         </div>
         {!p.placement.taken && p.placement.available_today && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Already know some AI? <Link href="/exam/placement" className="text-info underline-offset-4 hover:underline">Take the placement exam</Link> to skip the levels you know.
+            {p.track === "management" ? "Already managing people?" : "Already know some AI?"} <Link href={withTrack("/exam/placement", p.track)} className="text-info underline-offset-4 hover:underline">Take the placement exam</Link> to skip the levels you know.
           </p>
         )}
       </div>

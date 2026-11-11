@@ -4,6 +4,7 @@ import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { skillLabel } from "@/lib/skills";
 import { slugify } from "@/lib/slug";
+import { withTrack } from "@/lib/tracks";
 import type { TaskDetail } from "@/lib/types";
 import { ExternalLink } from "@/components/mission/task-bodies";
 import { Reveal } from "@/components/motion";
@@ -19,7 +20,7 @@ export function ReadingView({ detail }: { detail: TaskDetail }) {
   return (
     <div>
       <ReadingProgress />
-      <Link href="/" className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"><ArrowLeft className="size-4" /> Today&apos;s mission</Link>
+      <Link href={withTrack("/", detail.track)} className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"><ArrowLeft className="size-4" /> Today&apos;s lesson</Link>
 
       <Reveal>
         <header className="mb-10 max-w-3xl">
@@ -64,7 +65,7 @@ export function ReadingView({ detail }: { detail: TaskDetail }) {
             </aside>
           )}
           <div className="max-w-[72ch]">
-            {detail.quiz ? <ChapterQuiz taskId={detail.task.id} questions={detail.quiz} completed={detail.task.completed} score={detail.task.quiz_score} />
+            {detail.quiz ? <ChapterQuiz taskId={detail.task.id} questions={detail.quiz} completed={detail.task.completed} score={detail.task.quiz_score} home={withTrack("/", detail.track)} />
               : <FinishChapter taskId={detail.task.id} completed={detail.task.completed} skillSlug={r.skill_slug} />}
           </div>
         </article>

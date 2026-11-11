@@ -69,6 +69,31 @@ ARTICLES += [
 ]
 
 
+# Management track demo articles: (title, source, category, skill, closeness, engagement, hours_ago, excerpt, ai_summary)
+MGMT_ARTICLES = [
+    ("Why your OKRs read like a to-do list", "Harvard Business Review", "research", "mgmt-execution", 0.38, None, 4,
+     "Most teams write tasks and call them key results.", "Argues that key results must be measurable outcomes, not activities, with before/after examples."),
+    ("The first 90 days as a new manager", "First Round Review", "engineering_blog", "mgmt-people", 0.38, None, 8,
+     "A field guide for first-time managers.", "A week-by-week plan for new managers: listen first, then set expectations, then change one thing."),
+    ("An SLA without an SLO is a penalty waiting to happen", "LeadDev", "engineering_blog", "mgmt-operations", 0.38, 120, 12,
+     "Contract promises need internal targets.", "Explains SLA, SLO and SLI and why the internal target must be stricter than the contractual one."),
+    ("Reading a P&L when you are not a finance person", "MIT Sloan Management Review", "research", "mgmt-finance", 0.38, None, 20,
+     "Revenue, gross margin and operating costs in plain words.", "Walks through a simple profit and loss statement line by line for non-finance managers."),
+    ("Strategy is not a plan", "Roger Martin", "researcher", "mgmt-strategy", 0.38, None, 26,
+     "Plans are comfortable; strategy is a bet.", "Distinguishes strategy (a set of choices about where to play and how to win) from planning."),
+    ("How to write a memo executives actually read", "Lenny's Newsletter", "newsletter", "mgmt-communication", 0.38, None, 30,
+     "Bottom line up front.", "Shows the BLUF structure: recommendation first, then the three facts that support it."),
+    ("What boards really ask about AI", "McKinsey Insights", "research", "mgmt-governance", 0.27, None, 36,
+     "Directors want risk and return, not demos.", "Summarises the questions boards ask about AI spending: use cases, measurable return and risk controls."),
+    ("Pricing is the lever nobody pulls", "a16z", "engineering_blog", "mgmt-product-gtm", 0.27, None, 40,
+     "Small price changes move profit more than growth does.", "Argues that pricing experiments are under-used compared with acquisition spending."),
+    ("Ask HN: how do you run one-on-ones?", "Hacker News - management", "community", "mgmt-people", 0.27, 310, 44,
+     "HN discussion (188 comments)", "Managers share agendas for one-on-ones: the report owns the agenda, the manager owns follow-up."),
+    ("Layoffs, reorgs and what they teach about org design", "The Pragmatic Engineer", "newsletter", "mgmt-operations", 0.27, None, 50,
+     "Span of control is back in fashion.", "Looks at recent reorganisations and the trend toward fewer management layers."),
+]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8000)
@@ -107,17 +132,21 @@ def main():
             skill_vecs[r["slug"]] = unit(rng.normal(size=1536))
             conn.execute("update skills set embedding=%s where slug=%s", (skill_vecs[r["slug"]], r["slug"]))
         from app.curriculum import levels as lv  # the feed's "For you" query vector per level (offline: the level's skill vector)
-        for level in lv.ladder().levels:
-            conn.execute("insert into level_embeddings (level, embedding) values (%s, %s) on conflict do nothing", (level.index, skill_vecs[level.skill]))
+        for track in lv.TRACKS:
+            for level in lv.ladder(track).levels:
+                conn.execute("insert into level_embeddings (level, track, embedding) values (%s, %s, %s) on conflict do nothing",
+                             (level.index, track, skill_vecs[level.skill]))
 
     specs = {}
-    for a in ARTICLES:
-        specs.setdefault(a[2:3] + (a[1],), SourceSpec(slug=re.sub(r"[^a-z0-9]+", "-", a[1].lower()).strip("-"), name=a[1], category=a[2], url="https://example.test/feed"))
+    all_articles = ARTICLES + MGMT_ARTICLES
+    for a in all_articles:
+        specs.setdefault(a[2:3] + (a[1],), SourceSpec(slug=re.sub(r"[^a-z0-9]+", "-", a[1].lower()).strip("-"), name=a[1], category=a[2],
+                                                      url="https://example.test/feed", track="management" if a in MGMT_ARTICLES else "ai"))
     irepo.upsert_sources(specs.values())
     states = irepo.load_source_states()
     now = datetime.now(timezone.utc)
     ids = {}
-    for i, (title, src, cat, skill, close, eng, hrs, excerpt, ai) in enumerate(ARTICLES):
+    for i, (title, src, cat, skill, close, eng, hrs, excerpt, ai) in enumerate(all_articles):
         slug = re.sub(r"[^a-z0-9]+", "-", src.lower()).strip("-")
         is_dup = title == "OpenAI ships new embedding models"
         base = skill_vecs[skill] if not is_dup else None
@@ -149,7 +178,9 @@ def main():
             if name == "WeeklyThemeOutput":
                 d = F.weekly_dict(ids, skills=tuple(sorted(grounding.required_focus or {"rag", "vector-db"})))
             elif name == "DailyPlanOutput":
-                d = F.daily_dict(ids[0], skill=grounding.required_skill or "rag", evidence=ids[1:3] or [ids[0]])
+                skill = grounding.required_skill or "rag"
+                d = F.daily_dict(ids[0], skill=skill, evidence=ids[1:3] or [ids[0]],
+                                 insight_skill="vector-db" if "vector-db" in grounding.skill_slugs else skill)
             elif name == "LevelExamOutput":
                 d = {"questions": [{**q, "question": f"DEMO exam question {i + 1}: which statement is true?"} for i, q in enumerate(F.quiz_dict(10))]}
             elif name == "TaskEvaluationSchema":
@@ -189,6 +220,7 @@ def main():
             print("bitcoin:", generate_prediction(trigger="cli", llm=DemoLLM(), settings=s), flush=True)
     if not args.no_briefing:
         generators.generate_daily_briefing(llm=DemoLLM(), embedder=None, settings=s)
+        generators.generate_daily_briefing(llm=DemoLLM(), embedder=None, settings=s, track="management")
     # optional fake history; by default skills start at 0 like a fresh learner
     with get_pool().connection() as conn:
         for slug, lvl in ({} if not args.seed_skills else {"pytorch": 24.5, "classical-ml": 31, "rag": 33.2, "vector-db": 41.8, "llm-finetuning": 12.4, "mlops": 33, "llm-evals": 19.1}).items():

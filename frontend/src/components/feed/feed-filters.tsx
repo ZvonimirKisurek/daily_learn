@@ -4,7 +4,7 @@ import type { Category, Skill } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CATEGORY_LABEL } from "./article-card";
 
-export interface FeedParams { category?: string; skill?: string; sort?: string; match?: string }
+export interface FeedParams { category?: string; skill?: string; sort?: string; match?: string; track?: string }
 
 function href(base: FeedParams, patch: Partial<FeedParams>) {
   const merged = { ...base, ...patch };
