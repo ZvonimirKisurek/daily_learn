@@ -206,7 +206,7 @@ class LevelExamOutput(_Strict):
 # ------------------------------------------------------------------------------ daily plan (stage 1 of the chain)
 class ChapterSection(_Strict):
     heading: Text = Field(max_length=80)
-    key_points: Text = Field(max_length=500, description="What this section must establish: the idea, the analogy, the example")
+    key_points: Text = Field(max_length=900, description="What this section must establish: the idea, the analogy, the example")
     target_words: int = Field(ge=80, le=350)
 
 
