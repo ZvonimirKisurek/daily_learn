@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     http_timeout: float = 20.0
     http_max_retries: int = 4
     host_min_interval: float = 1.0  # seconds between requests to the same host
+    slow_hosts: str = "medium.com=6"  # host=seconds,...: hosts that answer 429 at the default pace
+
+    @property
+    def host_intervals(self) -> dict[str, float]:
+        out = {}
+        for part in self.slow_hosts.split(","):
+            host, _, sec = part.strip().partition("=")
+            if host and sec:
+                out[host.strip().lower()] = float(sec)
+        return out
     fetch_concurrency: int = 8
 
     reddit_client_id: str = ""

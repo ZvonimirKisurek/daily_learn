@@ -72,3 +72,24 @@ def test_parse_retry_after():
     assert parse_retry_after("5") == 5.0
     assert parse_retry_after(None) is None
     assert parse_retry_after("garbage") is None
+
+
+async def test_slow_hosts_get_their_own_spacing():
+    from app.ingestion.http import PoliteClient
+    slept = []
+
+    async def fake_sleep(s):
+        slept.append(s)
+
+    c = PoliteClient("UA/1", min_interval=1.0, host_intervals={"medium.com": 6.0}, sleep=fake_sleep)
+    await c._throttle("medium.com")
+    await c._throttle("medium.com")
+    await c._throttle("example.com")
+    await c._throttle("example.com")
+    await c.aclose()
+    assert len(slept) == 2 and 5.5 < slept[0] <= 6.0 and 0.5 < slept[1] <= 1.0
+
+
+def test_slow_hosts_setting_parses():
+    from app.config import Settings
+    assert Settings(slow_hosts="medium.com=6, substack.com = 2").host_intervals == {"medium.com": 6.0, "substack.com": 2.0}

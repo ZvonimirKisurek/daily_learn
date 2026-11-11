@@ -47,6 +47,8 @@ def _dry_run(only: list[str] | None, track: str | None = None) -> int:
     from app.ingestion.pipeline import fetch_all
 
     settings = get_settings()
+    for noisy in ("httpx", "app.ingestion.http"):  # one OK/FAIL line per source is the report; per-request logs drown it
+        logging.getLogger(noisy).setLevel(logging.ERROR)
     specs = [s for s in load_all_sources(settings) if (not only or s.slug in only) and (not track or s.track == track)]
     outcomes = asyncio.run(fetch_all(specs, {s.slug: SourceState() for s in specs}, settings))
     ok = failed = skipped = 0

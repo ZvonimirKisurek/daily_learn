@@ -5,9 +5,9 @@
 # newsletters, podcasts and YouTube channels (titles + descriptions), and topic feeds from Stack Exchange, Hacker News,
 # DEV and Medium for the acronyms and themes of the path (OKR, SLA, P&L, hiring, strategy, governance...).
 #
-# HONEST STATUS: this list was assembled from knowledge of where these publishers keep their feeds and could NOT be
-# tested from the environment it was written in. Some URLs will have moved or need a different path. Check them on
-# your server (no database, no AI calls):
+# STATUS: first checked on the production server on 2026-11-11; feeds that answered 403/404 there (and Stack Exchange,
+# which blocks automated readers) were removed, and medium.com is fetched slowly (SLOW_HOSTS) because it rate-limits.
+# Re-check any time (no database, no AI calls):
 #     python -m app.cli ingest --dry-run --track management
 # It prints OK / FAIL per source. A feed that keeps failing is skipped automatically after BREAKER_FAILURES attempts
 # (circuit breaker), so a dead link costs nothing; fix or delete the FAIL lines when you have a minute.
@@ -16,28 +16,17 @@ sources:
   # ------------------------------------------------------------------ business schools, research and consultancies
   - {slug: m-harvard-business-review, name: "Harvard Business Review", category: research, url: "https://feeds.hbr.org/harvardbusiness", weight: 1.4}
   - {slug: m-mit-sloan-management-review, name: "MIT Sloan Management Review", category: research, url: "https://sloanreview.mit.edu/feed/", weight: 1.4}
-  - {slug: m-hbs-working-knowledge, name: "HBS Working Knowledge", category: research, url: "https://hbswk.hbs.edu/stories-articles.rss", weight: 1.2}
   - {slug: m-knowledge-at-wharton, name: "Knowledge at Wharton", category: research, url: "https://knowledge.wharton.upenn.edu/feed/", weight: 1.2}
-  - {slug: m-kellogg-insight, name: "Kellogg Insight", category: research, url: "https://insight.kellogg.northwestern.edu/rss", weight: 1.1}
-  - {slug: m-insead-knowledge, name: "INSEAD Knowledge", category: research, url: "https://knowledge.insead.edu/rss.xml", weight: 1.1}
-  - {slug: m-stanford-gsb-insights, name: "Stanford GSB Insights", category: research, url: "https://www.gsb.stanford.edu/insights/feed", weight: 1.2}
-  - {slug: m-chicago-booth-review, name: "Chicago Booth Review", category: research, url: "https://www.chicagobooth.edu/review/rss", weight: 1.0}
-  - {slug: m-california-management-review, name: "California Management Review", category: research, url: "https://cmr.berkeley.edu/feed/", weight: 1.0}
   - {slug: m-mckinsey-insights, name: "McKinsey Insights", category: research, url: "https://www.mckinsey.com/insights/rss", weight: 1.3}
-  - {slug: m-bcg-publications, name: "BCG Publications", category: research, url: "https://www.bcg.com/rss", weight: 1.1}
-  - {slug: m-bain-insights, name: "Bain Insights", category: research, url: "https://www.bain.com/insights/rss", weight: 1.1}
   - {slug: m-strategy-business, name: "strategy+business", category: research, url: "https://www.strategy-business.com/rss/all_updates", weight: 1.0}
   - {slug: m-nber-new-working-papers, name: "NBER New Working Papers", category: research, url: "https://www.nber.org/rss/new.xml", weight: 0.7}
   - {slug: m-harvard-law-forum-on-corporate-governance, name: "Harvard Law Forum on Corporate Governance", category: research, url: "https://corpgov.law.harvard.edu/feed/", weight: 1.2}
   - {slug: m-marginal-revolution, name: "Marginal Revolution", category: research, url: "https://marginalrevolution.com/feed", weight: 0.8}
-  - {slug: m-world-economic-forum-agenda, name: "World Economic Forum Agenda", category: research, url: "https://www.weforum.org/agenda/feed", weight: 0.7}
-  - {slug: m-mit-news-management, name: "MIT News - management", category: research, url: "https://news.mit.edu/topic/mitmanagement-rss.xml", weight: 0.8}
   - {slug: m-mit-news-business, name: "MIT News - business", category: research, url: "https://news.mit.edu/topic/mitbusiness-rss.xml", weight: 0.8}
   - {slug: m-mit-news-startups, name: "MIT News - startups", category: research, url: "https://news.mit.edu/topic/mitstartups-rss.xml", weight: 0.8}
   - {slug: m-mit-news-innovation, name: "MIT News - innovation", category: research, url: "https://news.mit.edu/topic/mitinnovation-rss.xml", weight: 0.8}
   - {slug: m-mit-news-economics, name: "MIT News - economics", category: research, url: "https://news.mit.edu/topic/miteconomics-rss.xml", weight: 0.8}
   - {slug: m-mit-news-leadership, name: "MIT News - leadership", category: research, url: "https://news.mit.edu/topic/mitleadership-rss.xml", weight: 0.8}
-  - {slug: m-mit-news-entrepreneurship, name: "MIT News - entrepreneurship", category: research, url: "https://news.mit.edu/topic/mitentrepreneurship-rss.xml", weight: 0.8}
   - {slug: m-arxiv-econ-gn-general-economics, name: "arXiv econ.GN (general economics)", category: research, url: "https://rss.arxiv.org/rss/econ.GN", weight: 0.4, config: {max_items: 15}}
   - {slug: m-arxiv-q-fin-gn-general-finance, name: "arXiv q-fin.GN (general finance)", category: research, url: "https://rss.arxiv.org/rss/q-fin.GN", weight: 0.4, config: {max_items: 15}}
   - {slug: m-arxiv-cs-se-software-engineering, name: "arXiv cs.SE (software engineering)", category: research, url: "https://rss.arxiv.org/rss/cs.SE", weight: 0.4, config: {max_items: 15}}
@@ -62,8 +51,6 @@ sources:
   - {slug: m-fortune, name: "Fortune", category: industry_news, url: "https://fortune.com/feed/", weight: 0.9}
   - {slug: m-fast-company, name: "Fast Company", category: industry_news, url: "https://www.fastcompany.com/latest/rss", weight: 0.9}
   - {slug: m-inc, name: "Inc.", category: industry_news, url: "https://www.inc.com/rss/", weight: 0.8}
-  - {slug: m-forbes-leadership, name: "Forbes Leadership", category: industry_news, url: "https://www.forbes.com/leadership/feed/", weight: 0.8}
-  - {slug: m-forbes-entrepreneurs, name: "Forbes Entrepreneurs", category: industry_news, url: "https://www.forbes.com/entrepreneurs/feed/", weight: 0.7}
   - {slug: m-business-insider, name: "Business Insider", category: industry_news, url: "https://www.businessinsider.com/rss", weight: 0.6}
   - {slug: m-quartz, name: "Quartz", category: industry_news, url: "https://qz.com/rss", weight: 0.8}
   - {slug: m-axios, name: "Axios", category: industry_news, url: "https://api.axios.com/feed/", weight: 0.7}
@@ -93,11 +80,8 @@ sources:
   - {slug: m-construction-dive, name: "Construction Dive", category: industry_news, url: "https://www.constructiondive.com/feeds/news/", weight: 0.8, config: {max_items: 15}}
 
   # ------------------------------------------------------------------ company and practitioner blogs
-  - {slug: m-a16z, name: "a16z", category: engineering_blog, url: "https://a16z.com/feed/", weight: 1.2}
-  - {slug: m-first-round-review, name: "First Round Review", category: engineering_blog, url: "https://review.firstround.com/feed.xml", weight: 1.3}
   - {slug: m-y-combinator-blog, name: "Y Combinator Blog", category: engineering_blog, url: "https://www.ycombinator.com/blog/rss/", weight: 1.2}
   - {slug: m-saastr, name: "SaaStr", category: engineering_blog, url: "https://www.saastr.com/feed/", weight: 1.0}
-  - {slug: m-openview, name: "OpenView", category: engineering_blog, url: "https://openviewpartners.com/feed/", weight: 0.9}
   - {slug: m-intercom-blog, name: "Intercom Blog", category: engineering_blog, url: "https://www.intercom.com/blog/feed/", weight: 0.9}
   - {slug: m-gitlab-blog, name: "GitLab Blog", category: engineering_blog, url: "https://about.gitlab.com/atom.xml", weight: 0.7}
   - {slug: m-infoq, name: "InfoQ", category: engineering_blog, url: "https://feed.infoq.com/", weight: 0.8}
@@ -105,19 +89,12 @@ sources:
   - {slug: m-silicon-valley-product-group, name: "Silicon Valley Product Group", category: engineering_blog, url: "https://www.svpg.com/feed/", weight: 1.2}
   - {slug: m-product-talk, name: "Product Talk", category: engineering_blog, url: "https://www.producttalk.org/feed/", weight: 1.0}
   - {slug: m-mountain-goat-software-agile, name: "Mountain Goat Software (agile)", category: engineering_blog, url: "https://www.mountaingoatsoftware.com/blog/rss", weight: 0.9}
-  - {slug: m-agile-alliance, name: "Agile Alliance", category: engineering_blog, url: "https://agilealliance.org/feed/", weight: 0.7}
-  - {slug: m-atlassian-work-life, name: "Atlassian Work Life", category: engineering_blog, url: "https://www.atlassian.com/blog/feed", weight: 0.8}
-  - {slug: m-slack-blog, name: "Slack Blog", category: engineering_blog, url: "https://slack.com/blog/feed", weight: 0.6}
   - {slug: m-leaddev, name: "LeadDev", category: engineering_blog, url: "https://leaddev.com/feed", weight: 1.1}
   - {slug: m-thoughtworks-insights, name: "Thoughtworks Insights", category: engineering_blog, url: "https://www.thoughtworks.com/rss/insights.xml", weight: 0.9}
   - {slug: m-stripe-blog, name: "Stripe Blog", category: engineering_blog, url: "https://stripe.com/blog/feed.rss", weight: 0.8}
   - {slug: m-basecamp-37signals, name: "Basecamp / 37signals", category: engineering_blog, url: "https://world.hey.com/jason/feed.atom", weight: 1.0}
   - {slug: m-dhh, name: "DHH", category: engineering_blog, url: "https://world.hey.com/dhh/feed.atom", weight: 0.9}
   - {slug: m-buffer-open, name: "Buffer Open", category: engineering_blog, url: "https://buffer.com/resources/feed/", weight: 0.7}
-  - {slug: m-hubspot-blog, name: "HubSpot Blog", category: engineering_blog, url: "https://blog.hubspot.com/rss.xml", weight: 0.6}
-  - {slug: m-gusto-blog, name: "Gusto Blog", category: engineering_blog, url: "https://gusto.com/resources/feed", weight: 0.5}
-  - {slug: m-lattice-blog, name: "Lattice Blog", category: engineering_blog, url: "https://lattice.com/blog/rss.xml", weight: 0.7}
-  - {slug: m-culture-amp-blog, name: "Culture Amp Blog", category: engineering_blog, url: "https://www.cultureamp.com/blog/rss.xml", weight: 0.7}
   - {slug: m-gallup-workplace, name: "Gallup Workplace", category: engineering_blog, url: "https://news.gallup.com/topic/workplace.rss", weight: 0.9}
   - {slug: m-google-re-work, name: "Google re:Work", category: engineering_blog, url: "https://rework.withgoogle.com/blog/rss/", weight: 0.9}
   - {slug: m-netflix-tech-blog, name: "Netflix Tech Blog", category: engineering_blog, url: "https://netflixtechblog.com/feed", weight: 0.6}
@@ -127,12 +104,10 @@ sources:
   - {slug: m-medium-pub-the-mission, name: "Medium: The Mission", category: engineering_blog, url: "https://medium.com/feed/the-mission", weight: 0.7, config: {max_items: 10}}
   - {slug: m-medium-pub-startup-grind, name: "Medium: Startup Grind", category: engineering_blog, url: "https://medium.com/feed/startup-grind", weight: 0.7, config: {max_items: 10}}
   - {slug: m-medium-pub-the-year-of-the-looking-glass, name: "Medium: The Year of the Looking Glass (Julie Zhuo)", category: engineering_blog, url: "https://medium.com/feed/the-year-of-the-looking-glass", weight: 0.7, config: {max_items: 10}}
-  - {slug: m-medium-pub-product-coalition, name: "Medium: Product Coalition", category: engineering_blog, url: "https://medium.com/feed/product-coalition", weight: 0.7, config: {max_items: 10}}
   - {slug: m-medium-pub-better-humans, name: "Medium: Better Humans", category: engineering_blog, url: "https://medium.com/feed/better-humans", weight: 0.7, config: {max_items: 10}}
   - {slug: m-medium-pub-management-matters, name: "Medium: Management Matters", category: engineering_blog, url: "https://medium.com/feed/management-matters", weight: 0.7, config: {max_items: 10}}
   - {slug: m-medium-pub-leadership-lab, name: "Medium: Leadership Lab", category: engineering_blog, url: "https://medium.com/feed/leadership-lab", weight: 0.7, config: {max_items: 10}}
   - {slug: m-medium-pub-the-ascent, name: "Medium: The Ascent", category: engineering_blog, url: "https://medium.com/feed/the-ascent", weight: 0.7, config: {max_items: 10}}
-  - {slug: m-medium-pub-entrepreneurs-handbook, name: "Medium: Entrepreneur's Handbook", category: engineering_blog, url: "https://medium.com/feed/entrepreneurs-handbook", weight: 0.7, config: {max_items: 10}}
 
   # ------------------------------------------------------------------ leaders and thinkers (personal sites)
   - {slug: m-paul-graham-essays, name: "Paul Graham Essays", category: researcher, url: "http://www.aaronsw.com/2002/feeds/pgessays.rss", weight: 1.4}
@@ -147,7 +122,6 @@ sources:
   - {slug: m-martin-fowler, name: "Martin Fowler", category: researcher, url: "https://martinfowler.com/feed.atom", weight: 1.0}
   - {slug: m-joel-on-software, name: "Joel on Software", category: researcher, url: "https://www.joelonsoftware.com/feed/", weight: 0.9}
   - {slug: m-coding-horror, name: "Coding Horror", category: researcher, url: "https://blog.codinghorror.com/rss/", weight: 0.7}
-  - {slug: m-fred-wilson-avc, name: "Fred Wilson (AVC)", category: researcher, url: "https://avc.com/feed/", weight: 1.0}
   - {slug: m-brad-feld, name: "Brad Feld", category: researcher, url: "https://feld.com/feed", weight: 0.9}
   - {slug: m-tomasz-tunguz, name: "Tomasz Tunguz", category: researcher, url: "https://tomtunguz.com/index.xml", weight: 1.1}
   - {slug: m-steve-blank, name: "Steve Blank", category: researcher, url: "https://steveblank.com/feed/", weight: 1.2}
@@ -158,17 +132,13 @@ sources:
   - {slug: m-andrew-chen, name: "Andrew Chen", category: researcher, url: "https://andrewchen.com/feed/", weight: 1.0}
   - {slug: m-both-sides-of-the-table-mark-suster, name: "Both Sides of the Table (Mark Suster)", category: researcher, url: "https://bothsidesofthetable.com/feed", weight: 0.9}
   - {slug: m-above-the-crowd-bill-gurley, name: "Above the Crowd (Bill Gurley)", category: researcher, url: "https://abovethecrowd.com/feed/", weight: 1.1}
-  - {slug: m-ben-horowitz-a16z, name: "Ben Horowitz (a16z)", category: researcher, url: "https://a16z.com/author/ben-horowitz/feed/", weight: 1.1}
   - {slug: m-jason-cohen-a-smart-bear, name: "Jason Cohen (A Smart Bear)", category: researcher, url: "https://longform.asmartbear.com/index.xml", weight: 1.2}
   - {slug: m-kellan-elliott-mccrea, name: "Kellan Elliott-McCrea", category: researcher, url: "https://laughingmeme.org/feed.xml", weight: 0.9}
   - {slug: m-julia-evans, name: "Julia Evans", category: researcher, url: "https://jvns.ca/atom.xml", weight: 0.6}
   - {slug: m-dan-luu, name: "Dan Luu", category: researcher, url: "https://danluu.com/atom.xml", weight: 0.9}
   - {slug: m-gergely-orosz-blog, name: "Gergely Orosz (blog)", category: researcher, url: "https://blog.pragmaticengineer.com/rss/", weight: 1.2}
   - {slug: m-james-stanier-the-engineering-manager, name: "James Stanier (The Engineering Manager)", category: researcher, url: "https://www.theengineeringmanager.com/feed/", weight: 1.2}
-  - {slug: m-pat-kua, name: "Pat Kua", category: researcher, url: "https://www.patkua.com/feed/", weight: 0.9}
-  - {slug: m-michael-lopp-podcast-notes, name: "Michael Lopp podcast notes", category: researcher, url: "https://randsinrepose.com/category/management/feed/", weight: 1.0}
   - {slug: m-aswath-damodaran-musings-on-markets, name: "Aswath Damodaran (Musings on Markets)", category: researcher, url: "https://aswathdamodaran.blogspot.com/feeds/posts/default", weight: 1.2}
-  - {slug: m-howard-marks-memos, name: "Howard Marks memos", category: researcher, url: "https://www.oaktreecapital.com/insights/memos/rss", weight: 0.9}
   - {slug: m-scott-galloway-no-mercy-no-malice, name: "Scott Galloway (No Mercy / No Malice)", category: researcher, url: "https://www.profgalloway.com/feed/", weight: 1.0}
   - {slug: m-roger-martin-medium, name: "Roger Martin (Medium)", category: researcher, url: "https://rogermartin.medium.com/feed", weight: 1.3}
   - {slug: m-ethan-mollick-one-useful-thing, name: "Ethan Mollick (One Useful Thing)", category: researcher, url: "https://www.oneusefulthing.org/feed", weight: 1.1}
@@ -190,21 +160,15 @@ sources:
   - {slug: m-the-diff, name: "The Diff", category: newsletter, url: "https://www.thediff.co/archive/rss/", weight: 0.9}
   - {slug: m-platformer, name: "Platformer", category: newsletter, url: "https://www.platformer.news/rss/", weight: 0.6}
   - {slug: m-high-growth-engineer, name: "High Growth Engineer", category: newsletter, url: "https://read.highgrowthengineer.com/feed", weight: 1.0}
-  - {slug: m-leading-developers, name: "Leading Developers", category: newsletter, url: "https://leadingdevelopers.substack.com/feed", weight: 0.9}
   - {slug: m-the-looking-glass-julie-zhuo, name: "The Looking Glass (Julie Zhuo)", category: newsletter, url: "https://lg.substack.com/feed", weight: 1.2}
   - {slug: m-wes-kao, name: "Wes Kao", category: newsletter, url: "https://newsletter.weskao.com/feed", weight: 1.2}
   - {slug: m-elena-verna-growth-scoop, name: "Elena Verna (Growth Scoop)", category: newsletter, url: "https://www.elenaverna.com/feed", weight: 1.0}
-  - {slug: m-kyle-poyar-growth-unhinged, name: "Kyle Poyar (Growth Unhinged)", category: newsletter, url: "https://www.growthunhinged.com/feed", weight: 1.0}
-  - {slug: m-department-of-product, name: "Department of Product", category: newsletter, url: "https://www.departmentofproduct.com/feed", weight: 0.9}
   - {slug: m-product-growth-aakash-gupta, name: "Product Growth (Aakash Gupta)", category: newsletter, url: "https://www.news.aakashg.com/feed", weight: 0.9}
-  - {slug: m-the-hustle, name: "The Hustle", category: newsletter, url: "https://thehustle.co/feed/", weight: 0.6}
   - {slug: m-cb-insights-research, name: "CB Insights Research", category: newsletter, url: "https://www.cbinsights.com/research/feed/", weight: 0.9}
-  - {slug: m-byrne-hobart-capital-gains, name: "Byrne Hobart / Capital Gains", category: newsletter, url: "https://capitalgains.thediff.co/feed", weight: 0.8}
   - {slug: m-net-interest, name: "Net Interest", category: newsletter, url: "https://www.netinterest.co/feed", weight: 0.8}
   - {slug: m-noahpinion, name: "Noahpinion", category: newsletter, url: "https://www.noahpinion.blog/feed", weight: 0.7}
   - {slug: m-slow-boring, name: "Slow Boring", category: newsletter, url: "https://www.slowboring.com/feed", weight: 0.4}
   - {slug: m-money-stuff-mirror-matt-levine, name: "Money Stuff mirror (Matt Levine)", category: newsletter, url: "https://www.bloomberg.com/opinion/authors/ARbTQlRLRjE/matthew-s-levine.rss", weight: 1.0}
-  - {slug: m-software-lead-weekly, name: "Software Lead Weekly", category: newsletter, url: "https://softwareleadweekly.com/issues/feed/", weight: 1.2}
   - {slug: m-the-review-mckinsey-quarterly, name: "The Review (McKinsey Quarterly)", category: newsletter, url: "https://www.mckinsey.com/quarterly/rss", weight: 1.0}
   - {slug: m-ask-a-manager, name: "Ask a Manager", category: newsletter, url: "https://www.askamanager.org/feed", weight: 1.1}
 
@@ -221,14 +185,11 @@ sources:
   - {slug: m-the-indicator, name: "The Indicator", category: newsletter, url: "https://feeds.npr.org/510325/podcast.xml", weight: 0.7, config: {max_items: 8}}
   - {slug: m-freakonomics-radio, name: "Freakonomics Radio", category: newsletter, url: "https://feeds.simplecast.com/Y8lFbOT4", weight: 0.8, config: {max_items: 8}}
   - {slug: m-coaching-for-leaders, name: "Coaching for Leaders", category: newsletter, url: "https://coachingforleaders.com/feed/podcast/", weight: 1.2, config: {max_items: 8}}
-  - {slug: m-manager-tools, name: "Manager Tools", category: newsletter, url: "https://www.manager-tools.com/podcasts/feed/rss.xml", weight: 1.2, config: {max_items: 8}}
   - {slug: m-the-tim-ferriss-show, name: "The Tim Ferriss Show", category: newsletter, url: "https://rss.art19.com/tim-ferriss-show", weight: 0.7, config: {max_items: 8}}
   - {slug: m-the-twenty-minute-vc, name: "The Twenty Minute VC", category: newsletter, url: "https://thetwentyminutevc.libsyn.com/rss", weight: 0.9, config: {max_items: 8}}
   - {slug: m-worklife-with-adam-grant, name: "WorkLife with Adam Grant", category: newsletter, url: "https://feeds.feedburner.com/WorklifeWithAdamGrant", weight: 1.0, config: {max_items: 8}}
   - {slug: m-dare-to-lead-brene-brown, name: "Dare to Lead (Brene Brown)", category: newsletter, url: "https://feeds.megaphone.fm/GLT1412515089", weight: 0.8, config: {max_items: 8}}
-  - {slug: m-at-the-table-patrick-lencioni, name: "At the Table (Patrick Lencioni)", category: newsletter, url: "https://feeds.buzzsprout.com/509254.rss", weight: 1.0, config: {max_items: 8}}
   - {slug: m-the-look-and-sound-of-leadership, name: "The Look and Sound of Leadership", category: newsletter, url: "https://feeds.feedburner.com/TheLookSoundOfLeadership", weight: 0.9, config: {max_items: 8}}
-  - {slug: m-think-fast-talk-smart-stanford-gsb, name: "Think Fast, Talk Smart (Stanford GSB)", category: newsletter, url: "https://feeds.megaphone.fm/thinkfasttalksmart", weight: 1.1, config: {max_items: 8}}
 
   # ------------------------------------------------------------------ YouTube channels (video titles and descriptions)
   - {slug: m-yt-y-combinator, name: "YouTube: Y Combinator", category: newsletter, url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCcefcZRL2oaA_uBNeo5UOWg", weight: 1.3, config: {max_items: 8}}
@@ -250,63 +211,6 @@ sources:
   - {slug: m-yt-lex-fridman, name: "YouTube: Lex Fridman", category: newsletter, url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA", weight: 0.6, config: {max_items: 8}}
 
   # ------------------------------------------------------------------ communities: Stack Exchange (questions managers actually ask)
-  - {slug: m-project-management-stack-exchange, name: "Project Management Stack Exchange", category: community, url: "https://pm.stackexchange.com/feeds", weight: 0.9, config: {max_items: 15}}
-  - {slug: m-the-workplace-stack-exchange, name: "The Workplace Stack Exchange", category: community, url: "https://workplace.stackexchange.com/feeds", weight: 0.8, config: {max_items: 15}}
-  - {slug: m-software-engineering-stack-exchange, name: "Software Engineering Stack Exchange", category: community, url: "https://softwareengineering.stackexchange.com/feeds", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-se-pm-agile, name: "PM.SE: agile", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=agile&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-scrum, name: "PM.SE: scrum", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=scrum&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-kanban, name: "PM.SE: kanban", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=kanban&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-risk-management, name: "PM.SE: risk-management", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=risk-management&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-stakeholders, name: "PM.SE: stakeholders", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=stakeholders&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-estimation, name: "PM.SE: estimation", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=estimation&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-planning, name: "PM.SE: planning", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=planning&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-scope, name: "PM.SE: scope", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=scope&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-schedule, name: "PM.SE: schedule", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=schedule&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-budget, name: "PM.SE: budget", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=budget&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-team-management, name: "PM.SE: team-management", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=team-management&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-communication, name: "PM.SE: communication", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=communication&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-leadership, name: "PM.SE: leadership", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=leadership&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-requirements, name: "PM.SE: requirements", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=requirements&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-pmo, name: "PM.SE: pmo", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=pmo&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-waterfall, name: "PM.SE: waterfall", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=waterfall&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-change-management, name: "PM.SE: change-management", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=change-management&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-resource-management, name: "PM.SE: resource-management", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=resource-management&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-reporting, name: "PM.SE: reporting", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=reporting&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-product-owner, name: "PM.SE: product-owner", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=product-owner&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-sprint, name: "PM.SE: sprint", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=sprint&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-backlog, name: "PM.SE: backlog", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=backlog&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-velocity, name: "PM.SE: velocity", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=velocity&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-kpi, name: "PM.SE: kpi", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=kpi&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-quality, name: "PM.SE: quality", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=quality&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-contracts, name: "PM.SE: contracts", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=contracts&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-procurement, name: "PM.SE: procurement", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=procurement&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-portfolio-management, name: "PM.SE: portfolio-management", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=portfolio-management&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-pm-program-management, name: "PM.SE: program-management", category: community, url: "https://pm.stackexchange.com/feeds/tag?tagnames=program-management&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-management, name: "Workplace.SE: management", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=management&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-team, name: "Workplace.SE: team", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=team&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-leadership, name: "Workplace.SE: leadership", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=leadership&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-hiring-process, name: "Workplace.SE: hiring-process", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=hiring-process&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-interviewing, name: "Workplace.SE: interviewing", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=interviewing&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-performance-reviews, name: "Workplace.SE: performance-reviews", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=performance-reviews&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-feedback, name: "Workplace.SE: feedback", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=feedback&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-communication, name: "Workplace.SE: communication", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=communication&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-conflict, name: "Workplace.SE: conflict", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=conflict&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-promotion, name: "Workplace.SE: promotion", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=promotion&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-salary, name: "Workplace.SE: salary", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=salary&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-negotiation, name: "Workplace.SE: negotiation", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=negotiation&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-new-job, name: "Workplace.SE: new-job", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=new-job&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-career-development, name: "Workplace.SE: career-development", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=career-development&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-company-culture, name: "Workplace.SE: company-culture", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=company-culture&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-meetings, name: "Workplace.SE: meetings", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=meetings&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-remote-work, name: "Workplace.SE: remote-work", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=remote-work&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-startup, name: "Workplace.SE: startup", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=startup&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-termination, name: "Workplace.SE: termination", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=termination&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-resignation, name: "Workplace.SE: resignation", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=resignation&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-mentoring, name: "Workplace.SE: mentoring", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=mentoring&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-delegation, name: "Workplace.SE: delegation", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=delegation&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-burnout, name: "Workplace.SE: burnout", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=burnout&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-team-building, name: "Workplace.SE: team-building", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=team-building&sort=newest", weight: 0.6, config: {max_items: 8}}
-  - {slug: m-se-workplace-ethics, name: "Workplace.SE: ethics", category: community, url: "https://workplace.stackexchange.com/feeds/tag?tagnames=ethics&sort=newest", weight: 0.6, config: {max_items: 8}}
 
   # ------------------------------------------------------------------ communities: Hacker News discussions (official Algolia search API)
   - {slug: m-hn-engineering-manager, name: "Hacker News - engineering manager", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "engineering manager", min_points: 30, max_items: 15}}
@@ -426,6 +330,168 @@ sources:
   - {slug: m-hn-recession, name: "Hacker News - recession", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "recession", min_points: 30, max_items: 15}}
   - {slug: m-hn-antitrust, name: "Hacker News - antitrust", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "antitrust", min_points: 30, max_items: 15}}
   - {slug: m-hn-regulation, name: "Hacker News - regulation", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "regulation", min_points: 30, max_items: 15}}
+  - {slug: m-hn-1-1, name: "Hacker News - 1:1", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "1:1", min_points: 30, max_items: 15}}
+  - {slug: m-hn-accountability, name: "Hacker News - accountability", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "accountability", min_points: 30, max_items: 15}}
+  - {slug: m-hn-all-hands, name: "Hacker News - all-hands", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "all-hands", min_points: 30, max_items: 15}}
+  - {slug: m-hn-annual-planning, name: "Hacker News - annual planning", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "annual planning", min_points: 30, max_items: 15}}
+  - {slug: m-hn-arr, name: "Hacker News - ARR", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "ARR", min_points: 30, max_items: 15}}
+  - {slug: m-hn-attrition, name: "Hacker News - attrition", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "attrition", min_points: 30, max_items: 15}}
+  - {slug: m-hn-autonomy, name: "Hacker News - autonomy", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "autonomy", min_points: 30, max_items: 15}}
+  - {slug: m-hn-b2c, name: "Hacker News - B2C", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "B2C", min_points: 30, max_items: 15}}
+  - {slug: m-hn-backlog, name: "Hacker News - backlog", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "backlog", min_points: 30, max_items: 15}}
+  - {slug: m-hn-balance-sheet, name: "Hacker News - balance sheet", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "balance sheet", min_points: 30, max_items: 15}}
+  - {slug: m-hn-benchmarking, name: "Hacker News - benchmarking", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "benchmarking", min_points: 30, max_items: 15}}
+  - {slug: m-hn-best-practices, name: "Hacker News - best practices", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "best practices", min_points: 30, max_items: 15}}
+  - {slug: m-hn-board-deck, name: "Hacker News - board deck", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "board deck", min_points: 30, max_items: 15}}
+  - {slug: m-hn-brand, name: "Hacker News - brand", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "brand", min_points: 30, max_items: 15}}
+  - {slug: m-hn-budgeting, name: "Hacker News - budgeting", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "budgeting", min_points: 30, max_items: 15}}
+  - {slug: m-hn-business-plan, name: "Hacker News - business plan", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "business plan", min_points: 30, max_items: 15}}
+  - {slug: m-hn-business-strategy, name: "Hacker News - business strategy", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "business strategy", min_points: 30, max_items: 15}}
+  - {slug: m-hn-burn-rate, name: "Hacker News - burn rate", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "burn rate", min_points: 30, max_items: 15}}
+  - {slug: m-hn-capital-allocation, name: "Hacker News - capital allocation", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "capital allocation", min_points: 30, max_items: 15}}
+  - {slug: m-hn-career-growth, name: "Hacker News - career growth", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "career growth", min_points: 30, max_items: 15}}
+  - {slug: m-hn-ceo-letter, name: "Hacker News - CEO letter", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "CEO letter", min_points: 30, max_items: 15}}
+  - {slug: m-hn-change-management, name: "Hacker News - change management", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "change management", min_points: 30, max_items: 15}}
+  - {slug: m-hn-chief-of-staff, name: "Hacker News - chief of staff", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "chief of staff", min_points: 30, max_items: 15}}
+  - {slug: m-hn-code-review-culture, name: "Hacker News - code review culture", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "code review culture", min_points: 30, max_items: 15}}
+  - {slug: m-hn-cofounder, name: "Hacker News - cofounder", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "cofounder", min_points: 30, max_items: 15}}
+  - {slug: m-hn-cohort-analysis, name: "Hacker News - cohort analysis", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "cohort analysis", min_points: 30, max_items: 15}}
+  - {slug: m-hn-competition, name: "Hacker News - competition", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "competition", min_points: 30, max_items: 15}}
+  - {slug: m-hn-conflict, name: "Hacker News - conflict", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "conflict", min_points: 30, max_items: 15}}
+  - {slug: m-hn-contract, name: "Hacker News - contract", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "contract", min_points: 30, max_items: 15}}
+  - {slug: m-hn-cost-cutting, name: "Hacker News - cost cutting", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "cost cutting", min_points: 30, max_items: 15}}
+  - {slug: m-hn-cost-of-capital, name: "Hacker News - cost of capital", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "cost of capital", min_points: 30, max_items: 15}}
+  - {slug: m-hn-crm, name: "Hacker News - CRM", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "CRM", min_points: 30, max_items: 15}}
+  - {slug: m-hn-cross-functional, name: "Hacker News - cross-functional", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "cross-functional", min_points: 30, max_items: 15}}
+  - {slug: m-hn-customer-acquisition, name: "Hacker News - customer acquisition", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "customer acquisition", min_points: 30, max_items: 15}}
+  - {slug: m-hn-customer-discovery, name: "Hacker News - customer discovery", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "customer discovery", min_points: 30, max_items: 15}}
+  - {slug: m-hn-customer-retention, name: "Hacker News - customer retention", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "customer retention", min_points: 30, max_items: 15}}
+  - {slug: m-hn-dashboard, name: "Hacker News - dashboard", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "dashboard", min_points: 30, max_items: 15}}
+  - {slug: m-hn-data-driven, name: "Hacker News - data-driven", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "data-driven", min_points: 30, max_items: 15}}
+  - {slug: m-hn-debt-financing, name: "Hacker News - debt financing", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "debt financing", min_points: 30, max_items: 15}}
+  - {slug: m-hn-decision-log, name: "Hacker News - decision log", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "decision log", min_points: 30, max_items: 15}}
+  - {slug: m-hn-demand-generation, name: "Hacker News - demand generation", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "demand generation", min_points: 30, max_items: 15}}
+  - {slug: m-hn-design-doc, name: "Hacker News - design doc", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "design doc", min_points: 30, max_items: 15}}
+  - {slug: m-hn-developer-productivity, name: "Hacker News - developer productivity", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "developer productivity", min_points: 30, max_items: 15}}
+  - {slug: m-hn-disruption, name: "Hacker News - disruption", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "disruption", min_points: 30, max_items: 15}}
+  - {slug: m-hn-diversity, name: "Hacker News - diversity", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "diversity", min_points: 30, max_items: 15}}
+  - {slug: m-hn-due-diligence, name: "Hacker News - due diligence", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "due diligence", min_points: 30, max_items: 15}}
+  - {slug: m-hn-ebitda, name: "Hacker News - EBITDA", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "EBITDA", min_points: 30, max_items: 15}}
+  - {slug: m-hn-economies-of-scale, name: "Hacker News - economies of scale", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "economies of scale", min_points: 30, max_items: 15}}
+  - {slug: m-hn-employee-engagement, name: "Hacker News - employee engagement", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "employee engagement", min_points: 30, max_items: 15}}
+  - {slug: m-hn-employee-retention, name: "Hacker News - employee retention", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "employee retention", min_points: 30, max_items: 15}}
+  - {slug: m-hn-engineering-culture, name: "Hacker News - engineering culture", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "engineering culture", min_points: 30, max_items: 15}}
+  - {slug: m-hn-engineering-metrics, name: "Hacker News - engineering metrics", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "engineering metrics", min_points: 30, max_items: 15}}
+  - {slug: m-hn-enterprise, name: "Hacker News - enterprise", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "enterprise", min_points: 30, max_items: 15}}
+  - {slug: m-hn-entrepreneurship, name: "Hacker News - entrepreneurship", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "entrepreneurship", min_points: 30, max_items: 15}}
+  - {slug: m-hn-esg, name: "Hacker News - ESG", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "ESG", min_points: 30, max_items: 15}}
+  - {slug: m-hn-exit, name: "Hacker News - exit", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "exit", min_points: 30, max_items: 15}}
+  - {slug: m-hn-expansion, name: "Hacker News - expansion", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "expansion", min_points: 30, max_items: 15}}
+  - {slug: m-hn-feature-flags, name: "Hacker News - feature flags", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "feature flags", min_points: 30, max_items: 15}}
+  - {slug: m-hn-financial-model, name: "Hacker News - financial model", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "financial model", min_points: 30, max_items: 15}}
+  - {slug: m-hn-first-time-manager, name: "Hacker News - first-time manager", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "first-time manager", min_points: 30, max_items: 15}}
+  - {slug: m-hn-flat-organization, name: "Hacker News - flat organization", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "flat organization", min_points: 30, max_items: 15}}
+  - {slug: m-hn-founder-mode, name: "Hacker News - founder mode", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "founder mode", min_points: 30, max_items: 15}}
+  - {slug: m-hn-freemium, name: "Hacker News - freemium", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "freemium", min_points: 30, max_items: 15}}
+  - {slug: m-hn-fundraise, name: "Hacker News - fundraise", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "fundraise", min_points: 30, max_items: 15}}
+  - {slug: m-hn-gross-margin, name: "Hacker News - gross margin", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "gross margin", min_points: 30, max_items: 15}}
+  - {slug: m-hn-growth, name: "Hacker News - growth", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "growth", min_points: 30, max_items: 15}}
+  - {slug: m-hn-growth-hacking, name: "Hacker News - growth hacking", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "growth hacking", min_points: 30, max_items: 15}}
+  - {slug: m-hn-headcount, name: "Hacker News - headcount", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "headcount", min_points: 30, max_items: 15}}
+  - {slug: m-hn-high-performance, name: "Hacker News - high performance", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "high performance", min_points: 30, max_items: 15}}
+  - {slug: m-hn-holacracy, name: "Hacker News - holacracy", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "holacracy", min_points: 30, max_items: 15}}
+  - {slug: m-hn-hypergrowth, name: "Hacker News - hypergrowth", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "hypergrowth", min_points: 30, max_items: 15}}
+  - {slug: m-hn-incentives, name: "Hacker News - incentives", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "incentives", min_points: 30, max_items: 15}}
+  - {slug: m-hn-incident-response, name: "Hacker News - incident response", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "incident response", min_points: 30, max_items: 15}}
+  - {slug: m-hn-individual-contributor, name: "Hacker News - individual contributor", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "individual contributor", min_points: 30, max_items: 15}}
+  - {slug: m-hn-interview-process, name: "Hacker News - interview process", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "interview process", min_points: 30, max_items: 15}}
+  - {slug: m-hn-investor, name: "Hacker News - investor", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "investor", min_points: 30, max_items: 15}}
+  - {slug: m-hn-job-market, name: "Hacker News - job market", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "job market", min_points: 30, max_items: 15}}
+  - {slug: m-hn-key-results, name: "Hacker News - key results", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "key results", min_points: 30, max_items: 15}}
+  - {slug: m-hn-knowledge-management, name: "Hacker News - knowledge management", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "knowledge management", min_points: 30, max_items: 15}}
+  - {slug: m-hn-labor-market, name: "Hacker News - labor market", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "labor market", min_points: 30, max_items: 15}}
+  - {slug: m-hn-leadership-principles, name: "Hacker News - leadership principles", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "leadership principles", min_points: 30, max_items: 15}}
+  - {slug: m-hn-lean-startup, name: "Hacker News - lean startup", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "lean startup", min_points: 30, max_items: 15}}
+  - {slug: m-hn-ltv, name: "Hacker News - LTV", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "LTV", min_points: 30, max_items: 15}}
+  - {slug: m-hn-management-book, name: "Hacker News - management book", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "management book", min_points: 30, max_items: 15}}
+  - {slug: m-hn-management-style, name: "Hacker News - management style", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "management style", min_points: 30, max_items: 15}}
+  - {slug: m-hn-market-research, name: "Hacker News - market research", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "market research", min_points: 30, max_items: 15}}
+  - {slug: m-hn-market-share, name: "Hacker News - market share", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "market share", min_points: 30, max_items: 15}}
+  - {slug: m-hn-matrix-organization, name: "Hacker News - matrix organization", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "matrix organization", min_points: 30, max_items: 15}}
+  - {slug: m-hn-meeting-culture, name: "Hacker News - meeting culture", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "meeting culture", min_points: 30, max_items: 15}}
+  - {slug: m-hn-mergers, name: "Hacker News - mergers", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "mergers", min_points: 30, max_items: 15}}
+  - {slug: m-hn-metrics, name: "Hacker News - metrics", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "metrics", min_points: 30, max_items: 15}}
+  - {slug: m-hn-micromanagement, name: "Hacker News - micromanagement", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "micromanagement", min_points: 30, max_items: 15}}
+  - {slug: m-hn-mission-statement, name: "Hacker News - mission statement", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "mission statement", min_points: 30, max_items: 15}}
+  - {slug: m-hn-monetization, name: "Hacker News - monetization", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "monetization", min_points: 30, max_items: 15}}
+  - {slug: m-hn-morale, name: "Hacker News - morale", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "morale", min_points: 30, max_items: 15}}
+  - {slug: m-hn-motivation, name: "Hacker News - motivation", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "motivation", min_points: 30, max_items: 15}}
+  - {slug: m-hn-mrr, name: "Hacker News - MRR", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "MRR", min_points: 30, max_items: 15}}
+  - {slug: m-hn-net-promoter-score, name: "Hacker News - net promoter score", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "net promoter score", min_points: 30, max_items: 15}}
+  - {slug: m-hn-offsite, name: "Hacker News - offsite", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "offsite", min_points: 30, max_items: 15}}
+  - {slug: m-hn-onboarding, name: "Hacker News - onboarding", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "onboarding", min_points: 30, max_items: 15}}
+  - {slug: m-hn-open-source-business, name: "Hacker News - open source business", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "open source business", min_points: 30, max_items: 15}}
+  - {slug: m-hn-operating-model, name: "Hacker News - operating model", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "operating model", min_points: 30, max_items: 15}}
+  - {slug: m-hn-operations, name: "Hacker News - operations", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "operations", min_points: 30, max_items: 15}}
+  - {slug: m-hn-org-design, name: "Hacker News - org design", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "org design", min_points: 30, max_items: 15}}
+  - {slug: m-hn-outcomes, name: "Hacker News - outcomes", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "outcomes", min_points: 30, max_items: 15}}
+  - {slug: m-hn-partnership, name: "Hacker News - partnership", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "partnership", min_points: 30, max_items: 15}}
+  - {slug: m-hn-payroll, name: "Hacker News - payroll", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "payroll", min_points: 30, max_items: 15}}
+  - {slug: m-hn-performance-management, name: "Hacker News - performance management", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "performance management", min_points: 30, max_items: 15}}
+  - {slug: m-hn-pivot, name: "Hacker News - pivot", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "pivot", min_points: 30, max_items: 15}}
+  - {slug: m-hn-planning, name: "Hacker News - planning", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "planning", min_points: 30, max_items: 15}}
+  - {slug: m-hn-platform-strategy, name: "Hacker News - platform strategy", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "platform strategy", min_points: 30, max_items: 15}}
+  - {slug: m-hn-positioning, name: "Hacker News - positioning", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "positioning", min_points: 30, max_items: 15}}
+  - {slug: m-hn-post-mortem, name: "Hacker News - post-mortem", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "post-mortem", min_points: 30, max_items: 15}}
+  - {slug: m-hn-pr-crisis, name: "Hacker News - PR crisis", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "PR crisis", min_points: 30, max_items: 15}}
+  - {slug: m-hn-private-equity, name: "Hacker News - private equity", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "private equity", min_points: 30, max_items: 15}}
+  - {slug: m-hn-process-improvement, name: "Hacker News - process improvement", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "process improvement", min_points: 30, max_items: 15}}
+  - {slug: m-hn-product-led-growth, name: "Hacker News - product led growth", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "product led growth", min_points: 30, max_items: 15}}
+  - {slug: m-hn-product-manager, name: "Hacker News - product manager", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "product manager", min_points: 30, max_items: 15}}
+  - {slug: m-hn-product-strategy, name: "Hacker News - product strategy", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "product strategy", min_points: 30, max_items: 15}}
+  - {slug: m-hn-profit-margin, name: "Hacker News - profit margin", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "profit margin", min_points: 30, max_items: 15}}
+  - {slug: m-hn-psychological-safety, name: "Hacker News - psychological safety", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "psychological safety", min_points: 30, max_items: 15}}
+  - {slug: m-hn-public-company, name: "Hacker News - public company", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "public company", min_points: 30, max_items: 15}}
+  - {slug: m-hn-quarterly-planning, name: "Hacker News - quarterly planning", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "quarterly planning", min_points: 30, max_items: 15}}
+  - {slug: m-hn-recruiting, name: "Hacker News - recruiting", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "recruiting", min_points: 30, max_items: 15}}
+  - {slug: m-hn-remote-team, name: "Hacker News - remote team", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "remote team", min_points: 30, max_items: 15}}
+  - {slug: m-hn-reorganization, name: "Hacker News - reorganization", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "reorganization", min_points: 30, max_items: 15}}
+  - {slug: m-hn-resignation, name: "Hacker News - resignation", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "resignation", min_points: 30, max_items: 15}}
+  - {slug: m-hn-return-on-investment, name: "Hacker News - return on investment", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "return on investment", min_points: 30, max_items: 15}}
+  - {slug: m-hn-revenue-growth, name: "Hacker News - revenue growth", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "revenue growth", min_points: 30, max_items: 15}}
+  - {slug: m-hn-rfc, name: "Hacker News - RFC", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "RFC", min_points: 30, max_items: 15}}
+  - {slug: m-hn-risk, name: "Hacker News - risk", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "risk", min_points: 30, max_items: 15}}
+  - {slug: m-hn-runway, name: "Hacker News - runway", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "runway", min_points: 30, max_items: 15}}
+  - {slug: m-hn-saas, name: "Hacker News - SaaS", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "SaaS", min_points: 30, max_items: 15}}
+  - {slug: m-hn-salary, name: "Hacker News - salary", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "salary", min_points: 30, max_items: 15}}
+  - {slug: m-hn-seed-round, name: "Hacker News - seed round", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "seed round", min_points: 30, max_items: 15}}
+  - {slug: m-hn-series-a, name: "Hacker News - series A", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "series A", min_points: 30, max_items: 15}}
+  - {slug: m-hn-shareholder, name: "Hacker News - shareholder", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "shareholder", min_points: 30, max_items: 15}}
+  - {slug: m-hn-shipping, name: "Hacker News - shipping", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "shipping", min_points: 30, max_items: 15}}
+  - {slug: m-hn-small-business, name: "Hacker News - small business", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "small business", min_points: 30, max_items: 15}}
+  - {slug: m-hn-soft-skills, name: "Hacker News - soft skills", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "soft skills", min_points: 30, max_items: 15}}
+  - {slug: m-hn-span-of-control, name: "Hacker News - span of control", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "span of control", min_points: 30, max_items: 15}}
+  - {slug: m-hn-spreadsheet, name: "Hacker News - spreadsheet", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "spreadsheet", min_points: 30, max_items: 15}}
+  - {slug: m-hn-stakeholder-management, name: "Hacker News - stakeholder management", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "stakeholder management", min_points: 30, max_items: 15}}
+  - {slug: m-hn-startup-failure, name: "Hacker News - startup failure", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "startup failure", min_points: 30, max_items: 15}}
+  - {slug: m-hn-stock-buyback, name: "Hacker News - stock buyback", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "stock buyback", min_points: 30, max_items: 15}}
+  - {slug: m-hn-strategy-memo, name: "Hacker News - strategy memo", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "strategy memo", min_points: 30, max_items: 15}}
+  - {slug: m-hn-succession, name: "Hacker News - succession", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "succession", min_points: 30, max_items: 15}}
+  - {slug: m-hn-sustainability, name: "Hacker News - sustainability", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "sustainability", min_points: 30, max_items: 15}}
+  - {slug: m-hn-team-lead, name: "Hacker News - team lead", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "team lead", min_points: 30, max_items: 15}}
+  - {slug: m-hn-team-topologies, name: "Hacker News - team topologies", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "team topologies", min_points: 30, max_items: 15}}
+  - {slug: m-hn-tech-lead, name: "Hacker News - tech lead", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "tech lead", min_points: 30, max_items: 15}}
+  - {slug: m-hn-time-management, name: "Hacker News - time management", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "time management", min_points: 30, max_items: 15}}
+  - {slug: m-hn-total-compensation, name: "Hacker News - total compensation", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "total compensation", min_points: 30, max_items: 15}}
+  - {slug: m-hn-transparency, name: "Hacker News - transparency", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "transparency", min_points: 30, max_items: 15}}
+  - {slug: m-hn-turnover, name: "Hacker News - turnover", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "turnover", min_points: 30, max_items: 15}}
+  - {slug: m-hn-unicorn, name: "Hacker News - unicorn", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "unicorn", min_points: 30, max_items: 15}}
+  - {slug: m-hn-unions, name: "Hacker News - unions", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "unions", min_points: 30, max_items: 15}}
+  - {slug: m-hn-upskilling, name: "Hacker News - upskilling", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "upskilling", min_points: 30, max_items: 15}}
+  - {slug: m-hn-values, name: "Hacker News - values", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "values", min_points: 30, max_items: 15}}
+  - {slug: m-hn-vision, name: "Hacker News - vision", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "vision", min_points: 30, max_items: 15}}
+  - {slug: m-hn-work-life-balance, name: "Hacker News - work-life balance", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "work-life balance", min_points: 30, max_items: 15}}
+  - {slug: m-hn-workforce, name: "Hacker News - workforce", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 0.9, config: {query: "workforce", min_points: 30, max_items: 15}}
   - {slug: m-hn-ask-manager, name: "Ask HN - management and careers", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 1.0, config: {query: "manager", tags: ask_hn, min_points: 30}}
   - {slug: m-hn-ask-startup, name: "Ask HN - startups", category: community, kind: hackernews, url: "https://news.ycombinator.com", weight: 1.0, config: {query: "startup", tags: ask_hn, min_points: 30}}
 
@@ -453,6 +519,25 @@ sources:
   - {slug: m-dev-strategy, name: "DEV - strategy", category: community, url: "https://dev.to/feed/tag/strategy", weight: 0.5, config: {max_items: 8}}
   - {slug: m-dev-learning, name: "DEV - learning", category: community, url: "https://dev.to/feed/tag/learning", weight: 0.5, config: {max_items: 8}}
   - {slug: m-dev-writing, name: "DEV - writing", category: community, url: "https://dev.to/feed/tag/writing", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-engineeringmanagement, name: "DEV - engineeringmanagement", category: community, url: "https://dev.to/feed/tag/engineeringmanagement", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-techlead, name: "DEV - techlead", category: community, url: "https://dev.to/feed/tag/techlead", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-leadershipdevelopment, name: "DEV - leadershipdevelopment", category: community, url: "https://dev.to/feed/tag/leadershipdevelopment", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-saas, name: "DEV - saas", category: community, url: "https://dev.to/feed/tag/saas", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-growth, name: "DEV - growth", category: community, url: "https://dev.to/feed/tag/growth", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-marketing, name: "DEV - marketing", category: community, url: "https://dev.to/feed/tag/marketing", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-sales, name: "DEV - sales", category: community, url: "https://dev.to/feed/tag/sales", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-finance, name: "DEV - finance", category: community, url: "https://dev.to/feed/tag/finance", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-founder, name: "DEV - founder", category: community, url: "https://dev.to/feed/tag/founder", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-mentoring, name: "DEV - mentoring", category: community, url: "https://dev.to/feed/tag/mentoring", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-burnout, name: "DEV - burnout", category: community, url: "https://dev.to/feed/tag/burnout", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-worklifebalance, name: "DEV - worklifebalance", category: community, url: "https://dev.to/feed/tag/worklifebalance", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-onboarding, name: "DEV - onboarding", category: community, url: "https://dev.to/feed/tag/onboarding", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-okr, name: "DEV - okr", category: community, url: "https://dev.to/feed/tag/okr", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-kanban, name: "DEV - kanban", category: community, url: "https://dev.to/feed/tag/kanban", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-lean, name: "DEV - lean", category: community, url: "https://dev.to/feed/tag/lean", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-decisionmaking, name: "DEV - decisionmaking", category: community, url: "https://dev.to/feed/tag/decisionmaking", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-negotiation, name: "DEV - negotiation", category: community, url: "https://dev.to/feed/tag/negotiation", weight: 0.5, config: {max_items: 8}}
+  - {slug: m-dev-publicspeaking, name: "DEV - publicspeaking", category: community, url: "https://dev.to/feed/tag/publicspeaking", weight: 0.5, config: {max_items: 8}}
 
   # ------------------------------------------------------------------ communities: Medium tags
   - {slug: m-medium-tag-leadership, name: "Medium tag - leadership", category: community, url: "https://medium.com/feed/tag/leadership", weight: 0.5, config: {max_items: 10}}
@@ -464,96 +549,34 @@ sources:
   - {slug: m-medium-tag-product-management, name: "Medium tag - product-management", category: community, url: "https://medium.com/feed/tag/product-management", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-project-management, name: "Medium tag - project-management", category: community, url: "https://medium.com/feed/tag/project-management", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-agile, name: "Medium tag - agile", category: community, url: "https://medium.com/feed/tag/agile", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-scrum, name: "Medium tag - scrum", category: community, url: "https://medium.com/feed/tag/scrum", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-okr, name: "Medium tag - okr", category: community, url: "https://medium.com/feed/tag/okr", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-kpi, name: "Medium tag - kpi", category: community, url: "https://medium.com/feed/tag/kpi", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-executive-coaching, name: "Medium tag - executive-coaching", category: community, url: "https://medium.com/feed/tag/executive-coaching", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-leadership-development, name: "Medium tag - leadership-development", category: community, url: "https://medium.com/feed/tag/leadership-development", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-organizational-culture, name: "Medium tag - organizational-culture", category: community, url: "https://medium.com/feed/tag/organizational-culture", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-company-culture, name: "Medium tag - company-culture", category: community, url: "https://medium.com/feed/tag/company-culture", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-hiring, name: "Medium tag - hiring", category: community, url: "https://medium.com/feed/tag/hiring", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-recruiting, name: "Medium tag - recruiting", category: community, url: "https://medium.com/feed/tag/recruiting", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-human-resources, name: "Medium tag - human-resources", category: community, url: "https://medium.com/feed/tag/human-resources", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-people-management, name: "Medium tag - people-management", category: community, url: "https://medium.com/feed/tag/people-management", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-team-building, name: "Medium tag - team-building", category: community, url: "https://medium.com/feed/tag/team-building", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-teamwork, name: "Medium tag - teamwork", category: community, url: "https://medium.com/feed/tag/teamwork", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-remote-work, name: "Medium tag - remote-work", category: community, url: "https://medium.com/feed/tag/remote-work", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-future-of-work, name: "Medium tag - future-of-work", category: community, url: "https://medium.com/feed/tag/future-of-work", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-productivity, name: "Medium tag - productivity", category: community, url: "https://medium.com/feed/tag/productivity", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-decision-making, name: "Medium tag - decision-making", category: community, url: "https://medium.com/feed/tag/decision-making", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-negotiation, name: "Medium tag - negotiation", category: community, url: "https://medium.com/feed/tag/negotiation", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-communication, name: "Medium tag - communication", category: community, url: "https://medium.com/feed/tag/communication", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-public-speaking, name: "Medium tag - public-speaking", category: community, url: "https://medium.com/feed/tag/public-speaking", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-storytelling, name: "Medium tag - storytelling", category: community, url: "https://medium.com/feed/tag/storytelling", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-business-strategy, name: "Medium tag - business-strategy", category: community, url: "https://medium.com/feed/tag/business-strategy", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-corporate-strategy, name: "Medium tag - corporate-strategy", category: community, url: "https://medium.com/feed/tag/corporate-strategy", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-competitive-advantage, name: "Medium tag - competitive-advantage", category: community, url: "https://medium.com/feed/tag/competitive-advantage", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-innovation, name: "Medium tag - innovation", category: community, url: "https://medium.com/feed/tag/innovation", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-digital-transformation, name: "Medium tag - digital-transformation", category: community, url: "https://medium.com/feed/tag/digital-transformation", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-change-management, name: "Medium tag - change-management", category: community, url: "https://medium.com/feed/tag/change-management", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-operations, name: "Medium tag - operations", category: community, url: "https://medium.com/feed/tag/operations", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-supply-chain, name: "Medium tag - supply-chain", category: community, url: "https://medium.com/feed/tag/supply-chain", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-finance, name: "Medium tag - finance", category: community, url: "https://medium.com/feed/tag/finance", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-corporate-finance, name: "Medium tag - corporate-finance", category: community, url: "https://medium.com/feed/tag/corporate-finance", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-venture-capital, name: "Medium tag - venture-capital", category: community, url: "https://medium.com/feed/tag/venture-capital", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-fundraising, name: "Medium tag - fundraising", category: community, url: "https://medium.com/feed/tag/fundraising", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-investing, name: "Medium tag - investing", category: community, url: "https://medium.com/feed/tag/investing", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-economics, name: "Medium tag - economics", category: community, url: "https://medium.com/feed/tag/economics", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-accounting, name: "Medium tag - accounting", category: community, url: "https://medium.com/feed/tag/accounting", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-pricing, name: "Medium tag - pricing", category: community, url: "https://medium.com/feed/tag/pricing", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-sales, name: "Medium tag - sales", category: community, url: "https://medium.com/feed/tag/sales", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-marketing, name: "Medium tag - marketing", category: community, url: "https://medium.com/feed/tag/marketing", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-growth, name: "Medium tag - growth", category: community, url: "https://medium.com/feed/tag/growth", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-saas, name: "Medium tag - saas", category: community, url: "https://medium.com/feed/tag/saas", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-b2b, name: "Medium tag - b2b", category: community, url: "https://medium.com/feed/tag/b2b", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-customer-success, name: "Medium tag - customer-success", category: community, url: "https://medium.com/feed/tag/customer-success", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-customer-experience, name: "Medium tag - customer-experience", category: community, url: "https://medium.com/feed/tag/customer-experience", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-product-market-fit, name: "Medium tag - product-market-fit", category: community, url: "https://medium.com/feed/tag/product-market-fit", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-business-models, name: "Medium tag - business-models", category: community, url: "https://medium.com/feed/tag/business-models", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-mergers-and-acquisitions, name: "Medium tag - mergers-and-acquisitions", category: community, url: "https://medium.com/feed/tag/mergers-and-acquisitions", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-corporate-governance, name: "Medium tag - corporate-governance", category: community, url: "https://medium.com/feed/tag/corporate-governance", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-risk-management, name: "Medium tag - risk-management", category: community, url: "https://medium.com/feed/tag/risk-management", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-compliance, name: "Medium tag - compliance", category: community, url: "https://medium.com/feed/tag/compliance", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-ceo, name: "Medium tag - ceo", category: community, url: "https://medium.com/feed/tag/ceo", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-cto, name: "Medium tag - cto", category: community, url: "https://medium.com/feed/tag/cto", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-cfo, name: "Medium tag - cfo", category: community, url: "https://medium.com/feed/tag/cfo", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-coo, name: "Medium tag - coo", category: community, url: "https://medium.com/feed/tag/coo", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-founders, name: "Medium tag - founders", category: community, url: "https://medium.com/feed/tag/founders", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-scaling-startups, name: "Medium tag - scaling-startups", category: community, url: "https://medium.com/feed/tag/scaling-startups", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-engineering-management, name: "Medium tag - engineering-management", category: community, url: "https://medium.com/feed/tag/engineering-management", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-tech-leadership, name: "Medium tag - tech-leadership", category: community, url: "https://medium.com/feed/tag/tech-leadership", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-software-engineering-management, name: "Medium tag - software-engineering-management", category: community, url: "https://medium.com/feed/tag/software-engineering-management", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-performance-management, name: "Medium tag - performance-management", category: community, url: "https://medium.com/feed/tag/performance-management", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-feedback, name: "Medium tag - feedback", category: community, url: "https://medium.com/feed/tag/feedback", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-coaching, name: "Medium tag - coaching", category: community, url: "https://medium.com/feed/tag/coaching", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-mentoring, name: "Medium tag - mentoring", category: community, url: "https://medium.com/feed/tag/mentoring", weight: 0.5, config: {max_items: 10}}
   - {slug: m-medium-tag-career-development, name: "Medium tag - career-development", category: community, url: "https://medium.com/feed/tag/career-development", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-career-advice, name: "Medium tag - career-advice", category: community, url: "https://medium.com/feed/tag/career-advice", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-mba, name: "Medium tag - mba", category: community, url: "https://medium.com/feed/tag/mba", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-business-school, name: "Medium tag - business-school", category: community, url: "https://medium.com/feed/tag/business-school", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-consulting, name: "Medium tag - consulting", category: community, url: "https://medium.com/feed/tag/consulting", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-emotional-intelligence, name: "Medium tag - emotional-intelligence", category: community, url: "https://medium.com/feed/tag/emotional-intelligence", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-psychological-safety, name: "Medium tag - psychological-safety", category: community, url: "https://medium.com/feed/tag/psychological-safety", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-diversity-and-inclusion, name: "Medium tag - diversity-and-inclusion", category: community, url: "https://medium.com/feed/tag/diversity-and-inclusion", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-employee-engagement, name: "Medium tag - employee-engagement", category: community, url: "https://medium.com/feed/tag/employee-engagement", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-organizational-design, name: "Medium tag - organizational-design", category: community, url: "https://medium.com/feed/tag/organizational-design", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-lean-startup, name: "Medium tag - lean-startup", category: community, url: "https://medium.com/feed/tag/lean-startup", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-lean, name: "Medium tag - lean", category: community, url: "https://medium.com/feed/tag/lean", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-six-sigma, name: "Medium tag - six-sigma", category: community, url: "https://medium.com/feed/tag/six-sigma", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-kanban, name: "Medium tag - kanban", category: community, url: "https://medium.com/feed/tag/kanban", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-devops, name: "Medium tag - devops", category: community, url: "https://medium.com/feed/tag/devops", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-data-driven, name: "Medium tag - data-driven", category: community, url: "https://medium.com/feed/tag/data-driven", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-analytics, name: "Medium tag - analytics", category: community, url: "https://medium.com/feed/tag/analytics", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-metrics, name: "Medium tag - metrics", category: community, url: "https://medium.com/feed/tag/metrics", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-unit-economics, name: "Medium tag - unit-economics", category: community, url: "https://medium.com/feed/tag/unit-economics", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-board-of-directors, name: "Medium tag - board-of-directors", category: community, url: "https://medium.com/feed/tag/board-of-directors", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-investor-relations, name: "Medium tag - investor-relations", category: community, url: "https://medium.com/feed/tag/investor-relations", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-crisis-management, name: "Medium tag - crisis-management", category: community, url: "https://medium.com/feed/tag/crisis-management", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-sustainability, name: "Medium tag - sustainability", category: community, url: "https://medium.com/feed/tag/sustainability", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-esg, name: "Medium tag - esg", category: community, url: "https://medium.com/feed/tag/esg", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-ethics, name: "Medium tag - ethics", category: community, url: "https://medium.com/feed/tag/ethics", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-artificial-intelligence-strategy, name: "Medium tag - artificial-intelligence-strategy", category: community, url: "https://medium.com/feed/tag/artificial-intelligence-strategy", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-ai-in-business, name: "Medium tag - ai-in-business", category: community, url: "https://medium.com/feed/tag/ai-in-business", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-platform-strategy, name: "Medium tag - platform-strategy", category: community, url: "https://medium.com/feed/tag/platform-strategy", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-ecosystem, name: "Medium tag - ecosystem", category: community, url: "https://medium.com/feed/tag/ecosystem", weight: 0.5, config: {max_items: 10}}
-  - {slug: m-medium-tag-partnerships, name: "Medium tag - partnerships", category: community, url: "https://medium.com/feed/tag/partnerships", weight: 0.5, config: {max_items: 10}}

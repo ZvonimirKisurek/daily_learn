@@ -45,6 +45,7 @@ class PoliteClient:
         timeout: float = 20.0,
         max_retries: int = 4,
         min_interval: float = 1.0,
+        host_intervals: dict[str, float] | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
@@ -58,6 +59,7 @@ class PoliteClient:
         )
         self._max_retries = max_retries
         self._min_interval = min_interval
+        self._host_intervals = host_intervals or {}  # slower spacing for hosts that rate-limit (e.g. medium.com)
         self._sleep = sleep
         self._robots: dict[str, RobotFileParser | None] = {}  # None => disallow all (robots unreachable)
         self._robots_locks: dict[str, asyncio.Lock] = {}
@@ -69,7 +71,8 @@ class PoliteClient:
 
     async def _throttle(self, host: str) -> None:
         async with self._host_locks.setdefault(host, asyncio.Lock()):
-            wait = self._last_hit.get(host, 0.0) + self._min_interval - time.monotonic()
+            gap = next((v for h, v in self._host_intervals.items() if host == h or host.endswith("." + h)), self._min_interval)
+            wait = self._last_hit.get(host, 0.0) + gap - time.monotonic()
             if wait > 0:
                 await self._sleep(wait)
             self._last_hit[host] = time.monotonic()

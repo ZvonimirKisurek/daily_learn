@@ -47,7 +47,7 @@ async def fetch_all(
     own_client = client is None
     client = client or PoliteClient(
         settings.user_agent, timeout=settings.http_timeout, max_retries=settings.http_max_retries,
-        min_interval=settings.host_min_interval,
+        min_interval=settings.host_min_interval, host_intervals=settings.host_intervals,
     )
     sem = asyncio.Semaphore(settings.fetch_concurrency)
 
