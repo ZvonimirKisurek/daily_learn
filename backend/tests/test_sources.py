@@ -30,3 +30,15 @@ def test_urls_are_unique_https():
 def test_invalid_slug_rejected():
     with pytest.raises(ValueError):
         SourceSpec(slug="Bad Slug", name="x", category="research", url="https://x.test")
+
+
+def test_management_catalogue_is_valid_and_does_not_collide_with_the_ai_one():
+    from app.config import Settings
+    from app.ingestion.sources import load_all_sources
+
+    mgmt = load_sources("sources/management_sources.yaml")
+    assert len(mgmt) >= 500 and {s.track for s in mgmt} == {"management"} and all(s.slug.startswith("m-") for s in mgmt)
+    assert all(s.url.startswith(("https://", "http://")) for s in mgmt)
+    assert all(s.config.get("query") for s in mgmt if s.kind == "hackernews")
+    both = load_all_sources(Settings())
+    assert len(both) == len(SPECS) + len(mgmt) and {s.track for s in SPECS} == {"ai"}
