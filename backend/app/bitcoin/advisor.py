@@ -80,12 +80,9 @@ def latest_state() -> dict | None:
         return conn.execute("select * from bitcoin_bets order by created_at desc limit 1").fetchone()
 
 
-def advise(s: Settings, *, balance: float, strike: float, yes_ask: float, yes_bid: float | None, hours_to_settle: float | None,
-           reset: bool = False) -> dict:
-    """The daily check-in: settle the bankroll against the reported balance, then size today's bet."""
-    yes_bid = yes_ask if yes_bid is None else yes_bid
-    if yes_bid > yes_ask:
-        raise AdvisorError(422, "The YES bid (sell price) cannot be higher than the YES ask (buy price).")
+def advise(s: Settings, *, balance: float, strike: float | None = None, hours_to_settle: float | None = None, reset: bool = False) -> dict:
+    """The daily check-in: settle the bankroll against the reported balance, then say how much to bet and on which side.
+    The only required input is the balance. No strike means a plain up/down bet from the current price."""
     now = datetime.now(timezone.utc)
     settle_at = now + timedelta(hours=hours_to_settle) if hours_to_settle else next_settlement(s, now)
     hours = (settle_at - now).total_seconds() / 3600
@@ -100,22 +97,18 @@ def advise(s: Settings, *, balance: float, strike: float, yes_ask: float, yes_bi
 
     price = _spot(s)
     spot = float(price["price_usd"])
+    strike = round(spot, 2) if strike is None else strike
     model = _model(s, spot, strike, hours)
-    rec = betting.advise(model["p_yes"], yes_ask, yes_bid, active, p)
+    rec = betting.advise(model["p_yes"], model["calibrated_up_1d"] - 0.5, active, p)
 
     warnings = []
     if model["forecast_age_hours"] > STALE_FORECAST_HOURS:
         warnings.append(f"The forecast is {model['forecast_age_hours']:.0f} hours old. Press Refresh on the Bitcoin page and ask again for a current view.")
     if (now - price["fetched_at"]).total_seconds() > 900:
         warnings.append("The live price could not be fetched; the last stored price was used.")
-    if max(rec["edge_yes"], rec["edge_no"]) >= betting.SUSPICIOUS_EDGE:
-        warnings.append("The model and the market disagree by a lot. That is more often a typo or something the model cannot see than "
-                        "easy money: double-check the target price and the YES price before betting.")
-    if model["shrink"] == 0:
-        warnings.append("The forecast has not shown a directional edge recently, so any bet here rests only on volatility vs the strike.")
     detail = {
         **rec,
-        "inputs": {"balance": round(balance, 2), "strike": strike, "yes_ask": yes_ask, "yes_bid": yes_bid, "hours_to_settle": round(hours, 2),
+        "inputs": {"balance": round(balance, 2), "strike": strike, "hours_to_settle": round(hours, 2),
                    "settle_at": settle_at.isoformat()},
         "market": {"spot": spot, "spot_at": price["fetched_at"].isoformat()},
         "model": {k: (v.isoformat() if isinstance(v, datetime) else str(v) if k == "prediction_id" else v) for k, v in model.items()},
@@ -127,13 +120,14 @@ def advise(s: Settings, *, balance: float, strike: float, yes_ask: float, yes_bi
             """insert into bitcoin_bets (prediction_id, balance, active, vault, peak, swept, pnl, is_reset, action, detail)
                values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id, created_at""",
             (model["prediction_id"], round(balance, 2), active, vault, peak, swept, pnl, reset or prev is None, rec["action"], Jsonb(detail))).fetchone()
-    log.info("btc bet advice %s: %s shares=%s p_yes=%.3f ask=%.2f active=%.2f vault=%.2f", row["id"], rec["action"], rec["shares"],
-             model["p_yes"], yes_ask, active, vault)
+    log.info("btc bet advice %s: %s stake=%.2f p_yes=%.3f active=%.2f vault=%.2f", row["id"], rec["action"], rec["cost"],
+             model["p_yes"], active, vault)
     return {"id": row["id"], "created_at": row["created_at"], **detail}
 
 
-def check(s: Settings, *, sell_price: float) -> dict:
-    """Intra-day: with the market now paying `sell_price` per share you hold, sell or keep the latest recommended position?"""
+def check(s: Settings, *, sell_price: float, paid_price: float | None = None) -> dict:
+    """Intra-day: with the market now paying `sell_price` per share you hold, sell or keep the latest recommended position?
+    `paid_price` is what you actually paid per share; without it the recommendation's highest acceptable price is assumed."""
     last = latest_state()
     if last is None or last["action"] not in ("BUY_YES", "BUY_NO"):
         raise AdvisorError(409, "There is no open position: the latest recommendation was not a bet.")
@@ -146,7 +140,8 @@ def check(s: Settings, *, sell_price: float) -> dict:
     spot = float(_spot(s)["price_usd"])
     model = _model(s, spot, float(d["inputs"]["strike"]), hours)
     win = model["p_yes"] if last["action"] == "BUY_YES" else 1 - model["p_yes"]
-    out = betting.check_position(float(d["entry_price"]), sell_price, win, int(d["shares"]), params(s))
+    entry = paid_price or float(d["entry_price"])
+    out = betting.check_position(entry, sell_price, win, int(float(d["cost"]) / entry), params(s))
     return out | {"side": last["action"], "spot": spot, "hours_left": round(hours, 2), "strike": float(d["inputs"]["strike"])}
 
 
@@ -168,7 +163,7 @@ def overview(s: Settings, history: int = 14) -> dict:
             hours = (datetime.fromisoformat(d["inputs"]["settle_at"]) - now).total_seconds() / 3600
             spot = float(price["price_usd"])
             m = _model(s, spot, float(d["inputs"]["strike"]), hours)
-            rec = betting.advise(m["p_yes"], float(d["inputs"]["yes_ask"]), float(d["inputs"]["yes_bid"]), float(last["active"]), p)
+            rec = betting.advise(m["p_yes"], m["calibrated_up_1d"] - 0.5, float(last["active"]), p)
             live = {"spot": spot, "p_yes": m["p_yes"], "action": rec["action"], "changed": rec["action"] != last["action"], "hours_left": round(hours, 2)}
         except Exception:  # noqa: BLE001 - the live line is a convenience; never break the panel over it
             log.exception("bet advisor: live re-evaluation failed")

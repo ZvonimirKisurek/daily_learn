@@ -35,30 +35,30 @@ def test_calibration_shrinks_the_stated_edge_by_the_track_record(track, expect, 
 
 
 # ------------------------------------------------------------------ direction + sizing (the spec's daily routine)
-def test_buy_yes_when_the_model_beats_the_ask_sized_by_quarter_kelly():
-    r = betting.advise(0.65, 0.50, 0.48, 200.0, P)
-    assert r["action"] == "BUY_YES" and r["entry_price"] == 0.5 and r["kelly_full"] == pytest.approx(0.30)   # (p - S) / (1 - S)
-    assert r["fraction"] == pytest.approx(0.075) and r["shares"] == 30 and r["cost"] == 15.0                 # 0.25 * 0.30 * $200 = $15
-    assert r["take_profit"] == pytest.approx(0.85) and r["stop_loss"] == pytest.approx(0.30)
-    assert r["max_profit"] == 15.0 and r["expected_profit"] == pytest.approx(4.5)
+def test_bet_up_is_sized_by_quarter_kelly_at_the_highest_price_worth_paying():
+    r = betting.advise(0.65, 0.10, 200.0, P)
+    assert r["action"] == "BUY_YES" and r["prob_win"] == 0.65 and r["entry_price"] == 0.60     # max price = p - min_edge
+    assert r["kelly_full"] == pytest.approx(0.125) and r["fraction"] == pytest.approx(0.03125, abs=1e-4)   # 0.05 / (1 - 0.60), then a quarter
+    assert r["cost"] == 6.25 and r["shares"] == 10 and "60c or less" in r["reason"]            # $200 * 3.125%
+    assert r["max_profit"] == pytest.approx(4.17) and r["expected_profit"] == pytest.approx(0.52)
 
 
-def test_buy_no_uses_one_minus_the_bid_and_the_risk_cap_binds():
-    r = betting.advise(0.20, 0.72, 0.70, 1_000.0, P)
-    assert r["action"] == "BUY_NO" and r["entry_price"] == pytest.approx(0.30) and r["prob_win"] == pytest.approx(0.80)
-    assert r["kelly_full"] == pytest.approx(5 / 7, abs=1e-4)             # (S_bid - p) / S_bid
-    assert r["fraction"] == 0.10 and r["shares"] == 333 and r["cost"] == pytest.approx(99.9)   # capped at 10% of the bankroll
+def test_bet_down_follows_a_negative_lean_and_the_risk_cap_binds():
+    r = betting.advise(0.20, -0.10, 1_000.0, P)
+    assert r["action"] == "BUY_NO" and r["prob_win"] == pytest.approx(0.80) and r["entry_price"] == 0.75 and r["cost"] == 50.0
+    capped = betting.advise(0.95, 0.20, 1_000.0, P)                                             # Kelly says 12.5%; the cap is 10%
+    assert capped["fraction"] == 0.10 and capped["cost"] == 100.0
 
 
-@pytest.mark.parametrize("p,ask,bid,active,params,action,needle", [
-    (0.54, 0.50, 0.48, 200.0, P, "HOLD_CASH", "No edge"),                               # 4 points < 5
-    (0.50, 0.51, 0.49, 200.0, P, "HOLD_CASH", "No edge"),                               # inside the spread
-    (0.65, 0.50, 0.48, 8.0, P, "HOLD_CASH", "below the minimum order"),                 # 7.5% of $8 = $0.60
-    (0.65, 0.50, 0.48, 0.5, P, "HALT", "Trading stops"),                                # bankrupt: the vault is not touched
-    (0.56, 0.50, 0.48, 200.0, Params(fee=0.15), "HOLD_CASH", "does not cover"),         # 12% expected return vs a 15% fee
+@pytest.mark.parametrize("p,lean,active,action,needle", [
+    (0.65, 0.0, 200.0, "HOLD_CASH", "No edge"),                    # no calibrated lean: a coin flip
+    (0.65, 0.005, 200.0, "HOLD_CASH", "No edge"),                  # a lean under one point is noise
+    (0.65, 0.10, 8.0, "HOLD_CASH", "below the minimum order"),     # 3.1% of $8 = $0.25
+    (0.05, 0.10, 200.0, "HOLD_CASH", "too unlikely"),              # the strike is far above: no price is low enough
+    (0.65, 0.10, 0.5, "HALT", "Trading stops"),                    # bankrupt: the vault is not touched
 ])
-def test_no_bet_cases(p, ask, bid, active, params, action, needle):
-    r = betting.advise(p, ask, bid, active, params)
+def test_no_bet_cases(p, lean, active, action, needle):
+    r = betting.advise(p, lean, active, P)
     assert r["action"] == action and needle in r["reason"] and r["shares"] == 0 and r["cost"] == 0.0
 
 
@@ -103,42 +103,41 @@ async def test_daily_check_in_flow(btc_db, monkeypatch):  # noqa: F811
             assert empty["state"] is None and empty["last"] is None and empty["history"] == [] and empty["params"]["kelly"] == 0.25
             assert 0 < empty["defaults"]["hours_to_settle"] <= 24 and "18:00" in empty["defaults"]["settle_label"]
 
-            ask = {"balance": 200, "strike": 75_123.45, "yes_ask": 0.30, "yes_bid": 0.28, "hours_to_settle": 24}
+            ask = {"balance": 200, "hours_to_settle": 24}                                       # the balance is the only thing you report
             r = await c.post("/api/bitcoin/bet", json=ask)
             assert r.status_code == 409 and "no Bitcoin forecast" in r.json()["detail"]        # nothing to base a probability on yet
 
             generate_prediction(trigger="cli", llm=FakeBtcLLM())  # spot 75,123.45; 1d call: up, low confidence
             a = (await c.post("/api/bitcoin/bet", json=ask)).json()
-            # strike = spot and no scored track record: the stated edge is halved, so p(YES) sits just above 50%
-            assert a["model"]["shrink"] == 0.5 and 0.5 <= a["model"]["p_yes"] < 0.6 and a["market"]["spot"] == 75_123.45
-            assert a["action"] == "BUY_YES" and a["entry_price"] == 0.30 and a["shares"] > 0 and a["cost"] <= 20.0    # <= 10% of $200
+            # no strike = up/down from the current price; no scored track record: the stated edge is halved
+            assert a["inputs"]["strike"] == 75_123.45 and a["model"]["shrink"] == 0.5 and 0.5 < a["model"]["p_yes"] < 0.6
+            assert a["action"] == "BUY_YES" and 0 < a["cost"] <= 20.0                           # <= 10% of $200
+            assert a["entry_price"] == pytest.approx(a["prob_win"] - 0.05, abs=0.006)           # the highest price worth paying
             assert a["bankroll"] == {"balance": 200.0, "active": 200.0, "vault": 0.0, "peak": 200.0, "swept": 0.0, "pnl": None}
 
             chk = (await c.post("/api/bitcoin/bet/check", json={"sell_price": 0.80})).json()   # the market now overpays: sell
-            assert chk["action"] == "SELL" and chk["rule"] == "exit" and chk["side"] == "BUY_YES" and chk["shares"] == a["shares"]
-            assert (await c.post("/api/bitcoin/bet/check", json={"sell_price": 0.35})).json()["action"] == "HOLD"
+            assert chk["action"] == "SELL" and chk["rule"] == "exit" and chk["side"] == "BUY_YES" and chk["shares"] > 0
+            held = (await c.post("/api/bitcoin/bet/check", json={"sell_price": 0.42, "paid_price": 0.40})).json()
+            assert held["action"] == "HOLD" and held["entry_price"] == 0.40
 
-            # next day: the balance grew to $230 -> a new peak, half of the $30 gain is vaulted; the market is now fairly priced
-            b = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 230, "yes_ask": 0.56, "yes_bid": 0.52})).json()
+            # next day: the balance grew to $230 -> a new peak, half of the $30 gain is vaulted
+            b = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 230})).json()
             assert b["bankroll"] == {"balance": 230.0, "active": 215.0, "vault": 15.0, "peak": 230.0, "swept": 15.0, "pnl": 30.0}
-            assert b["action"] == "HOLD_CASH" and b["shares"] == 0
-            assert (await c.post("/api/bitcoin/bet/check", json={"sell_price": 0.5})).status_code == 409   # no open position
+            assert b["action"] == "BUY_YES"
 
-            # a losing day: nothing comes back out of the vault; a far-away strike makes NO the side with the edge
-            d = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 180, "strike": 90_000, "yes_ask": 0.40, "yes_bid": 0.38})).json()
+            # a losing day: nothing comes back out of the vault; a strike far above the price is too unlikely to bet on
+            d = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 180, "strike": 90_000})).json()
             assert d["bankroll"]["vault"] == 15.0 and d["bankroll"]["active"] == 165.0 and d["bankroll"]["pnl"] == -50.0
-            assert d["action"] == "BUY_NO" and d["entry_price"] == pytest.approx(0.62) and d["cost"] <= 16.5
-
-            bad = await c.post("/api/bitcoin/bet", json=ask | {"yes_ask": 0.30, "yes_bid": 0.40})
-            assert bad.status_code == 422 and "cannot be higher" in bad.json()["detail"]
-            assert (await c.post("/api/bitcoin/bet", json=ask | {"yes_ask": 1.2})).status_code == 422
+            assert d["action"] == "HOLD_CASH" and d["cost"] == 0.0
+            assert (await c.post("/api/bitcoin/bet/check", json={"sell_price": 0.5})).status_code == 409   # no open position
+            assert (await c.post("/api/bitcoin/bet", json=ask | {"balance": -1})).status_code == 422
 
             fresh = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 50, "reset": True})).json()   # after a deposit/withdrawal
             assert fresh["bankroll"] == {"balance": 50.0, "active": 50.0, "vault": 0.0, "peak": 50.0, "swept": 0.0, "pnl": None}
 
             o = (await c.get("/api/bitcoin/bet")).json()
             assert o["state"]["active"] == 50.0 and len(o["history"]) == 4 and o["history"][0]["is_reset"] and o["last"]["id"] == fresh["id"]
-            assert [h["action"] for h in o["history"]][1:] == ["BUY_NO", "HOLD_CASH", "BUY_YES"] and "Not financial advice" in o["disclaimer"]
+            assert [h["action"] for h in o["history"]][1:] == ["HOLD_CASH", "BUY_YES", "BUY_YES"] and "Not financial advice" in o["disclaimer"]
     with psycopg.connect(btc_db) as conn:
         assert conn.execute("select count(*) from bitcoin_bets").fetchone()[0] == 4
     get_settings.cache_clear()

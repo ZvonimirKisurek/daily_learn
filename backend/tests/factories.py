@@ -96,6 +96,8 @@ def chapter_text(words: int = 800, cites=("A1",)) -> str:
             parts.append("The similarity of two vectors is $\\cos\\theta = \\frac{a \\cdot b}{\\|a\\|\\|b\\|}$.\n")
         if h == "A worked example":
             parts.append("```python\nimport numpy as np\n\n\ndef cosine(a, b):\n    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))\n\n\nprint(cosine(np.array([1.0, 0.0]), np.array([1.0, 1.0])))\n```\n")
+    parts.append("## From the lecture hall\n\nStanford CS229 (Andrew Ng), lecture notes, part I, derives this carefully.\n\n"
+                 "**Seminar question:** when is a simple model the better scientific choice?\n")
     return "\n\n".join(parts)
 
 

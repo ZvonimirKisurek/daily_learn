@@ -96,7 +96,8 @@ def check_prose(text: str, *, min_words: int, max_words: int | None = None, arti
     return problems
 
 
-def check_chapter(md: str, *, min_words: int, max_words: int | None = None, min_python: int = 0, article_ids=None) -> list[str]:
+def check_chapter(md: str, *, min_words: int, max_words: int | None = None, min_python: int = 0, article_ids=None,
+                  required_heading: str | None = None) -> list[str]:
     """A short daily lesson reading: the right length (5-10 minutes), real structure, valid code where code is required,
     grounded citations, no links, and no quiz baked into the text (the quiz is separate and graded)."""
     md = strip_h1(md)  # a stray `# Title` is removed, not failed (generate_text(clean=strip_h1) saves the cleaned text)
@@ -112,6 +113,9 @@ def check_chapter(md: str, *, min_words: int, max_words: int | None = None, min_
         problems.append("a code fence is never closed (unbalanced ``` lines)")
     if len(re.findall(r"^## \S", md, re.M)) < 3:
         problems.append("use at least 3 sections, each starting with a '## ' heading")
+    if required_heading and not re.search(rf"^##\s+{re.escape(required_heading)}\s*$(?s:.*)\*\*Seminar question:\*\*", md, re.M | re.I):
+        problems.append(f"end with a '## {required_heading}' section that names 1-2 entries of <university_canon> and has a line "
+                        "starting with '**Seminar question:**'")
     if re.search(r"^##\s+.*(check your understanding|quiz|self-test)", md, re.M | re.I):
         problems.append("remove the quiz/'Check Your Understanding' section: the quiz is shown separately")
     langs = [lang.strip().lower() for lang, _ in _FENCE.findall(md)]

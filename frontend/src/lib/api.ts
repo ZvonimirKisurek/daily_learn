@@ -77,8 +77,8 @@ export const pulseBitcoin = () => request<BitcoinPulse>("/api/bitcoin/pulse", { 
 export const getBitcoinBet = () => request<BetOverview>("/api/bitcoin/bet");
 /** The daily check-in. Fetches a live price server-side, so it gets a longer timeout. */
 export const adviseBitcoinBet = (body: BetInput) => request<BetAdvice>("/api/bitcoin/bet", { method: "POST", body: JSON.stringify(body) }, 40_000);
-export const checkBitcoinBet = (sell_price: number) =>
-  request<BetCheck>("/api/bitcoin/bet/check", { method: "POST", body: JSON.stringify({ sell_price }) }, 40_000);
+export const checkBitcoinBet = (sell_price: number, paid_price?: number) =>
+  request<BetCheck>("/api/bitcoin/bet/check", { method: "POST", body: JSON.stringify({ sell_price, paid_price }) }, 40_000);
 export const queueBriefing = (track: Track = "ai") =>
   request<{ queued: boolean; reason: string | null }>(withTrack("/api/briefing/generate", track), { method: "POST" });
 

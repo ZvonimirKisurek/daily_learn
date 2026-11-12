@@ -53,6 +53,7 @@ class InsightOut(BaseModel):
 
 class LessonInfo(BaseModel):
     track: str = "ai"
+    canon: list[str] = Field(default_factory=list, description="the level's university reading list (courses, books, papers)")
     level: int
     of: int
     tier: int
@@ -140,7 +141,7 @@ class SkillOut(BaseModel):
 class TodayOut(BaseModel):
     date: date
     track: str = "ai"
-    state: Literal["ready", "pending"] = Field(description="'pending' = no briefing generated yet for today")
+    state: Literal["ready", "pending", "rest"] = Field(description="'pending' = no lesson generated yet for today; 'rest' = a weekend, no lesson is made")
     briefing: BriefingOut | None
     weekly_theme: WeeklyThemeOut | None
     skills: list[SkillOut]
@@ -480,15 +481,14 @@ class BitcoinPulseOut(BaseModel):
 # ----------------------------------------------------------------------------------------------- Bitcoin bet advisor
 class BetIn(BaseModel):
     balance: float = Field(ge=0, le=1e9, description="total balance on the prediction platform right now (USD)")
-    strike: float = Field(gt=0, le=1e8, description="the price in the question: 'BTC above $strike at settlement'")
-    yes_ask: float = Field(gt=0, lt=1, description="price to BUY one YES share (0-1)")
-    yes_bid: float | None = Field(default=None, gt=0, lt=1, description="price to SELL one YES share; defaults to yes_ask")
+    strike: float | None = Field(default=None, gt=0, le=1e8, description="the price in the question: 'BTC above $strike at settlement'; default: the current price (plain up/down)")
     hours_to_settle: float | None = Field(default=None, gt=0, le=72, description="default: until the next daily settlement")
     reset: bool = Field(default=False, description="start a fresh bankroll (after a deposit or withdrawal): vault 0, peak = balance")
 
 
 class BetCheckIn(BaseModel):
     sell_price: float = Field(gt=0, lt=1, description="what the market pays right now for one share you hold (0-1)")
+    paid_price: float | None = Field(default=None, gt=0, lt=1, description="what you paid per share; default: the recommendation's highest acceptable price")
 
 
 class BetAdviceOut(BaseModel):
@@ -502,8 +502,8 @@ class BetAdviceOut(BaseModel):
     cost: float
     entry_price: float | None
     prob_win: float | None
-    edge_yes: float
-    edge_no: float
+    edge_yes: float | None = None  # only on check-ins made before the share price stopped being an input
+    edge_no: float | None = None
     kelly_full: float | None
     fraction: float
     take_profit: float | None
@@ -555,7 +555,7 @@ class BetHistoryRow(BaseModel):
 
 
 class BetLiveOut(BaseModel):
-    """The last check-in re-evaluated at the current price (same market prices as entered)."""
+    """The last check-in re-evaluated at the current price."""
     spot: float
     p_yes: float
     action: Literal["BUY_YES", "BUY_NO", "HOLD_CASH", "HALT"]

@@ -139,6 +139,31 @@ LESSON_PEDAGOGY = """\
   path; if one is unavoidable, explain it in one sentence and say a later level covers it.
 - Bridge from software engineering where it genuinely helps (functions, tests, caches), and say where the analogy breaks."""
 
+# The university standard, shared by both tracks. The learner asked for lessons with the value of a top university
+# course. A model asked to "cite Harvard" will invent a syllabus, so the references are NOT its choice: every level in
+# levels.yaml carries a vetted `canon`, the prompt shows it as <university_canon>, and these rules allow nothing else.
+LECTURE_HALL = "From the lecture hall"
+UNIVERSITY_PLAN_RULES = f"""\
+- The LAST section MUST be titled '{LECTURE_HALL}' (target_words 80-120). Its key_points: which 1-2 entries of
+  <university_canon> go deeper on TODAY's topic and what exactly the learner would find there, plus one seminar
+  question: an open question with no single right answer, the kind a professor asks to start a discussion.
+- Never name a course, university, book, paper or author that is not in <university_canon>, anywhere in the plan."""
+UNIVERSITY_CHAPTER_RULES = f"""\
+- The '{LECTURE_HALL}' section: name 1-2 entries of <university_canon>, copying each name exactly as listed, and say
+  in one sentence each what it adds to today's topic. Then one line starting with '**Seminar question:**' followed by
+  one open question to think about. No other content in that section.
+- Never name a course, university, book, paper or author that is not in <university_canon>. Do not quote from them
+  and do not claim what a specific lecture or page says beyond what you are certain of."""
+
+LESSON_UNIVERSITY = """\
+# The standard: a top university course, in small daily steps
+- Teach the way the best university courses do: intuition first, then the PRECISE definition in the field's real
+  terminology (the learner should be able to follow a lecture on this afterwards), then a worked example done by hand,
+  then where the idea breaks down or is still debated.
+- Be rigorous even when simple: no hand-waving, no claim you could not defend to a professor. Simplify by choosing a
+  smaller example, never by saying something false.
+- Make the learner think before you tell: pose the key question, then answer it."""
+
 # --------------------------------------------------------------------------- stage 1: the daily plan
 DAILY_PLAN_SYSTEM = f"""\
 You are a patient, expert teacher of AI and machine learning who has taught complete beginners and shipped real ML
@@ -156,9 +181,12 @@ the reading and the essay. Continue from <recent_work>: never repeat a lesson th
 
 {LESSON_PEDAGOGY}
 
+{LESSON_UNIVERSITY}
+
 # The reading (`reading`)
-- 3-6 sections whose target_words sum to 600-1,100 words (a 5-10 minute read); estimated_minutes 5-10.
+- 4-7 sections whose target_words sum to 600-1,100 words (a 5-10 minute read); estimated_minutes 5-10.
 - key_points says concretely what each section must establish (the idea, the analogy, the example), not a topic label.
+{UNIVERSITY_PLAN_RULES}
 - From level 5 on, include one tiny formula or one short Python snippet where it makes the idea concrete; before level 5
   keep it maths-free (a snippet is fine only at level 4).
 - No quiz or 'Check Your Understanding' section: the quiz is separate (below).
@@ -168,6 +196,8 @@ the reading and the essay. Continue from <recent_work>: never repeat a lesson th
 # The quiz (`reading.quiz`)
 - 4-5 multiple-choice questions that check UNDERSTANDING of this reading (apply the idea to a new example, spot the
   misconception), not trivia or trick questions. Every answer must follow from the reading's key_points.
+- At least one is a TRANSFER question, as in a university problem set: the idea applied to a situation the reading
+  did not show. Never ask about the '{LECTURE_HALL}' section.
 - Exactly 4 options each, exactly one correct, `answer` = its index. Wrong options are plausible beginner
   misconceptions, similar in length to the right one. `explanation` says why the right option is right.
 
@@ -182,6 +212,8 @@ the reading and the essay. Continue from <recent_work>: never repeat a lesson th
 - Each step names the file to create or edit and what goes in it, gives exact commands when code is run, and states
   expected_output the learner can VERIFY (a property, a shape, an ordering). NEVER invent precise numeric results.
 - submission_instructions says exactly what to paste for grading (the answers, or the code AND its terminal output).
+- `stretch_goal`: one optional problem-set style challenge a step beyond the lesson (explain WHY, prove or break
+  something small, try the edge case). It is not graded.
 - `rubric`: 2-4 criteria OBSERVABLE in the pasted submission. One central criterion is must_pass. max_points 2-5 per
   criterion, pass_score 6-7. Grade understanding, not polish.
 - Both reading.skill_slug and hands_on_task.skill_slug are the skill given in <todays_lesson>.
@@ -214,10 +246,13 @@ teach today's idea clearly and completely, at the level given in <learner_level>
 
 {LESSON_PEDAGOGY}
 
+{LESSON_UNIVERSITY}
+
 # Format (checked by software; failing it means you must rewrite)
 - Output ONLY the reading, in markdown. No preamble, no closing remarks, no level-1 heading (the title is shown
   separately). Use `## ` headings for the outline's sections, in order (at least 3).
 - LENGTH: 600-1,100 words of prose, excluding code. Meet each section's target_words roughly. Short paragraphs.
+{UNIVERSITY_CHAPTER_RULES}
 - Do NOT include quiz questions or a 'Check Your Understanding' section, and never reveal the quiz. But make sure
   everything needed to answer the questions in <quiz> is taught clearly.
 - MATHEMATICS only if the outline calls for it: LaTeX with `$...$` inline and `$$...$$` for display, never `\\(` or
@@ -372,7 +407,13 @@ def render_todays_lesson(lesson: dict) -> str:
     kind = "REVIEW (every topic of this level has been done once; revisit it from a new angle, slightly harder)" if lesson["review"] else "NEW"
     return (f"<todays_lesson>\ntopic: {_esc(lesson['topic'])}\nskill: {lesson['skill']}\ntype: {kind}\n"
             f"lesson {lesson['lesson_number']} on this level (the level exam unlocks after {lesson['lessons_required']} finished lessons)\n"
-            f"this level's topics, in order:\n{topics}\n</todays_lesson>")
+            f"this level's topics, in order:\n{topics}\n</todays_lesson>\n{render_canon(lesson)}")
+
+
+def render_canon(lesson: dict) -> str:
+    """The level's vetted university reading list: the ONLY courses, books and papers a lesson may name."""
+    items = "\n".join(f"- {_esc(c)}" for c in lesson.get("canon") or []) or "- (none for this level: name no course, book or paper)"
+    return f"<university_canon>\n{items}\n</university_canon>"
 
 
 def build_daily_plan_prompt(
@@ -398,7 +439,7 @@ def build_chapter_prompt(plan: dict, lesson: dict, inspiration: list[RankedArtic
             else "Include at least one short, runnable ```python example." if lesson["level"] >= 5
             else "Code is optional at this level; keep it maths-free.")
     return (
-        f"{render_learner_level(lesson)}\n<reading_plan>\ntitle: {_esc(plan['chapter_title'])}\nskill: {plan['skill_slug']}\n"
+        f"{render_learner_level(lesson)}\n{render_canon(lesson)}\n<reading_plan>\ntitle: {_esc(plan['chapter_title'])}\nskill: {plan['skill_slug']}\n"
         f"learning_goals:\n{goals}\nsections:\n{sections}\n</reading_plan>\n<quiz>\n{quiz}\n</quiz>\n"
         f"{render_articles(inspiration, window_days)}\n\n"
         f"Write the complete short lesson now, following every section of the plan. {code}\n\n{CHAPTER_CRITICAL}"

@@ -25,12 +25,13 @@ const Label = ({ title, hint, children }: { title: string; hint: string; childre
 );
 
 /**
- * The daily bet calculator. You report two things from the prediction site (your balance and the price of the bet);
- * the server does the arithmetic (betting.py): model probability vs market price, quarter-Kelly size with a hard cap,
- * and the vault sweep. It never places a bet: it tells you what the rules say.
+ * The daily bet calculator. You report ONE thing, your balance; the server does the arithmetic (betting.py): the
+ * forecast's calibrated lean gives the side, quarter-Kelly with a hard cap gives the stake, and the vault sweep locks in
+ * gains. The share price is not an input (it moves all day): you get the highest price still worth paying instead.
+ * It never places a bet: it tells you what the rules say.
  */
 export function BetAdvisor({ overview, spot }: { overview: BetOverview; spot: number | null }) {
-  const [form, setForm] = useState({ balance: "", strike: "", ask: "", bid: "", hours: String(overview.defaults.hours_to_settle), reset: false });
+  const [form, setForm] = useState({ balance: "", strike: "", hours: String(overview.defaults.hours_to_settle), reset: false });
   const [fresh, setFresh] = useState<BetAdvice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -43,8 +44,7 @@ export function BetAdvisor({ overview, spot }: { overview: BetOverview; spot: nu
     setError(null);
     start(async () => {
       const res = await adviseBetAction({
-        balance: num(form.balance), strike: num(form.strike), yes_ask: sharePrice(form.ask),
-        yes_bid: form.bid.trim() ? sharePrice(form.bid) : undefined, hours_to_settle: form.hours.trim() ? Number(form.hours) : undefined, reset: form.reset,
+        balance: num(form.balance), strike: form.strike.trim() ? num(form.strike) : undefined, hours_to_settle: form.hours.trim() ? Number(form.hours) : undefined, reset: form.reset,
       });
       if (!res.ok) return setError(res.error);
       setFresh(res.data);
@@ -57,21 +57,15 @@ export function BetAdvisor({ overview, spot }: { overview: BetOverview; spot: nu
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <form onSubmit={submit} className="space-y-4">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Once a day, copy two things from the prediction site: <span className="text-foreground">your balance</span> and <span className="text-foreground">the bet&apos;s price</span>.
-            You get: bet UP, bet DOWN or no bet, and how much.
+            Once a day, type <span className="text-foreground">your balance</span> from the prediction site.
+            You get: bet UP, bet DOWN or no bet, and <span className="text-foreground">how many dollars to bet</span>.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <Label title="Your balance ($)" hint="Everything you have on the prediction site right now.">
               <input className={field} inputMode="decimal" required placeholder="200" value={form.balance} onChange={set("balance")} />
             </Label>
-            <Label title="Target BTC price ($)" hint={`The bet: "BTC above this price at settlement".${spot ? ` Now: ${usd(spot)}.` : ""}`}>
-              <input className={field} inputMode="decimal" required placeholder={spot ? String(Math.round(spot)) : "75000"} value={form.strike} onChange={set("strike")} />
-            </Label>
-            <Label title="YES price (buy)" hint="Cost of one YES/UP share. 0.55 or 55 both mean 55 cents.">
-              <input className={field} inputMode="decimal" required placeholder="0.55" value={form.ask} onChange={set("ask")} />
-            </Label>
-            <Label title="YES price (sell) · optional" hint="What you get selling one YES share. Empty = same as buy.">
-              <input className={field} inputMode="decimal" placeholder="0.53" value={form.bid} onChange={set("bid")} />
+            <Label title="Target BTC price ($) · optional" hint={`Only if the bet is "BTC above a set price". Empty = up or down from the price now${spot ? ` (${usd(spot)})` : ""}.`}>
+              <input className={field} inputMode="decimal" placeholder={spot ? String(Math.round(spot)) : "75000"} value={form.strike} onChange={set("strike")} />
             </Label>
             <Label title="Hours to settlement" hint={`Pre-filled: time until the next ${overview.defaults.settle_label}.`}>
               <input className={field} inputMode="decimal" value={form.hours} onChange={set("hours")} />
@@ -91,7 +85,7 @@ export function BetAdvisor({ overview, spot }: { overview: BetOverview; spot: nu
         <div className="min-w-0 space-y-4">
           {advice ? <Verdict a={advice} live={fresh ? null : overview.live} /> : (
             <div className="grid h-full min-h-40 place-items-center rounded-lg border border-dashed border-white/10 px-6 text-center text-sm text-muted-foreground">
-              Fill in the form to get today&apos;s recommendation. Your first balance becomes the starting bankroll.
+              Type your balance to get today&apos;s recommendation. Your first balance becomes the starting bankroll.
             </div>
           )}
           {advice && overview.open_position && (advice.action === "BUY_YES" || advice.action === "BUY_NO") && <PositionCheck side={advice.action} />}
@@ -140,10 +134,10 @@ function Verdict({ a, live }: { a: BetAdvice; live: BetOverview["live"] }) {
           <Icon className="size-4" /> BTC above {usd(a.inputs.strike)} · {day(a.created_at)}
         </div>
         <p className="mt-1.5 text-2xl font-semibold tracking-tight">
-          {v.head}{bet && <span className="text-foreground">: buy {a.shares} {side} share{a.shares === 1 ? "" : "s"} at {cents(a.entry_price)} or less</span>}
+          {v.head}{bet && <span className="text-foreground">: {usd(a.cost, true)}</span>}
         </p>
         <p className="mt-1.5 text-sm leading-relaxed text-foreground/85">
-          {bet && <>Cost <span className="font-mono">{usd(a.cost, true)}</span> ({pc(a.fraction, 1)} of your active bankroll). </>}{a.reason}
+          {bet && <>Buy {side} shares for <span className="font-mono">{usd(a.cost, true)}</span> ({pc(a.fraction, 1)} of your active bankroll). </>}{a.reason}
         </p>
       </div>
 
@@ -152,21 +146,19 @@ function Verdict({ a, live }: { a: BetAdvice; live: BetOverview["live"] }) {
           <span className="mr-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-300/90">Live</span>
           BTC is now {usd(live.spot)}: the model gives {pc(live.p_yes)} for &quot;above target&quot; with {live.hours_left.toFixed(1)} h left.{" "}
           {live.changed
-            ? <span className="font-medium">At the prices you entered, the rules would now say: {VERDICT[live.action].head}. Enter the current YES price to re-check.</span>
-            : "The recommendation above still stands at the prices you entered."}
+            ? <span className="font-medium">The rules would now say: {VERDICT[live.action].head}. Enter your balance again for a fresh recommendation.</span>
+            : "The recommendation above still stands."}
         </p>
       )}
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3 sm:grid-cols-4">
         <Stat label="Model: above target" value={pc(a.model.p_yes)} />
-        <Stat label="Market says" value={`${cents(a.inputs.yes_bid)}–${cents(a.inputs.yes_ask)}`} />
-        <Stat label="Edge UP / DOWN" value={`${(a.edge_yes * 100).toFixed(0)} / ${(a.edge_no * 100).toFixed(0)} pts`} />
         <Stat label="BTC now" value={usd(a.market.spot)} />
         {bet && <>
-          <Stat label="If you win" value={`+${usd(a.max_profit, true)}`} valueClassName="text-emerald-300" />
+          <Stat label="Model: you win" value={pc(a.prob_win)} />
+          <Stat label="Pay at most" value={`${cents(a.entry_price)} a share`} />
+          <Stat label="If you win" value={`+${usd(a.max_profit, true)} or more`} valueClassName="text-emerald-300" />
           <Stat label="If you lose" value={`-${usd(a.cost, true)}`} valueClassName="text-rose-300" />
-          <Stat label="Sell early at (profit)" value={`${cents(a.take_profit)} or more`} />
-          <Stat label="Sell early at (stop)" value={`${cents(a.stop_loss)} or less`} />
         </>}
       </dl>
 
@@ -186,6 +178,7 @@ function Verdict({ a, live }: { a: BetAdvice; live: BetOverview["live"] }) {
 
 function PositionCheck({ side }: { side: "BUY_YES" | "BUY_NO" }) {
   const [price, setPrice] = useState("");
+  const [paid, setPaid] = useState("");
   const [res, setRes] = useState<BetCheck | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -194,7 +187,7 @@ function PositionCheck({ side }: { side: "BUY_YES" | "BUY_NO" }) {
     e.preventDefault();
     setError(null);
     start(async () => {
-      const r = await checkBetAction(sharePrice(price));
+      const r = await checkBetAction(sharePrice(price), paid.trim() ? sharePrice(paid) : undefined);
       if (!r.ok) return setError(r.error);
       setRes(r.data);
     });
@@ -203,11 +196,12 @@ function PositionCheck({ side }: { side: "BUY_YES" | "BUY_NO" }) {
     <form onSubmit={run} className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
       <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-300/80">Already bought? Check before settlement</div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <input className={cn(field, "max-w-[9rem]")} inputMode="decimal" placeholder="0.70" aria-label={`Current sell price of one ${name} share`} value={price} onChange={(e) => setPrice(e.target.value)} />
+        <input className={cn(field, "max-w-[8rem]")} inputMode="decimal" placeholder="paid 0.50" aria-label={`Price you paid for one ${name} share`} value={paid} onChange={(e) => setPaid(e.target.value)} />
+        <input className={cn(field, "max-w-[8rem]")} inputMode="decimal" placeholder="now 0.70" aria-label={`Current sell price of one ${name} share`} value={price} onChange={(e) => setPrice(e.target.value)} />
         <button type="submit" disabled={pending || !price.trim()} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-400/30 hover:bg-emerald-400/10 disabled:opacity-50">
           {pending && <Loader2 className="size-3.5 animate-spin" />} Sell or hold?
         </button>
-        <span className="text-[11px] text-muted-foreground">Enter what the site pays now for one {name} share.</span>
+        <span className="text-[11px] text-muted-foreground">What you paid for one {name} share, and what the site pays for it now (0.55 or 55 = 55 cents).</span>
       </div>
       {error && <p role="alert" className="mt-2 text-sm text-rose-300">{error}</p>}
       {res && (
@@ -237,7 +231,7 @@ function History({ rows }: { rows: BetOverview["history"] }) {
               <td className={r.pnl == null ? "text-muted-foreground" : r.pnl >= 0 ? "text-emerald-300" : "text-rose-300"}>{r.pnl == null ? "—" : `${r.pnl >= 0 ? "+" : "-"}${usd(Math.abs(r.pnl), true)}`}</td>
               <td>{usd(r.strike)}</td>
               <td className={r.action === "BUY_YES" ? "text-emerald-300" : r.action === "BUY_NO" ? "text-rose-300" : "text-muted-foreground"}>
-                {SHORT[r.action]}{r.shares > 0 && ` · ${r.shares} @ ${cents(r.entry_price)}`}
+                {SHORT[r.action]}{r.cost > 0 && ` · ${usd(r.cost, true)}`}
               </td>
               <td className="text-amber-300/90">{usd(r.vault, true)}</td>
             </tr>
@@ -254,8 +248,9 @@ function Rules({ p }: { p: BetOverview["params"] }) {
       <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.14em] hover:text-foreground">How it decides</summary>
       <ul className="mt-2 list-disc space-y-1 pl-5">
         <li>It turns the 1-day forecast into a probability that BTC ends above your target, using the measured daily volatility and the time left. The forecast&apos;s confidence is first scaled down by how often past 1-day forecasts were actually right.</li>
-        <li>It bets only when that probability beats the market price by at least {pc(p.min_edge)}: UP (buy YES) or DOWN (buy NO). Otherwise: no bet.</li>
-        <li>Size = {pc(p.kelly)} of the Kelly fraction, never more than {pc(p.max_fraction)} of the active bankroll, and never below the ${p.min_trade.toFixed(2)} minimum order.</li>
+        <li>The side follows the forecast&apos;s proven lean: UP (buy YES) or DOWN (buy NO). No proven lean means no bet.</li>
+        <li>You do not enter the share price, because it moves all day. Instead you get the highest price worth paying: the model&apos;s chance of winning minus a {pc(p.min_edge)} safety margin. If a share costs more than that, skip the bet.</li>
+        <li>Stake = {pc(p.kelly)} of the Kelly fraction at that highest price, never more than {pc(p.max_fraction)} of the active bankroll, and never below the ${p.min_trade.toFixed(2)} minimum order. A cheaper share only improves the bet, so the stake stays safe.</li>
         <li>Sell early when the price reaches {pc(p.take_profit)} of the possible profit, when the position has lost {pc(p.stop_loss)} of its cost, or when the market pays more than the model thinks a share is worth.</li>
         <li>{pc(p.vault_share)} of every new best balance goes to the vault for good. If the active bankroll falls below the minimum order, it says stop.</li>
       </ul>

@@ -133,16 +133,14 @@ export async function generateBitcoinAction(): Promise<ActionResult<{ queued: bo
 
 const price01 = (v: unknown): v is number => typeof v === "number" && v > 0 && v < 1;
 
-/** Bet advisor check-in: report balance + market price, get direction and size. refresh() updates bankroll and history. */
+/** Bet advisor check-in: report the balance, get direction and stake. refresh() updates bankroll and history. */
 export async function adviseBetAction(input: BetInput): Promise<ActionResult<BetAdvice>> {
-  const { balance, strike, yes_ask, yes_bid, hours_to_settle, reset } = input;
+  const { balance, strike, hours_to_settle, reset } = input;
   if (!(typeof balance === "number" && balance >= 0 && balance <= 1e9)) return { ok: false, error: "Enter your balance in dollars." };
-  if (!(typeof strike === "number" && strike > 0)) return { ok: false, error: "Enter the Bitcoin price the bet is about." };
-  if (!price01(yes_ask)) return { ok: false, error: "The YES price must be between 0.01 and 0.99 (or 1-99 cents)." };
-  if (yes_bid !== undefined && !price01(yes_bid)) return { ok: false, error: "The YES sell price must be between 0.01 and 0.99." };
+  if (strike !== undefined && !(typeof strike === "number" && strike > 0)) return { ok: false, error: "The target price must be a positive number (or leave it empty)." };
   if (hours_to_settle !== undefined && !(hours_to_settle > 0 && hours_to_settle <= 72)) return { ok: false, error: "Hours to settlement must be between 0 and 72." };
   try {
-    const data = await adviseBitcoinBet({ balance, strike, yes_ask, yes_bid, hours_to_settle, reset: reset === true });
+    const data = await adviseBitcoinBet({ balance, strike, hours_to_settle, reset: reset === true });
     refresh();
     return { ok: true, data };
   } catch (e) {
@@ -150,10 +148,11 @@ export async function adviseBetAction(input: BetInput): Promise<ActionResult<Bet
   }
 }
 
-export async function checkBetAction(sellPrice: number): Promise<ActionResult<BetCheck>> {
+export async function checkBetAction(sellPrice: number, paidPrice?: number): Promise<ActionResult<BetCheck>> {
   if (!price01(sellPrice)) return { ok: false, error: "The sell price must be between 0.01 and 0.99 (or 1-99 cents)." };
+  if (paidPrice !== undefined && !price01(paidPrice)) return { ok: false, error: "The price you paid must be between 0.01 and 0.99 (or 1-99 cents)." };
   try {
-    return { ok: true, data: await checkBitcoinBet(sellPrice) };
+    return { ok: true, data: await checkBitcoinBet(sellPrice, paidPrice) };
   } catch (e) {
     return { ok: false, error: message(e) };
   }

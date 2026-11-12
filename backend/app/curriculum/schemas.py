@@ -215,7 +215,7 @@ class ReadingPlan(_Strict):
     skill_slug: SkillSlug
     difficulty: int = Field(ge=1, le=3, description="1=from scratch, 3=research-level")
     learning_goals: list[Text] = Field(min_length=2, max_length=4, description="After reading you can... (observable)")
-    sections: list[ChapterSection] = Field(min_length=3, max_length=6, description="Ordered outline of a 5-10 minute read; no quiz section (the quiz is separate)")
+    sections: list[ChapterSection] = Field(min_length=3, max_length=7, description="Ordered outline of a 5-10 minute read; no quiz section (the quiz is separate)")
     inspiration_article_ids: list[ArticleRef] = Field(min_length=1, max_length=3, description="Supplied articles to use as real-world examples")
     estimated_minutes: int = Field(ge=5, le=10)
     quiz: list[QuizQuestion] = Field(min_length=4, max_length=5, description="Checks understanding of THIS reading; must be answerable from it")

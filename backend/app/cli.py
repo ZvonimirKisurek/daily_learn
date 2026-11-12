@@ -233,7 +233,11 @@ def main() -> int:
         if args.cmd == "generate-weekly":
             r = generators.generate_weekly_theme(week_start=d, force=args.force, dry_run=args.dry_run)
         else:
-            r = generators.generate_daily_briefing(day=d, force=args.force, dry_run=args.dry_run, track=args.track)
+            try:
+                r = generators.generate_daily_briefing(day=d, force=args.force, dry_run=args.dry_run, track=args.track)
+            except generators.RestDay as exc:
+                print(exc)
+                return 0
         if args.dry_run:
             print(f"=== SYSTEM ===\n{r['system']}\n\n=== USER ({r['articles']} articles) ===\n{r['user']}")
         else:

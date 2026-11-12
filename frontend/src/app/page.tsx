@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { ApiProblem } from "@/components/api-problem";
 import { MissionBoard } from "@/components/mission/mission-board";
 import { PendingBriefing } from "@/components/mission/pending-briefing";
+import { RestDay } from "@/components/mission/rest-day";
 import { CommandCenterSkeleton } from "@/components/mission/skeletons";
 import { WeeklyThemeCard } from "@/components/mission/weekly-theme-card";
 import { LevelCard } from "@/components/progress/level-card";
@@ -42,7 +43,8 @@ async function CommandCenter({ searchParams }: { searchParams: SearchParams }) {
           <TrackTabs track={track} base="/" />
         </div>
         <LevelCard progress={progress} />
-        {today.state === "ready" && today.briefing ? <MissionBoard briefing={today.briefing} /> : <PendingBriefing track={track} />}
+        {today.state === "ready" && today.briefing ? <MissionBoard briefing={today.briefing} />
+          : today.state === "rest" ? <RestDay track={track} /> : <PendingBriefing track={track} />}
         {today.weekly_theme && <WeeklyThemeCard weekly={today.weekly_theme} today={today.date} />}
       </div>
       {/* One skill graph per track; the track you are looking at comes first. */}

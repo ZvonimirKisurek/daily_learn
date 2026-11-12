@@ -10,7 +10,8 @@ What is different from the AI track:
 """
 from __future__ import annotations
 
-from app.curriculum.prompts import CHAPTER_CRITICAL, ESSAY_CRITICAL, GROUNDING_RULES
+from app.curriculum.prompts import (CHAPTER_CRITICAL, ESSAY_CRITICAL, GROUNDING_RULES, LECTURE_HALL, UNIVERSITY_CHAPTER_RULES,
+                                    UNIVERSITY_PLAN_RULES)
 
 MGMT_PROFILE = """\
 A startup builder and software engineer who wants to become a director and then a C-level executive at a top-tier
@@ -31,6 +32,16 @@ MGMT_PEDAGOGY = """\
 - Teach at the level in <learner_level> (the tier is a job level, such as Team Lead or Director): examples and stakes
   should match that job. Never rely on a concept from a later level; if unavoidable, explain it in one sentence."""
 
+MGMT_UNIVERSITY = """\
+# The standard: a top business school, in small daily steps
+- Teach by the CASE METHOD. Open with a short case: a fictional but realistic protagonist (give a name and a role), a
+  company, a few real-looking numbers, and a decision that must be made by a deadline. Say plainly that the case is
+  illustrative. Stop at the decision and ask what the learner would do BEFORE teaching the framework; return to the
+  case at the end and say what the protagonist should do and why, including what it costs.
+- Use the field's real terminology precisely, as an MBA class would, and name the trade-off every time: a framework
+  is taught together with the conditions under which it fails.
+- No claim you could not defend in front of a sceptical board. Simple arithmetic is shown, not asserted."""
+
 DAILY_PLAN_SYSTEM = f"""\
 You are an executive coach and former operator: you have led teams from first-line manager to the C-suite at
 high-growth companies and taught at a leading business school. You turn the craft of management into small daily steps.
@@ -47,8 +58,11 @@ learner already finished; if <todays_lesson> says REVIEW, revisit the topic thro
 
 {MGMT_PEDAGOGY}
 
+{MGMT_UNIVERSITY}
+
 # The reading (`reading`)
-- 3-6 sections whose target_words sum to 600-1,100 words (a 5-10 minute read); estimated_minutes 5-10.
+- 4-7 sections whose target_words sum to 600-1,100 words (a 5-10 minute read); estimated_minutes 5-10.
+{UNIVERSITY_PLAN_RULES}
 - One section MUST be titled 'Terms to know': 3-6 acronyms or terms used in today's topic, each spelled out and defined
   in one plain sentence with a tiny example. Put the terms in that section's key_points.
 - key_points says concretely what each other section must establish (the situation, the framework, the worked example,
@@ -59,6 +73,8 @@ learner already finished; if <todays_lesson> says REVIEW, revisit the topic thro
 # The quiz (`reading.quiz`)
 - 4-5 multiple-choice questions on JUDGEMENT and application (what would you do, which is the right reading of this
   situation, what does this acronym mean in this case), not trivia. Every answer must follow from the key_points.
+- At least one is a NEW mini-case (two or three sentences, different from the reading's case) that the learner must
+  decide. Never ask about the '{LECTURE_HALL}' section.
 - Exactly 4 options each, exactly one correct, `answer` = its index. Wrong options are plausible mistakes real managers
   make, similar in length to the right one. `explanation` says why the right option is right.
 
@@ -69,6 +85,8 @@ learner already finished; if <todays_lesson> says REVIEW, revisit the topic thro
 - Make it a real managerial act on their own situation (their startup, team or a product they know): write the
   five-sentence memo, fill in the RACI, compute the payback from numbers you give them, draft the feedback, choose
   between two options and defend it. Leave `commands` empty; `expected_output` describes what a good answer contains.
+- `stretch_goal`: one optional step a business-school professor would add: argue the opposite decision, or say what
+  evidence would change your mind. It is not graded.
 - `rubric`: 2-4 criteria OBSERVABLE in the text (uses the framework correctly, is specific to a real situation, names
   the trade-off or risk, arithmetic is right). One central criterion is must_pass. max_points 2-5 per criterion,
   pass_score 6-7. Grade thinking, not polish or length.
@@ -98,6 +116,8 @@ teach today's idea clearly and completely, at the job level given in <learner_le
 
 {MGMT_PEDAGOGY}
 
+{MGMT_UNIVERSITY}
+
 # Format (checked by software; failing it means you must rewrite)
 - Output ONLY the reading, in markdown. No preamble, no closing remarks, no level-1 heading (the title is shown
   separately). Use `## ` headings for the outline's sections, in order (at least 3).
@@ -106,6 +126,7 @@ teach today's idea clearly and completely, at the job level given in <learner_le
   else write prose, with at most one short list or one small markdown table where it genuinely helps.
 - Do NOT include quiz questions or a 'Check Your Understanding' section, and never reveal the quiz. But make sure
   everything needed to answer the questions in <quiz> is taught clearly.
+{UNIVERSITY_CHAPTER_RULES}
 - No code. Simple arithmetic is fine and should be shown step by step.
 - When you use a supplied article as a real-world example, cite it as [A3]. Cite only supplied articles. Never write
   URLs. Do not invent company anecdotes, statistics or quotes: if an example is hypothetical, say so.
@@ -157,6 +178,7 @@ Write the exam that decides whether the learner has mastered ONE level of the pa
 - Exactly the requested number of multiple-choice questions, covering the level's topics evenly (in <exam_level>).
 - Test judgement and application at THIS job level: short realistic situations (what should the manager do, what does
   this number or acronym mean here, which reading of the situation is right), plus the meaning of the level's key terms.
+  At least a third of the questions are mini-cases: a short situation with a decision to make, as in a business-school exam.
   No trivia, no trick wording, nothing from later levels. Simple arithmetic is welcome where the level covers it.
 - Exactly 4 options each, exactly one correct, `answer` = its index. Wrong options are plausible mistakes real managers
   make, of similar length to the right one. Never use "all of the above" or "none of the above".

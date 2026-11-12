@@ -29,6 +29,10 @@ class NotEnoughData(RuntimeError):
     pass
 
 
+class RestDay(RuntimeError):
+    """A weekend: no lesson is generated (settings.weekend_lessons switches that off)."""
+
+
 def local_now(settings: Settings) -> datetime:
     return datetime.now(ZoneInfo(settings.timezone))
 
@@ -119,7 +123,7 @@ def current_lesson(day: date, repo=repository, lad: levels.Ladder | None = None,
     lv = lad.level(index)
     topic, review = levels.lesson_topic(lv, done)
     return {"track": track, "level": lv.index, "of": len(lad.levels), "tier": lv.tier, "tier_name": lad.tier_name(lv.tier), "title": lv.title,
-            "summary": lv.summary, "skill": lv.skill, "topics": lv.topics, "topic": topic, "review": review,
+            "summary": lv.summary, "skill": lv.skill, "topics": lv.topics, "canon": lv.canon, "topic": topic, "review": review,
             "lesson_number": done + 1, "lessons_required": lv.lessons_required,
             "earlier_levels": [f"{x.index}. {x.title}" for x in lad.levels if x.index < lv.index]}
 
@@ -150,6 +154,8 @@ def generate_daily_briefing(
     existing = repo.get_briefing(day, track)
     if existing and not force and not dry_run:
         return {"id": str(existing["id"]), "day": day.isoformat(), "payload": existing["payload"], "cached": True}
+    if levels.is_rest_day(day, settings.weekend_lessons) and not force and not dry_run:
+        raise RestDay(f"{day:%A %Y-%m-%d} is a rest day: no lesson on weekends (use --force to make one anyway)")
 
     week_start = monday_of(day)
     theme_row = repo.get_weekly_theme(week_start) if track == "ai" else None
@@ -190,7 +196,8 @@ def generate_daily_briefing(
         return llm.generate_text(
             system=systems["chapter"], user=prompts.build_chapter_prompt(reading.model_dump(), lesson, inspiration, window),
             check=lambda t: cc.check_chapter(t, min_words=settings.chapter_min_words, max_words=settings.chapter_max_words,
-                                             min_python=min_python, article_ids=chapter_ids),
+                                             min_python=min_python, article_ids=chapter_ids,
+                                             required_heading=prompts.LECTURE_HALL if lesson["canon"] else None),
             purpose="Chapter", temperature=settings.temp_chapter, clean=cc.strip_h1)
 
     def write_essay() -> str:
@@ -206,7 +213,7 @@ def generate_daily_briefing(
     rng = random.Random(f"{day}-{track}-{lesson['level']}")
     quiz = [levels.shuffle_question(q.model_dump(), rng) for q in reading.quiz]  # answer key: stored server-side only
     payload = {
-        "lesson": {k: lesson[k] for k in ("track", "level", "of", "tier", "tier_name", "title", "topic", "review", "lesson_number", "lessons_required")},
+        "lesson": {k: lesson[k] for k in ("track", "level", "of", "tier", "tier_name", "title", "topic", "review", "lesson_number", "lessons_required", "canon")},
         "morning_reading": {
             "chapter_title": reading.chapter_title, "skill_slug": reading.skill_slug, "difficulty": reading.difficulty,
             "learning_goals": reading.learning_goals, "estimated_minutes": reading.estimated_minutes,
@@ -248,7 +255,8 @@ def regenerate_lessons(start: date, end: date, *, llm=None, embedder=None, repo=
     if backup_path:
         Path(backup_path).write_text(json.dumps({"exported_at": datetime.now(timezone.utc).isoformat(), "briefings": old}, default=str, indent=1))
     deleted = repo.delete_briefings_between(start, end, track)
-    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    days = [d for d in (start + timedelta(days=i) for i in range((end - start).days + 1))
+            if not levels.is_rest_day(d, settings.weekend_lessons)]  # weekends are rest days: no lesson is made for them
     made, failed = [], []
     for i, d in enumerate(days):
         for attempt in (1, 2):  # one retry: a flaky API call should not leave a hole in the week

@@ -547,7 +547,10 @@ async def test_regenerating_a_week_gives_consecutive_topics_backs_up_and_past_le
     import json
     from datetime import timedelta
     seed_articles()
-    s = Settings(timezone="UTC", min_candidates=10, prompt_article_count=20)
+    s = Settings(timezone="UTC", min_candidates=10, prompt_article_count=20, weekend_lessons=True)  # every day, whatever today is
+    with pytest.raises(generators.RestDay):  # the default: Saturday and Sunday are rest days, nothing is generated
+        generators.generate_daily_briefing(day=date(2026, 11, 7), llm=FakeLLM(), embedder=FakeEmbedder(),
+                                           settings=Settings(timezone="UTC", min_candidates=10, prompt_article_count=20))
     start = TODAY - timedelta(days=5)
     for d in (start - timedelta(days=1), start, start + timedelta(days=1)):  # three old-format lessons, one outside the range
         generators.generate_daily_briefing(day=d, llm=FakeLLM(), embedder=FakeEmbedder(), settings=s)

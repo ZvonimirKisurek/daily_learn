@@ -53,6 +53,9 @@ class Level(_Strict):
     title: str
     summary: str
     topics: list[str] = Field(min_length=2)
+    # The university canon of this level: courses, textbooks and papers a top university would assign for it. Lessons
+    # may name ONLY these (the model never invents a reference), and the app lists them under each reading.
+    canon: list[str] = Field(default_factory=list, max_length=4)
 
     @property
     def lessons_required(self) -> int:
@@ -181,14 +184,22 @@ def hands_on_xp(score: int) -> int:
     return XP_HANDS_ON_BASE + XP_PER_SCORE_POINT * score
 
 
-def streak(completed_days: list[date], today: date) -> int:
-    """Consecutive days with a finished lesson, ending today (or yesterday: today's lesson may still be in progress)."""
+def is_rest_day(d: date, weekend_lessons: bool = False) -> bool:
+    """Saturday and Sunday have no lesson (like a university timetable), unless WEEKEND_LESSONS is switched on."""
+    return not weekend_lessons and d.weekday() >= 5
+
+
+def streak(completed_days: list[date], today: date, weekend_lessons: bool = False) -> int:
+    """Consecutive days with a finished lesson, ending today (or yesterday: today's lesson may still be in progress).
+    A rest day (weekend) neither breaks the streak nor is needed for it; a lesson finished on one still counts."""
     days = set(completed_days)
     d = today if today in days else today - timedelta(days=1)
     n = 0
-    while d in days:
-        n += 1
+    while d in days or is_rest_day(d, weekend_lessons):
+        n += d in days
         d -= timedelta(days=1)
+        if n == 0 and (today - d).days > 3:  # nothing finished since before the last weekend
+            break
     return n
 
 

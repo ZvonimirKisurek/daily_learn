@@ -262,3 +262,19 @@ def test_reset_progress_cli_requires_confirmation(db):
     assert yes.returncode == 0 and "16 skills reset to 0" in yes.stdout
     with psycopg.connect(db) as c:
         assert c.execute("select max(level) from skills").fetchone()[0] == 0
+
+
+def test_a_lesson_must_end_with_the_university_section_and_prompts_carry_only_the_vetted_canon():
+    from app.curriculum import levels, prompts
+    kw = dict(min_words=600, max_words=1250, article_ids=frozenset({"A1"}), required_heading=prompts.LECTURE_HALL)
+    assert cc.check_chapter(chapter_text(), **kw) == []
+    assert any("Seminar question" in p for p in cc.check_chapter(chapter_text().split("## From the lecture hall")[0], **kw))
+    for track in levels.TRACKS:
+        lv = levels.ladder(track).level(1)
+        lesson = {"topic": lv.topics[0], "skill": lv.skill, "review": False, "lesson_number": 1, "lessons_required": 4,
+                  "topics": lv.topics, "canon": lv.canon}
+        block = prompts.render_todays_lesson(lesson)
+        assert "<university_canon>" in block and all(c.split(",")[0] in block for c in lv.canon)
+        systems = prompts.lesson_systems(track)
+        assert prompts.LECTURE_HALL in systems["plan"] and "Seminar question" in systems["chapter"]
+        assert "not in <university_canon>" in systems["plan"] and "not in <university_canon>" in systems["chapter"]

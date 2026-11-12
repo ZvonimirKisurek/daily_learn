@@ -36,7 +36,7 @@ def _today(cfg) -> "datetime.date":
 async def today(conn: Conn, cfg: Cfg, track: Track = "ai"):
     """Everything the Command Center needs in one round trip. `state="pending"` (briefing null) is a normal,
     expected response before 06:30 or if generation failed - it is NOT an error, so it is a 200."""
-    return await queries.fetch_today(conn, _today(cfg), track)
+    return await queries.fetch_today(conn, _today(cfg), track, cfg.weekend_lessons)
 
 
 @router.get("/briefings/history", response_model=list[date])
@@ -151,7 +151,7 @@ async def submit_quiz(task_id: UUID, body: AnswersIn, conn: Conn):
 @router.get("/progress", response_model=ProgressOut)
 async def progress(conn: Conn, cfg: Cfg, track: Track = "ai"):
     """Level, XP, streak, knowledge score, exam status and the whole path (completed / current / locked) of one track."""
-    return await queries.fetch_progress(conn, _today(cfg), cfg.timezone, levels.ladder(track), cfg.exam_cooldown_hours, track)
+    return await queries.fetch_progress(conn, _today(cfg), cfg.timezone, levels.ladder(track), cfg.exam_cooldown_hours, track, cfg.weekend_lessons)
 
 
 @router.post("/exams/start", response_model=ExamOut)
@@ -225,6 +225,8 @@ async def generate_briefing(conn: Conn, cfg: Cfg, enqueue: Annotated[Callable[..
     the UI polls /api/today. LLM generation takes tens of seconds - never do that inside a request."""
     if await queries.briefing_exists(conn, _today(cfg), track):
         return QueueOut(queued=False, reason="already generated")
+    if levels.is_rest_day(_today(cfg), cfg.weekend_lessons):
+        return QueueOut(queued=False, reason="rest day: no lesson on weekends")
     try:
         # `enqueue` is blocking network I/O (a Redis connection). Calling it directly inside `async def` would
         # freeze the event loop - and every other request - while it waits. Offload blocking calls to a thread.
@@ -312,12 +314,12 @@ async def bitcoin_bet_overview(cfg: Cfg):
 
 @router.post("/bitcoin/bet", response_model=BetAdviceOut)
 async def bitcoin_bet_advise(body: BetIn, cfg: Cfg):
-    """The daily check-in: report your balance and the market's price for 'BTC above $strike'; get direction and size.
-    Pure arithmetic on the latest forecast (betting.py): edge vs price, quarter-Kelly, a hard cap, and the vault sweep."""
+    """The daily check-in: report your balance; get the direction, the stake in dollars and the highest share price worth
+    paying. Pure arithmetic on the latest forecast (betting.py): quarter-Kelly, a hard cap, and the vault sweep."""
     return await _advisor(advisor.advise, cfg, **body.model_dump())
 
 
 @router.post("/bitcoin/bet/check", response_model=BetCheckOut)
 async def bitcoin_bet_check(body: BetCheckIn, cfg: Cfg):
     """Before settlement: sell the open position at the current price, or keep holding? Nothing is stored."""
-    return await _advisor(advisor.check, cfg, sell_price=body.sell_price)
+    return await _advisor(advisor.check, cfg, sell_price=body.sell_price, paid_price=body.paid_price)

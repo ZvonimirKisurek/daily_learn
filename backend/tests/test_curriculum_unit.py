@@ -161,8 +161,14 @@ def test_ladder_is_valid_and_streaks_and_topics_are_deterministic():
     assert levels.lesson_topic(lad.level(1), 1) == (lad.level(1).topics[1], False)
     assert levels.lesson_topic(lad.level(1), 4) == (lad.level(1).topics[0], True)      # all topics done: review until the exam is passed
     t = date(2026, 11, 9)
-    assert levels.streak([t, t - timedelta(1), t - timedelta(2), t - timedelta(4)], t) == 3
-    assert levels.streak([t - timedelta(1)], t) == 1 and levels.streak([t - timedelta(2)], t) == 0
+    assert levels.streak([t, t - timedelta(1), t - timedelta(2), t - timedelta(4)], t, weekend_lessons=True) == 3
+    assert levels.streak([t - timedelta(1)], t, True) == 1 and levels.streak([t - timedelta(2)], t, True) == 0
+    # default: weekends are rest days. t is a Monday: Friday's lesson keeps the streak alive across the weekend
+    assert levels.is_rest_day(t - timedelta(1)) and not levels.is_rest_day(t) and not levels.is_rest_day(t - timedelta(1), weekend_lessons=True)
+    assert levels.streak([t - timedelta(3)], t) == 1 and levels.streak([t, t - timedelta(3), t - timedelta(4)], t) == 3
+    assert levels.streak([t - timedelta(4)], t) == 0                                   # Friday was missed: the streak is gone
+    assert levels.streak([t, t - timedelta(1), t - timedelta(3)], t) == 3              # a lesson done on a Sunday still counts
+    assert all(len(x.canon) == 3 for tr in levels.TRACKS for x in levels.ladder(tr).levels)   # every level has its university reading list
     import random
     q = {"question": "q", "options": ["right", "b", "c", "d"], "answer": 0, "explanation": "e"}
     s = levels.shuffle_question(q, random.Random(3))

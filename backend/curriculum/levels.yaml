@@ -8,6 +8,8 @@
 #    Missed a day? Its lesson stays on the calendar and can be finished later (catch-up); it still counts.
 #  * After `topics` lessons the level exam unlocks. Pass it (>= pass_percent) to move to the next level. Fail it and
 #    you stay on the level (review lessons) until you pass.
+#  * `canon` is the level's university reading list (courses, textbooks, papers). Each lesson ends with a short
+#    "From the lecture hall" section that points to it; lessons may cite only what is listed here.
 #  * The placement exam (placement.yaml) can skip whole tiers you already know. It only ever moves you up.
 pass_percent: 80          # level exams and reading quizzes
 exam_questions: 10        # questions per level exam
@@ -26,6 +28,10 @@ levels:
     skill: ai-foundations
     title: "What is AI?"
     summary: "What artificial intelligence, machine learning and deep learning are, how they differ, and where you already meet them every day."
+    canon:
+      - "Harvard CS50's Introduction to Artificial Intelligence with Python (CS50 AI), week 0"
+      - "MIT 6.S191 Introduction to Deep Learning, lecture 1 (the opening survey of what AI can do)"
+      - "Melanie Mitchell, 'Artificial Intelligence: A Guide for Thinking Humans' (2019)"
     topics:
       - "AI, machine learning and deep learning: three nested circles"
       - "Rules vs learning: why some problems need examples instead of hand-written code"
@@ -36,6 +42,10 @@ levels:
     skill: ai-foundations
     title: "Data: the fuel of AI"
     summary: "What data looks like to a machine-learning system: examples, features and labels, and why data quality decides everything."
+    canon:
+      - "Harvard CS109A Introduction to Data Science, the first lectures on data and exploratory analysis"
+      - "James, Witten, Hastie and Tibshirani, 'An Introduction to Statistical Learning' (ISLR), chapter 2"
+      - "Cornell CS4780 Machine Learning for Intelligent Systems (Kilian Weinberger), lecture 1: the supervised learning setup"
     topics:
       - "What data is: rows, columns, examples and features"
       - "Labels and supervised learning: learning from answered examples"
@@ -46,6 +56,10 @@ levels:
     skill: ai-foundations
     title: "How machines learn"
     summary: "The core loop of all machine learning in plain words: a model makes a guess, measures its mistake and adjusts."
+    canon:
+      - "Stanford CS229 Machine Learning (Andrew Ng), lecture notes, part I: supervised learning"
+      - "Caltech 'Learning From Data' (Yaser Abu-Mostafa), lecture 1: The Learning Problem"
+      - "ISLR ('An Introduction to Statistical Learning'), section 2.2: assessing model accuracy and overfitting"
     topics:
       - "A model is a function: inputs in, prediction out"
       - "Measuring mistakes: the idea of a loss"
@@ -56,6 +70,10 @@ levels:
     skill: ai-foundations
     title: "Python for AI"
     summary: "Just enough Python, NumPy and pandas to load, inspect and plot a small dataset."
+    canon:
+      - "Harvard CS50P: CS50's Introduction to Programming with Python"
+      - "MIT 6.0001 Introduction to Computer Science and Programming in Python (MIT OpenCourseWare)"
+      - "Jake VanderPlas, 'Python Data Science Handbook': the NumPy, pandas and Matplotlib chapters"
     topics:
       - "Running a Python script; lists and dictionaries"
       - "NumPy arrays: computing on many numbers at once"
@@ -67,6 +85,10 @@ levels:
     skill: classical-ml
     title: "The maths you actually need"
     summary: "Vectors, dot products, averages and slopes: the four ideas every later level uses, built from intuition."
+    canon:
+      - "MIT 18.06 Linear Algebra (Gilbert Strang, MIT OpenCourseWare), the first lectures on vectors"
+      - "Harvard Stat 110 Probability (Joe Blitzstein)"
+      - "Deisenroth, Faisal and Ong, 'Mathematics for Machine Learning' (2020), chapters 2, 5 and 6"
     topics:
       - "Vectors: lists of numbers with a direction"
       - "The dot product and what it measures"
@@ -77,6 +99,10 @@ levels:
     skill: classical-ml
     title: "Linear regression"
     summary: "Your first real model: fit a line to data, measure its error and improve it with gradient descent."
+    canon:
+      - "Stanford CS229 (Andrew Ng), lecture notes, part I: linear regression, the LMS rule and gradient descent"
+      - "ISLR ('An Introduction to Statistical Learning'), chapter 3: Linear Regression"
+      - "Cornell CS4780 (Kilian Weinberger), the lecture on linear regression"
     topics:
       - "Fitting a line to points"
       - "Mean squared error"
@@ -87,6 +113,10 @@ levels:
     skill: classical-ml
     title: "Classification"
     summary: "Predicting categories instead of numbers, and measuring how good those predictions really are."
+    canon:
+      - "ISLR ('An Introduction to Statistical Learning'), chapter 4: Classification"
+      - "Stanford CS229 (Andrew Ng), lecture notes, part II: classification and logistic regression"
+      - "Harvard CS109A Introduction to Data Science, the lectures on logistic regression and classification metrics"
     topics:
       - "From numbers to categories: the classification problem"
       - "Logistic regression and probabilities"
@@ -97,6 +127,10 @@ levels:
     skill: classical-ml
     title: "Trees and ensembles"
     summary: "Decision trees and the ensembles built from them, still the strongest models for table-shaped data."
+    canon:
+      - "ISLR ('An Introduction to Statistical Learning'), chapter 8: Tree-Based Methods"
+      - "Leo Breiman, 'Random Forests' (Machine Learning journal, 2001)"
+      - "Jerome Friedman, 'Greedy Function Approximation: A Gradient Boosting Machine' (Annals of Statistics, 2001)"
     topics:
       - "Decision trees: twenty questions for data"
       - "Random forests: the wisdom of crowds"
@@ -107,6 +141,10 @@ levels:
     skill: classical-ml
     title: "Evaluating models honestly"
     summary: "How to know whether a model will work on data it has never seen: splits, cross-validation and the bias-variance trade-off."
+    canon:
+      - "ISLR ('An Introduction to Statistical Learning'), chapter 5 (resampling) and chapter 6 (regularisation)"
+      - "Caltech 'Learning From Data' (Yaser Abu-Mostafa), the lecture on the bias-variance trade-off"
+      - "Stanford CS229 (Andrew Ng), lecture notes on bias, variance and advice for applying machine learning"
     topics:
       - "Train, validation and test splits"
       - "Cross-validation"
@@ -118,6 +156,10 @@ levels:
     skill: pytorch
     title: "Neural networks from scratch"
     summary: "What a neural network is, built up from a single artificial neuron to a stack of layers."
+    canon:
+      - "MIT 6.S191 Introduction to Deep Learning, lecture 1: the perceptron and feed-forward networks"
+      - "Stanford CS231n, course notes: 'Neural Networks Part 1: Setting up the Architecture'"
+      - "Goodfellow, Bengio and Courville, 'Deep Learning' (2016), chapter 6: Deep Feedforward Networks"
     topics:
       - "The artificial neuron"
       - "Layers and activation functions"
@@ -128,6 +170,10 @@ levels:
     skill: pytorch
     title: "Training neural networks"
     summary: "How networks learn: backpropagation, PyTorch tensors and autograd, optimisers and a complete training loop."
+    canon:
+      - "Rumelhart, Hinton and Williams, 'Learning representations by back-propagating errors' (Nature, 1986)"
+      - "Stanford CS231n, course notes on backpropagation and on optimisation"
+      - "Kingma and Ba, 'Adam: A Method for Stochastic Optimization' (2015)"
     topics:
       - "Backpropagation intuition"
       - "Tensors and autograd in PyTorch"
@@ -138,6 +184,10 @@ levels:
     skill: pytorch
     title: "Deep learning in practice"
     summary: "The practical craft: images and convolutions, fighting overfitting, hyperparameters and transfer learning."
+    canon:
+      - "Stanford CS231n Deep Learning for Computer Vision, course notes on convolutional networks"
+      - "Krizhevsky, Sutskever and Hinton, 'ImageNet Classification with Deep Convolutional Neural Networks' (2012)"
+      - "Srivastava et al., 'Dropout: A Simple Way to Prevent Neural Networks from Overfitting' (JMLR, 2014)"
     topics:
       - "Images and convolutional networks"
       - "Overfitting in deep nets: dropout and early stopping"
@@ -149,6 +199,10 @@ levels:
     skill: vector-db
     title: "Embeddings and similarity"
     summary: "How text becomes vectors whose geometry captures meaning, and how to search by meaning."
+    canon:
+      - "Stanford CS224n Natural Language Processing with Deep Learning, lectures 1-2: word vectors"
+      - "Mikolov et al., 'Efficient Estimation of Word Representations in Vector Space' (word2vec, 2013)"
+      - "Reimers and Gurevych, 'Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks' (2019)"
     topics:
       - "Turning words and sentences into vectors"
       - "Cosine similarity"
@@ -159,6 +213,10 @@ levels:
     skill: llm-finetuning
     title: "Transformers and LLMs"
     summary: "What a large language model is made of: tokens, attention and next-token generation."
+    canon:
+      - "Vaswani et al., 'Attention Is All You Need' (2017)"
+      - "Stanford CS224n, the lectures on self-attention and transformers"
+      - "Harvard NLP, 'The Annotated Transformer' (Alexander Rush)"
     topics:
       - "Tokens and tokenisation"
       - "Attention: letting words look at each other"
@@ -169,6 +227,10 @@ levels:
     skill: rag
     title: "Building with LLMs"
     summary: "Using LLMs from code: prompts, sampling, structured output and keeping hallucinations in check."
+    canon:
+      - "Brown et al., 'Language Models are Few-Shot Learners' (GPT-3, 2020)"
+      - "Princeton COS 597G Understanding Large Language Models (Danqi Chen)"
+      - "Stanford CS224n, the lectures on prompting and large language models"
     topics:
       - "Prompts: instructions, context and examples"
       - "Temperature and sampling"
@@ -179,6 +241,10 @@ levels:
     skill: rag
     title: "Retrieval-augmented generation"
     summary: "RAG: give an LLM the right documents at answer time so it answers from evidence, with citations."
+    canon:
+      - "Lewis et al., 'Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks' (2020)"
+      - "Karpukhin et al., 'Dense Passage Retrieval for Open-Domain Question Answering' (2020)"
+      - "Manning, Raghavan and Schutze, 'Introduction to Information Retrieval' (the Stanford textbook)"
     topics:
       - "Why LLMs need retrieval"
       - "Chunking documents"
@@ -190,6 +256,10 @@ levels:
     skill: vector-db
     title: "Vector databases"
     summary: "Similarity search at scale: approximate nearest neighbours, HNSW, pgvector and hybrid search."
+    canon:
+      - "Malkov and Yashunin, 'Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs' (HNSW, 2018)"
+      - "Johnson, Douze and Jegou, 'Billion-scale similarity search with GPUs' (FAISS, 2017)"
+      - "Manning, Raghavan and Schutze, 'Introduction to Information Retrieval', the chapters on scoring and BM25"
     topics:
       - "Approximate nearest neighbour search"
       - "HNSW and IVF indexes"
@@ -200,6 +270,10 @@ levels:
     skill: llm-evals
     title: "Evaluating AI systems"
     summary: "Measuring whether an AI feature works: retrieval metrics, LLM-as-judge and golden test sets."
+    canon:
+      - "Manning, Raghavan and Schutze, 'Introduction to Information Retrieval', chapter 8: Evaluation in information retrieval"
+      - "Liang et al., 'Holistic Evaluation of Language Models' (Stanford HELM, 2022)"
+      - "Zheng et al., 'Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena' (2023)"
     topics:
       - "Why evaluation comes first"
       - "Retrieval metrics: recall@k and MRR"
@@ -210,6 +284,10 @@ levels:
     skill: mlops
     title: "MLOps: shipping models"
     summary: "From notebook to production: tracking experiments, serving, monitoring and CI/CD for models."
+    canon:
+      - "Sculley et al., 'Hidden Technical Debt in Machine Learning Systems' (NeurIPS, 2015)"
+      - "Stanford CS329S Machine Learning Systems Design (Chip Huyen)"
+      - "Breck et al., 'The ML Test Score: A Rubric for ML Production Readiness and Technical Debt Reduction' (2017)"
     topics:
       - "Experiment tracking"
       - "Serving a model behind an API"
@@ -221,6 +299,10 @@ levels:
     skill: llm-finetuning
     title: "Fine-tuning LLMs"
     summary: "Adapting open models to a task with LoRA, and deciding with evidence when fine-tuning beats prompting or retrieval."
+    canon:
+      - "Hu et al., 'LoRA: Low-Rank Adaptation of Large Language Models' (2021)"
+      - "Howard and Ruder, 'Universal Language Model Fine-tuning for Text Classification' (ULMFiT, 2018)"
+      - "Dettmers et al., 'QLoRA: Efficient Finetuning of Quantized LLMs' (2023)"
     topics:
       - "When to fine-tune vs prompt vs retrieve"
       - "LoRA and parameter-efficient fine-tuning"
@@ -231,6 +313,10 @@ levels:
     skill: mlops
     title: "Production AI at scale"
     summary: "The frontier of practice: efficient inference, agents, safety, and keeping up with research."
+    canon:
+      - "MIT 6.5940 TinyML and Efficient Deep Learning Computing (Song Han)"
+      - "Yao et al., 'ReAct: Synergizing Reasoning and Acting in Language Models' (2022)"
+      - "S. Keshav, 'How to Read a Paper' (2007)"
     topics:
       - "Quantisation and efficient inference"
       - "Agents and tool use"

@@ -19,6 +19,10 @@ levels:
     skill: mgmt-people
     title: "From maker to manager"
     summary: "What a manager is actually for, how the job differs from doing the work yourself, and how to survive the first 90 days."
+    canon:
+      - "Andrew Grove, 'High Output Management' (1983)"
+      - "Linda Hill (Harvard Business School), 'Becoming the Boss' (Harvard Business Review, 2007)"
+      - "Michael Watkins, 'The First 90 Days' (Harvard Business Review Press)"
     topics:
       - "A manager's output is the output of the team"
       - "Maker's schedule vs manager's schedule: where your time now goes"
@@ -29,6 +33,10 @@ levels:
     skill: mgmt-people
     title: "One-on-ones and feedback"
     summary: "The two tools a people manager uses every week: the one-on-one meeting and honest, usable feedback."
+    canon:
+      - "Center for Creative Leadership, the Situation-Behavior-Impact (SBI) feedback model"
+      - "Stone, Patton and Heen (Harvard Negotiation Project), 'Difficult Conversations' (1999)"
+      - "Hersey and Blanchard, the Situational Leadership model"
     topics:
       - "One-on-ones: purpose, agenda and cadence"
       - "Giving feedback with the SBI model (Situation, Behaviour, Impact)"
@@ -39,6 +47,10 @@ levels:
     skill: mgmt-execution
     title: "The language of management"
     summary: "The acronyms and terms you hear in every management meeting, decoded: goals, service levels, roles, product and money."
+    canon:
+      - "John Doerr, 'Measure What Matters' (2018), on OKRs"
+      - "Beyer et al., 'Site Reliability Engineering' (Google, 2016), the chapters on service level objectives"
+      - "Peter Drucker, 'The Practice of Management' (1954), on management by objectives"
     topics:
       - "Goals and measures: KPI, OKR, North Star metric, SMART goals"
       - "Service terms: SLA, SLO, SLI, uptime and error budgets"
@@ -49,6 +61,10 @@ levels:
     skill: mgmt-execution
     title: "Running a team's work"
     summary: "Turning a pile of requests into a plan the team can deliver: prioritising, estimating, rituals and meetings."
+    canon:
+      - "Frederick Brooks, 'The Mythical Man-Month' (1975)"
+      - "Schwaber and Sutherland, 'The Scrum Guide'"
+      - "Kahneman and Tversky on the planning fallacy (1979)"
     topics:
       - "Prioritisation: the Eisenhower matrix, RICE and saying no"
       - "Planning and estimation without lying to yourself"
@@ -60,6 +76,10 @@ levels:
     skill: mgmt-people
     title: "Hiring and building a team"
     summary: "The full people cycle: hire well, onboard fast, manage performance, and part ways properly when you must."
+    canon:
+      - "Schmidt and Hunter, 'The Validity and Utility of Selection Methods in Personnel Psychology' (Psychological Bulletin, 1998)"
+      - "Peter Cappelli (Wharton), 'Your Approach to Hiring Is All Wrong' (Harvard Business Review, 2019)"
+      - "Laszlo Bock, 'Work Rules!' (2015)"
     topics:
       - "A hiring process: scorecards and structured interviews"
       - "Onboarding: the first 30, 60 and 90 days"
@@ -70,6 +90,10 @@ levels:
     skill: mgmt-execution
     title: "Project and program management"
     summary: "Delivering work bigger than one team: scope, schedule, risk, stakeholders and honest status reporting."
+    canon:
+      - "Project Management Institute, 'A Guide to the Project Management Body of Knowledge' (PMBOK Guide)"
+      - "Bent Flyvbjerg and Dan Gardner, 'How Big Things Get Done' (2023)"
+      - "Frederick Brooks, 'The Mythical Man-Month' (1975)"
     topics:
       - "The triple constraint (scope, time, cost) and the critical path"
       - "Risk management: risk registers and RAID logs"
@@ -80,6 +104,10 @@ levels:
     skill: mgmt-operations
     title: "Goals and metrics"
     summary: "Setting goals people can act on and choosing numbers that tell the truth about the business."
+    canon:
+      - "Kaplan and Norton (Harvard Business School), 'The Balanced Scorecard: Measures That Drive Performance' (Harvard Business Review, 1992)"
+      - "Steven Kerr, 'On the Folly of Rewarding A, While Hoping for B' (Academy of Management Journal, 1975)"
+      - "John Doerr, 'Measure What Matters' (2018)"
     topics:
       - "OKRs done right (and the common ways they fail)"
       - "KPIs and the metric tree under a North Star"
@@ -90,6 +118,10 @@ levels:
     skill: mgmt-communication
     title: "Communicating like a leader"
     summary: "Writing and speaking so that busy senior people understand you and decide quickly."
+    canon:
+      - "Barbara Minto, 'The Pyramid Principle'"
+      - "Gabarro and Kotter (Harvard Business School), 'Managing Your Boss' (Harvard Business Review, 1980)"
+      - "Bryar and Carr, 'Working Backwards' (2021), on Amazon's six-page narratives"
     topics:
       - "Writing for executives: BLUF and the Amazon six-pager"
       - "Presenting to senior leaders: answer first"
@@ -101,6 +133,10 @@ levels:
     skill: mgmt-finance
     title: "Business finance for managers"
     summary: "Reading the three financial statements and the unit economics every budget conversation rests on."
+    canon:
+      - "Wharton, 'Introduction to Financial Accounting' (Brian Bushee)"
+      - "Berman and Knight, 'Financial Intelligence' (Harvard Business Review Press)"
+      - "Harvard Business School Online, 'Financial Accounting'"
     topics:
       - "Reading a P&L: revenue, COGS, gross margin, OPEX, EBITDA"
       - "Balance sheet and cash flow: why profit is not cash"
@@ -111,6 +147,10 @@ levels:
     skill: mgmt-people
     title: "Managing managers"
     summary: "Leading through other leaders: skip-levels, delegation at scale, succession and culture as a system."
+    canon:
+      - "Edgar Schein (MIT Sloan), 'Organizational Culture and Leadership'"
+      - "Charan, Drotter and Noel, 'The Leadership Pipeline'"
+      - "Andrew Grove, 'High Output Management' (1983), on managerial leverage"
     topics:
       - "Skip-level meetings and reading the health of an organisation"
       - "Delegating outcomes, not tasks"
@@ -121,6 +161,10 @@ levels:
     skill: mgmt-operations
     title: "Operations and service management"
     summary: "Running reliable operations: bottlenecks, service levels and contracts, incidents, and continuous improvement."
+    canon:
+      - "Eliyahu Goldratt, 'The Goal' (1984), on the theory of constraints"
+      - "Wharton, 'Introduction to Operations Management' (Christian Terwiesch)"
+      - "Beyer et al., 'Site Reliability Engineering' (Google, 2016), the chapter on postmortem culture"
     topics:
       - "Process design and the theory of constraints"
       - "SLAs, SLOs and vendor contracts in practice"
@@ -131,6 +175,10 @@ levels:
     skill: mgmt-product-gtm
     title: "Product and customers"
     summary: "How a product finds its market, what to charge, how it is sold and how customers are kept."
+    canon:
+      - "Christensen et al. (Harvard Business School), 'Know Your Customers' Jobs to Be Done' (Harvard Business Review, 2016)"
+      - "Frederick Reichheld, 'The One Number You Need to Grow' (Harvard Business Review, 2003)"
+      - "Geoffrey Moore, 'Crossing the Chasm' (1991)"
     topics:
       - "Product-market fit: what it is and how to tell"
       - "Pricing and packaging"
@@ -142,6 +190,10 @@ levels:
     skill: mgmt-strategy
     title: "Strategy fundamentals"
     summary: "What strategy really is, how competitive advantage works, and why a plan is not a strategy."
+    canon:
+      - "Michael Porter (Harvard Business School), 'What Is Strategy?' (Harvard Business Review, 1996)"
+      - "Michael Porter, 'The Five Competitive Forces That Shape Strategy' (Harvard Business Review, 2008)"
+      - "Richard Rumelt, 'Good Strategy/Bad Strategy' (2011)"
     topics:
       - "The kernel of good strategy: diagnosis, guiding policy, coherent actions"
       - "Competitive advantage and Porter's five forces"
@@ -152,6 +204,10 @@ levels:
     skill: mgmt-operations
     title: "Organisation design and scaling"
     summary: "Structuring a growing organisation and changing it without breaking it."
+    canon:
+      - "John Kotter (Harvard Business School), 'Leading Change: Why Transformation Efforts Fail' (Harvard Business Review, 1995)"
+      - "Larry Greiner, 'Evolution and Revolution as Organizations Grow' (Harvard Business Review, 1972)"
+      - "Melvin Conway, 'How Do Committees Invent?' (1968)"
     topics:
       - "Org structures: functional, divisional, matrix"
       - "Span of control, layers and Conway's law"
@@ -162,6 +218,10 @@ levels:
     skill: mgmt-communication
     title: "Negotiation and influence"
     summary: "Getting agreement when you cannot order it: negotiation, influence without authority, politics and presence."
+    canon:
+      - "Fisher and Ury (Harvard Negotiation Project), 'Getting to Yes' (1981)"
+      - "Robert Cialdini, 'Influence: The Psychology of Persuasion'"
+      - "Cohen and Bradford, 'Influence Without Authority'"
     topics:
       - "Negotiation basics: BATNA, ZOPA, interests vs positions"
       - "Influence without authority"
@@ -172,6 +232,10 @@ levels:
     skill: mgmt-strategy
     title: "Decision-making under uncertainty"
     summary: "Making and owning big calls with incomplete information."
+    canon:
+      - "Daniel Kahneman (Princeton), 'Thinking, Fast and Slow' (2011)"
+      - "Gary Klein, 'Performing a Project Premortem' (Harvard Business Review, 2007)"
+      - "Tetlock and Gardner (University of Pennsylvania), 'Superforecasting' (2015)"
     topics:
       - "One-way and two-way doors: reversible vs irreversible decisions"
       - "Expected value, base rates and probabilistic thinking"
@@ -183,6 +247,10 @@ levels:
     skill: mgmt-finance
     title: "Corporate finance and capital"
     summary: "How companies are valued, funded and bought, and how leaders decide where capital goes."
+    canon:
+      - "Brealey, Myers and Allen, 'Principles of Corporate Finance'"
+      - "Koller, Goedhart and Wessels (McKinsey), 'Valuation: Measuring and Managing the Value of Companies'"
+      - "William Thorndike, 'The Outsiders' (2012), on capital allocation"
     topics:
       - "Valuation basics: DCF and multiples"
       - "Fundraising: stages, dilution and term sheets"
@@ -193,6 +261,10 @@ levels:
     skill: mgmt-execution
     title: "Leading a function"
     summary: "Running a whole department: annual planning, the portfolio, the executive team and the operating rhythm."
+    canon:
+      - "Patrick Lencioni, 'The Five Dysfunctions of a Team' (2002), on the first team"
+      - "Kaplan and Norton, 'Mastering the Management System' (Harvard Business Review, 2008)"
+      - "Bossidy and Charan, 'Execution: The Discipline of Getting Things Done' (2002)"
     topics:
       - "Annual planning and the budgeting cycle"
       - "Portfolio management and resource allocation"
@@ -203,6 +275,10 @@ levels:
     skill: mgmt-product-gtm
     title: "Sales, marketing and revenue"
     summary: "The revenue engine a general manager must understand: pipeline maths, sales organisations, brand and partners."
+    canon:
+      - "Mark Roberge (Harvard Business School), 'The Sales Acceleration Formula' (2015)"
+      - "Philip Kotler (Northwestern Kellogg), 'Marketing Management'"
+      - "Binet and Field, 'The Long and the Short of It' (2013)"
     topics:
       - "The revenue engine: funnel, pipeline coverage, win rate"
       - "Sales organisation, quotas and compensation"
@@ -214,6 +290,10 @@ levels:
     skill: mgmt-governance
     title: "Governance and the board"
     summary: "How a company is governed: what boards do, how to work with one, and the duties that come with the top jobs."
+    canon:
+      - "Harvard Law School Forum on Corporate Governance"
+      - "Charan, Carey and Useem (Wharton), 'Boards That Lead' (2014)"
+      - "Jensen and Meckling, 'Theory of the Firm: Managerial Behavior, Agency Costs and Ownership Structure' (1976)"
     topics:
       - "What a board does: fiduciary duties and committees"
       - "Board meetings and the board deck"
@@ -224,6 +304,10 @@ levels:
     skill: mgmt-strategy
     title: "The chief executive's job"
     summary: "The work only the CEO can do, and what the rest of the C-suite (CFO, COO, CTO, CPO, CMO) is there for."
+    canon:
+      - "A.G. Lafley, 'What Only the CEO Can Do' (Harvard Business Review, 2009)"
+      - "Porter and Nohria (Harvard Business School), 'How CEOs Manage Time' (Harvard Business Review, 2018)"
+      - "Peter Drucker, 'What Makes an Effective Executive' (Harvard Business Review, 2004)"
     topics:
       - "What only the CEO can do: direction, capital, people"
       - "The C-suite roles: CFO, COO, CTO, CPO, CMO, CHRO"
@@ -234,6 +318,10 @@ levels:
     skill: mgmt-governance
     title: "Technology and AI strategy for executives"
     summary: "The technology decisions that reach the top table: build or buy, AI adoption, transformation and cyber risk."
+    canon:
+      - "Iansiti and Lakhani (Harvard Business School), 'Competing in the Age of AI' (2020)"
+      - "Clayton Christensen (Harvard Business School), 'The Innovator's Dilemma' (1997)"
+      - "Agrawal, Gans and Goldfarb, 'Prediction Machines' (2018)"
     topics:
       - "Build, buy or partner"
       - "AI adoption: use cases, ROI and risk"

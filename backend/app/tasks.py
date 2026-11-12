@@ -33,10 +33,12 @@ def generate_weekly_theme_task(self) -> dict:
 
 @app.task(bind=True, name="app.tasks.generate_daily_briefing", autoretry_for=_TRANSIENT, retry_backoff=True, retry_backoff_max=900, max_retries=4)
 def generate_daily_briefing_task(self, track: str = "ai") -> dict:
-    from app.curriculum.generators import NotEnoughData, generate_daily_briefing
+    from app.curriculum.generators import NotEnoughData, RestDay, generate_daily_briefing
 
     try:
         r = generate_daily_briefing(track=track)
+    except RestDay as exc:
+        return {"track": track, "skipped": str(exc)}
     except NotEnoughData as exc:
         if track == "ai":
             raise

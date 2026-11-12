@@ -73,14 +73,14 @@ async def _tasks(conn: AsyncConnection, briefing_id) -> list[dict]:
     return [{**r, "completed": r["completed_at"] is not None} for r in rows]
 
 
-async def fetch_today(conn: AsyncConnection, day: date, track: str = "ai") -> dict:
+async def fetch_today(conn: AsyncConnection, day: date, track: str = "ai", weekend_lessons: bool = False) -> dict:
     b = await (await conn.execute("select id, day, completed_at, payload, theme_id, level, track from daily_briefings where day=%s and track=%s",
                                   (day, track))).fetchone()
     week_start = day - timedelta(days=day.weekday())
     t = await (await conn.execute("select id, week_start, payload from weekly_themes where week_start=%s", (week_start,))).fetchone()
     return {
         "date": day, "track": track,
-        "state": "ready" if b else "pending",
+        "state": "ready" if b else "rest" if lv.is_rest_day(day, weekend_lessons) else "pending",
         "briefing": None if b is None else {"id": b["id"], "day": b["day"], "completed_at": b["completed_at"], "level": b["level"], "track": b["track"],
                                             "payload": b["payload"], "tasks": await _tasks(conn, b["id"])},
         "weekly_theme": None if t is None or track != "ai" else {"id": t["id"], "week_start": t["week_start"], "theme": t["payload"]},
@@ -477,7 +477,8 @@ async def _level_state(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladd
     return {"p": p, "level": level, "done": done, "attempts_today": attempts, "completions": {c["level"]: c for c in completions}}
 
 
-async def fetch_progress(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladder, cooldown_hours: int, track: str = "ai") -> dict:
+async def fetch_progress(conn: AsyncConnection, today: date, tz: str, lad: lv.Ladder, cooldown_hours: int, track: str = "ai",
+                         weekend_lessons: bool = False) -> dict:
     st = await _level_state(conn, today, tz, lad, track)
     level, done, comps = st["level"], st["done"], st["completions"]
     graduated = level.index == lad.levels[-1].index and level.index in comps
@@ -507,7 +508,7 @@ async def fetch_progress(conn: AsyncConnection, today: date, tz: str, lad: lv.La
                  "attempts_max": lad.exam_attempts_per_day, "pass_percent": lad.pass_percent, "questions": lad.exam_questions,
                  "last": dict(last) if last else None, "open_exam_id": open_exam["id"] if open_exam else None},
         "xp_total": int(xp["total"]), "xp_today": int(xp["today"]),
-        "streak_days": lv.streak([d["day"] for d in days], today),
+        "streak_days": lv.streak([d["day"] for d in days], today, weekend_lessons),
         "knowledge_score": lv.knowledge_score(len(comps), len(lad.levels)),
         "placement": {"taken": st["p"]["placement_taken_at"] is not None, "available_today": not placement_today},
         "path": [{**x.model_dump(), "tier_name": lad.tier_name(x.tier), "status": status(x.index),

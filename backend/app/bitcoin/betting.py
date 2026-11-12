@@ -2,9 +2,9 @@
 
     forecast (1d direction + confidence) ──► calibrate against the track record ──► P(price > K at settlement)
                                                                                           │
-                market YES ask / bid ──► edge = model probability - price ──► direction (YES / NO / hold)
+        the forecast's calibrated lean ──► direction (UP / DOWN / no bet) and the highest share price worth paying
                                                                                           │
-                       fractional Kelly on the ACTIVE bankroll, capped ──► shares, take-profit, stop-loss
+                       fractional Kelly on the ACTIVE bankroll, capped ──► STAKE in dollars (the market price is not an input)
     balance reported each day ──► high-water mark ──► half of every new peak moves to the VAULT (never bet again)
 
 WHY THE CALIBRATION STEP. Kelly sizing is only as good as the probability it is fed: betting as if you were right 80% of
@@ -28,7 +28,6 @@ from statistics import NormalDist
 _N = NormalDist()
 ACTIONS = ("BUY_YES", "BUY_NO", "HOLD_CASH", "HALT")
 P_FLOOR = 0.02  # the probability is clamped to [2%, 98%]
-SUSPICIOUS_EDGE = 0.25  # an edge this large usually means a typo or a model blind spot, not free money
 
 
 @dataclass(frozen=True)
@@ -74,44 +73,42 @@ def prob_above(spot: float, strike: float, sigma_daily: float, hours: float, p_u
 
 
 # ----------------------------------------------------------------------------------------------- the daily routine
-def advise(p_yes: float, yes_ask: float, yes_bid: float, active: float, params: Params = Params()) -> dict:
-    """Direction, size and exit levels for one cycle. A NO share costs 1 - YES bid and wins with probability 1 - p."""
-    edge_yes, edge_no = p_yes - yes_ask, yes_bid - p_yes
-    base = {"edge_yes": round(edge_yes, 4), "edge_no": round(edge_no, 4), "shares": 0, "cost": 0.0, "entry_price": None,
-            "prob_win": None, "kelly_full": None, "fraction": 0.0, "take_profit": None, "stop_loss": None,
-            "max_profit": 0.0, "expected_profit": 0.0}
+MIN_LEAN = 0.01  # a calibrated 1-day view within one point of 50% is a coin flip: no bet
+
+
+def advise(p_yes: float, lean: float, active: float, params: Params = Params()) -> dict:
+    """Direction and STAKE (in dollars) for one cycle, without knowing the market's share price (it moves all day).
+
+    `lean` is the calibrated 1-day view minus 50%: positive means UP. The side follows the lean; the stake is what
+    fractional Kelly allows at the WORST price still worth paying, `max_price` = P(win) - min_edge. Paying less than
+    that only adds edge, so the stake is safe at any price up to it; above it there is no bet.
+    Kelly at price q is (p - q) / (1 - q); at q = max_price that is min_edge / (1 - max_price)."""
+    base = {"shares": 0, "cost": 0.0, "entry_price": None, "prob_win": None, "kelly_full": None, "fraction": 0.0,
+            "take_profit": None, "stop_loss": None, "max_profit": 0.0, "expected_profit": 0.0}
     if active < params.min_trade:
         return base | {"action": "HALT", "reason": f"The active bankroll (${active:.2f}) is below the minimum order "
                                                    f"(${params.min_trade:.2f}). Trading stops; the vault stays untouched."}
-    if edge_yes >= params.min_edge:
-        action, entry, win = "BUY_YES", yes_ask, p_yes
-    elif edge_no >= params.min_edge:
-        action, entry, win = "BUY_NO", 1 - yes_bid, 1 - p_yes
-    else:
-        best = max(edge_yes, edge_no)
-        gap = (f"the model's edge on the best side is only {best * 100:.1f} points" if best > 0
-               else "the market price is already at or beyond what the model thinks it is worth")
-        return base | {"action": "HOLD_CASH", "reason": f"No edge: {gap}; at least {params.min_edge * 100:.0f} points are needed to bet."}
-    base |= {"entry_price": round(entry, 4), "prob_win": round(win, 4)}
-    expected_return = (win - entry) / entry
-    if params.fee and expected_return <= params.fee / (1 - params.fee):
-        return base | {"action": "HOLD_CASH", "reason": f"The expected return ({expected_return * 100:.1f}%) does not cover the "
-                                                        f"{params.fee * 100:.1f}% fee."}
-    f_star = (win - entry) / (1 - entry)
+    if abs(lean) < MIN_LEAN:
+        return base | {"action": "HOLD_CASH", "reason": "No edge: the forecast has no proven lean up or down right now, "
+                                                        "so a bet would be a coin flip minus fees."}
+    action, win = ("BUY_YES", p_yes) if lean > 0 else ("BUY_NO", 1 - p_yes)
+    max_price = round(win - params.min_edge - params.fee, 2)
+    base |= {"prob_win": round(win, 4)}
+    if max_price < 0.03:
+        return base | {"action": "HOLD_CASH", "reason": f"The model gives this side only {win * 100:.0f}%: too unlikely to be worth a bet."}
+    f_star = (win - max_price) / (1 - max_price)
     fraction = max(0.0, min(params.kelly * f_star, params.f_max))
-    capital = active * fraction
-    base |= {"kelly_full": round(f_star, 4), "fraction": round(fraction, 4)}
-    shares = int(capital / entry)
-    if capital < params.min_trade or shares < 1:
-        return base | {"action": "HOLD_CASH", "reason": f"There is an edge, but the bet size (${capital:.2f}) is below the "
+    stake = math.floor(active * fraction * 100) / 100
+    base |= {"entry_price": max_price, "kelly_full": round(f_star, 4), "fraction": round(fraction, 4)}
+    if stake < params.min_trade:
+        return base | {"action": "HOLD_CASH", "reason": f"There is a lean, but the bet size (${stake:.2f}) is below the "
                                                         f"minimum order (${params.min_trade:.2f})."}
-    cost = shares * entry
+    shares = stake / max_price  # at the worst acceptable price; a cheaper price buys more shares for the same stake
     return base | {
-        "action": action, "shares": shares, "cost": round(cost, 2),
-        "take_profit": round(entry + params.take * (1 - entry), 4), "stop_loss": round(entry * (1 - params.stop), 4),
-        "max_profit": round(shares * (1 - entry), 2), "expected_profit": round(shares * (win - entry), 2),
-        "reason": f"The model gives this side {win * 100:.0f}% and the market sells it for {entry * 100:.0f}c: "
-                  f"an edge of {(win - entry) * 100:.0f} points.",
+        "action": action, "shares": int(shares), "cost": stake,
+        "max_profit": round(shares * (1 - max_price), 2), "expected_profit": round(shares * (win - max_price), 2),
+        "reason": f"The model gives this side {win * 100:.0f}%. Bet ${stake:.2f}, and only while one share costs "
+                  f"{max_price * 100:.0f}c or less: above that price the edge is gone, so skip the bet.",
     }
 
 

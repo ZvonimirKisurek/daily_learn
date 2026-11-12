@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     candidate_window_days: int = 7
     max_per_source: int = 6  # diversity cap so one firehose (arXiv) can't fill the prompt
     min_candidates: int = 10
+    weekend_lessons: bool = False  # Saturday and Sunday are rest days: no daily lesson is generated, and they never break a streak
     # --- AI summaries (cheap, high-volume => small model) ---
     summary_model: str = "gpt-4o-mini"
     summary_batch_size: int = 10

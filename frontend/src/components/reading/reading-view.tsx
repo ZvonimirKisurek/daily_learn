@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Clock, Gauge, Library, ScrollText } from "lucide-react";
+import { ArrowLeft, Clock, Gauge, GraduationCap, Library, ScrollText } from "lucide-react";
 import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { skillLabel } from "@/lib/skills";
@@ -62,6 +62,15 @@ export function ReadingView({ detail }: { detail: TaskDetail }) {
                 {r.inspiration.map((a, i) => <li key={a.article_uuid} className="flex gap-2"><span className="font-mono text-muted-foreground">[{a.ref_id ?? `A${i + 1}`}]</span><ExternalLink href={a.url}>{a.title}</ExternalLink></li>)}
               </ul>
               <p className="mt-2 text-xs text-muted-foreground">Optional: the chapter is self-contained. These are where the real-world examples came from.</p>
+            </aside>
+          )}
+          {(detail.lesson?.canon?.length ?? 0) > 0 && (
+            <aside className="mt-6 max-w-[72ch] rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
+              <div className="eyebrow mb-2 flex items-center gap-2"><GraduationCap className="size-3.5" /> University reading list · Level {detail.lesson!.level}</div>
+              <ul className="space-y-1.5 text-sm">
+                {detail.lesson!.canon!.map((c) => <li key={c}><ExternalLink href={`https://www.google.com/search?q=${encodeURIComponent(c)}`}>{c}</ExternalLink></li>)}
+              </ul>
+              <p className="mt-2 text-xs text-muted-foreground">Optional: what a top university assigns for this level. Each link opens a search for the course, book or paper.</p>
             </aside>
           )}
           <div className="max-w-[72ch]">

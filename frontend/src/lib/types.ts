@@ -35,6 +35,8 @@ export interface InsightMeta {
 export interface LessonInfo {
   track?: Track; level: number; of: number; tier: number; tier_name: string; title: string; topic: string; review: boolean;
   lesson_number: number; lessons_required: number;
+  /** The level's university reading list (courses, books, papers). Absent on lessons made before it existed. */
+  canon?: string[];
 }
 
 export interface Briefing {
@@ -61,7 +63,7 @@ export interface Skill {
   history: { at: string; level: number }[];
 }
 
-export interface Today { date: string; track: Track; state: "ready" | "pending"; briefing: Briefing | null; weekly_theme: WeeklyTheme | null; skills: Skill[] }
+export interface Today { date: string; track: Track; state: "ready" | "pending" | "rest"; briefing: Briefing | null; weekly_theme: WeeklyTheme | null; skills: Skill[] }
 
 export interface Completion {
   task: Task; skill: { slug: string; level: number; delta: number }; briefing_completed: boolean; already_completed: boolean; xp: number;
@@ -183,10 +185,10 @@ export interface BitcoinLatest { run: BitcoinRun | null; price: BitcoinPrice | n
 export type BetAction = "BUY_YES" | "BUY_NO" | "HOLD_CASH" | "HALT";
 export interface BetAdvice {
   id: string; created_at: string; action: BetAction; reason: string; shares: number; cost: number;
-  /** Price per share of the side to buy (0-1); null when there is no bet. */
-  entry_price: number | null; prob_win: number | null; edge_yes: number; edge_no: number; kelly_full: number | null; fraction: number;
+  /** `cost` is the stake in dollars. `entry_price` is the HIGHEST price per share worth paying (0-1); null when there is no bet. */
+  entry_price: number | null; prob_win: number | null; kelly_full: number | null; fraction: number;
   take_profit: number | null; stop_loss: number | null; max_profit: number; expected_profit: number;
-  inputs: { balance: number; strike: number; yes_ask: number; yes_bid: number; hours_to_settle: number; settle_at: string };
+  inputs: { balance: number; strike: number; hours_to_settle: number; settle_at: string };
   market: { spot: number; spot_at: string };
   model: {
     forecast_at: string; forecast_age_hours: number; sigma_daily: number; stated_up_1d: number; shrink: number;
@@ -200,7 +202,7 @@ export interface BetCheck {
   sell_price: number; entry_price: number; prob_win_now: number; unrealized: number; shares: number; spot: number; strike: number; hours_left: number;
 }
 export interface BetOverview {
-  /** The last check-in re-evaluated at the current BTC price (market prices as you entered them). */
+  /** The last check-in re-evaluated at the current BTC price. */
   live: { spot: number; p_yes: number; action: BetAction; changed: boolean; hours_left: number } | null;
   state: { balance: number; active: number; vault: number; peak: number; updated_at: string } | null;
   last: BetAdvice | null; open_position: boolean;
@@ -214,4 +216,4 @@ export interface BitcoinPulse {
   price_updated: boolean; news_added: number; forecast: "current" | "started" | "running" | "cooldown" | "busy" | "error";
   reason: string | null; run_id: string | null;
 }
-export interface BetInput { balance: number; strike: number; yes_ask: number; yes_bid?: number; hours_to_settle?: number; reset?: boolean }
+export interface BetInput { balance: number; strike?: number; hours_to_settle?: number; reset?: boolean }
