@@ -133,14 +133,17 @@ export async function generateBitcoinAction(): Promise<ActionResult<{ queued: bo
 
 const price01 = (v: unknown): v is number => typeof v === "number" && v > 0 && v < 1;
 
-/** Bet advisor check-in: report the balance, get direction and stake. refresh() updates bankroll and history. */
+/** Bet advisor check-in: report the balance and the site's two payouts; get the side and the stake, or when to ask again. */
 export async function adviseBetAction(input: BetInput): Promise<ActionResult<BetAdvice>> {
-  const { balance, strike, hours_to_settle, reset } = input;
+  const { balance, up_x, down_x, strike, min_bet, hours_to_settle, reset } = input;
+  const quote = (v: unknown): v is number => typeof v === "number" && v > 1 && v <= 1000;
   if (!(typeof balance === "number" && balance >= 0 && balance <= 1e9)) return { ok: false, error: "Enter your balance in dollars." };
+  if (!quote(up_x) || !quote(down_x)) return { ok: false, error: "Enter both payouts as the site shows them, for example 1.02 and 8.31 (each above 1)." };
+  if (min_bet !== undefined && !(typeof min_bet === "number" && min_bet > 0)) return { ok: false, error: "The smallest bet must be a positive amount." };
   if (strike !== undefined && !(typeof strike === "number" && strike > 0)) return { ok: false, error: "The target price must be a positive number (or leave it empty)." };
   if (hours_to_settle !== undefined && !(hours_to_settle > 0 && hours_to_settle <= 72)) return { ok: false, error: "Hours to settlement must be between 0 and 72." };
   try {
-    const data = await adviseBitcoinBet({ balance, strike, hours_to_settle, reset: reset === true });
+    const data = await adviseBitcoinBet({ balance, up_x, down_x, strike, min_bet, hours_to_settle, reset: reset === true });
     refresh();
     return { ok: true, data };
   } catch (e) {

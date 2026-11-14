@@ -59,7 +59,7 @@ async def briefing_for_day(day: date, conn: Conn, cfg: Cfg, track: Track = "ai")
     Any other day must have a stored briefing: past-without-data and future dates are a 404, so the UI never offers an empty page."""
     if day != _today(cfg) and not await queries.briefing_exists(conn, day, track):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no briefing for that date")
-    return await queries.fetch_today(conn, day, track)
+    return await queries.fetch_today(conn, day, track, cfg.weekend_lessons)
 
 
 @router.post("/tasks/{task_id}/complete", response_model=CompletionOut)

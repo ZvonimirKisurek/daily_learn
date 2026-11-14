@@ -481,7 +481,10 @@ class BitcoinPulseOut(BaseModel):
 # ----------------------------------------------------------------------------------------------- Bitcoin bet advisor
 class BetIn(BaseModel):
     balance: float = Field(ge=0, le=1e9, description="total balance on the prediction platform right now (USD)")
-    strike: float | None = Field(default=None, gt=0, le=1e8, description="the price in the question: 'BTC above $strike at settlement'; default: the current price (plain up/down)")
+    up_x: float = Field(gt=1, le=1000, description="the site's payout multiplier for UP, e.g. 1.02 (a $1 bet returns $1.02)")
+    down_x: float = Field(gt=1, le=1000, description="the site's payout multiplier for DOWN, e.g. 8.31")
+    strike: float | None = Field(default=None, gt=0, le=1e8, description="the price to beat: UP wins if BTC settles above it; default: the current price")
+    min_bet: float | None = Field(default=None, gt=0, le=1e6, description="the smallest bet the site allows (USD); default: BITCOIN_BET_MIN_TRADE")
     hours_to_settle: float | None = Field(default=None, gt=0, le=72, description="default: until the next daily settlement")
     reset: bool = Field(default=False, description="start a fresh bankroll (after a deposit or withdrawal): vault 0, peak = balance")
 
@@ -569,6 +572,7 @@ class BetOverviewOut(BaseModel):
     last: BetAdviceOut | None
     open_position: bool
     history: list[BetHistoryRow]
+    record: dict | None = Field(default=None, description="what the advisor learned from settled days: n, model_closer, bets, wins, trust, note")
     defaults: dict
     params: dict
     disclaimer: str = BITCOIN_DISCLAIMER

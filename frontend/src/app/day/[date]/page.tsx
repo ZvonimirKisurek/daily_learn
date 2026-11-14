@@ -6,6 +6,7 @@ import { ArrowLeft, CalendarDays, History } from "lucide-react";
 import { ApiProblem } from "@/components/api-problem";
 import { MissionBoard } from "@/components/mission/mission-board";
 import { PendingBriefing } from "@/components/mission/pending-briefing";
+import { RestDay } from "@/components/mission/rest-day";
 import { CommandCenterSkeleton } from "@/components/mission/skeletons";
 import { ApiError, attempt, getDay } from "@/lib/api";
 import { parseTrack, withTrack, type Track } from "@/lib/tracks";
@@ -59,7 +60,7 @@ async function Content({ params, searchParams }: Props) {
       )}
       {day.state === "ready" && day.briefing
         ? <MissionBoard briefing={day.briefing} heading={archived ? "Mission archive" : catchUp ? "Catch-up lesson" : "Today's Lesson"} archived={archived} />
-        : <PendingBriefing track={track} />}
+        : day.state === "rest" ? <RestDay track={track} /> : <PendingBriefing track={track} />}
     </div>
   );
 }

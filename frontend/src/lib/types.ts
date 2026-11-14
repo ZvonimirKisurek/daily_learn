@@ -185,11 +185,15 @@ export interface BitcoinLatest { run: BitcoinRun | null; price: BitcoinPrice | n
 export type BetAction = "BUY_YES" | "BUY_NO" | "HOLD_CASH" | "HALT";
 export interface BetAdvice {
   id: string; created_at: string; action: BetAction; reason: string; shares: number; cost: number;
-  /** `cost` is the stake in dollars. `entry_price` is the HIGHEST price per share worth paying (0-1); null when there is no bet. */
-  entry_price: number | null; prob_win: number | null; kelly_full: number | null; fraction: number;
+  /** `cost` is the stake in dollars; `multiplier` is the site's payout for the chosen side; `entry_price` = 1 / multiplier. */
+  entry_price: number | null; prob_win: number | null; multiplier?: number | null; long_shot?: boolean; expected_return?: number | null;
+  /** On a "no bet": the payout each side would need before it becomes a bet, and when to ask again. */
+  need_up_x?: number | null; need_down_x?: number | null; next_check?: { hours: number; at: string; label: string } | null;
+  record?: BetRecord; kelly_full: number | null; fraction: number;
   take_profit: number | null; stop_loss: number | null; max_profit: number; expected_profit: number;
-  inputs: { balance: number; strike: number; hours_to_settle: number; settle_at: string };
-  market: { spot: number; spot_at: string };
+  inputs: { balance: number; strike: number; up_x?: number; down_x?: number; min_bet?: number; hours_to_settle: number; settle_at: string };
+  /** p_market: the quotes as a probability of UP; p_used: that probability moved toward the model's by `trust`. */
+  market: { spot: number; spot_at: string; up_x?: number; down_x?: number; p_market?: number; margin?: number; p_used?: number; trust?: number };
   model: {
     forecast_at: string; forecast_age_hours: number; sigma_daily: number; stated_up_1d: number; shrink: number;
     calibrated_up_1d: number; calibration_note: string; p_yes: number;
@@ -197,6 +201,8 @@ export interface BetAdvice {
   bankroll: { balance: number; active: number; vault: number; peak: number; swept: number; pnl: number | null };
   warnings: string[];
 }
+/** What the advisor learned from settled days: how often the model beat the market, and the weight that earns it. */
+export interface BetRecord { n: number; model_closer: number; bets: number; wins: number; trust: number; note: string }
 export interface BetCheck {
   action: "SELL" | "HOLD"; rule: "exit" | "take_profit" | "stop_loss" | "hold"; reason: string; side: "BUY_YES" | "BUY_NO";
   sell_price: number; entry_price: number; prob_win_now: number; unrealized: number; shares: number; spot: number; strike: number; hours_left: number;
@@ -208,7 +214,8 @@ export interface BetOverview {
   last: BetAdvice | null; open_position: boolean;
   history: { id: string; created_at: string; balance: number; vault: number; pnl: number | null; action: BetAction; shares: number;
              entry_price: number | null; cost: number; strike: number; is_reset: boolean }[];
-  defaults: { hours_to_settle: number; settle_at: string; settle_label: string };
+  record?: BetRecord | null;
+  defaults: { hours_to_settle: number; settle_at: string; settle_label: string; min_bet?: number };
   params: { min_edge: number; kelly: number; max_fraction: number; vault_share: number; take_profit: number; stop_loss: number; min_trade: number; fee: number };
   disclaimer: string;
 }
@@ -216,4 +223,4 @@ export interface BitcoinPulse {
   price_updated: boolean; news_added: number; forecast: "current" | "started" | "running" | "cooldown" | "busy" | "error";
   reason: string | null; run_id: string | null;
 }
-export interface BetInput { balance: number; strike?: number; hours_to_settle?: number; reset?: boolean }
+export interface BetInput { balance: number; up_x: number; down_x: number; strike?: number; min_bet?: number; hours_to_settle?: number; reset?: boolean }

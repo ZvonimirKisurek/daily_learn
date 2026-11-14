@@ -134,9 +134,11 @@ class Settings(BaseSettings):
     bitcoin_live_max_age_hours: float = 6  # with the page open, refresh a forecast older than this even without news
     bitcoin_background_forecast: bool = False  # true = also run the 09:00 scheduled forecast when nobody is looking
     # --- Bitcoin bet advisor (bitcoin/betting.py): a daily binary bet "BTC above $K at settlement" ---
-    bitcoin_bet_min_edge: float = 0.05  # model probability must beat the market price by this much
-    bitcoin_bet_kelly: float = 0.25  # quarter-Kelly
-    bitcoin_bet_max_fraction: float = 0.10  # hard cap per bet, as a share of the active bankroll
+    bitcoin_bet_min_edge: float = 0.03  # our probability must beat the cost of a side (1 / its multiplier) by this much
+    bitcoin_bet_kelly: float = 0.50  # half-Kelly (0.25 = quarter-Kelly: half the stake, a much smoother ride)
+    bitcoin_bet_max_fraction: float = 0.30  # hard cap per bet, as a share of the active bankroll
+    bitcoin_bet_trust_min: float = 0.25  # how far the forecast may overrule the market's quote: at least this much...
+    bitcoin_bet_trust_max: float = 0.75  # ...and at most this much; in between it is learned from settled days
     bitcoin_bet_vault_share: float = 0.50  # share of every new balance peak moved to the vault
     bitcoin_bet_take_profit: float = 0.70
     bitcoin_bet_stop_loss: float = 0.40

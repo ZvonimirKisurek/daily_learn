@@ -35,31 +35,53 @@ def test_calibration_shrinks_the_stated_edge_by_the_track_record(track, expect, 
 
 
 # ------------------------------------------------------------------ direction + sizing (the spec's daily routine)
-def test_bet_up_is_sized_by_quarter_kelly_at_the_highest_price_worth_paying():
-    r = betting.advise(0.65, 0.10, 200.0, P)
-    assert r["action"] == "BUY_YES" and r["prob_win"] == 0.65 and r["entry_price"] == 0.60     # max price = p - min_edge
-    assert r["kelly_full"] == pytest.approx(0.125) and r["fraction"] == pytest.approx(0.03125, abs=1e-4)   # 0.05 / (1 - 0.60), then a quarter
-    assert r["cost"] == 6.25 and r["shares"] == 10 and "60c or less" in r["reason"]            # $200 * 3.125%
-    assert r["max_profit"] == pytest.approx(4.17) and r["expected_profit"] == pytest.approx(0.52)
+def test_a_quote_becomes_the_markets_probability_and_trust_is_earned_from_settled_days():
+    p, margin = betting.implied_up(1.02, 8.31)
+    assert p == pytest.approx(0.8907, abs=1e-4) and margin == pytest.approx(0.1007, abs=1e-4)   # 98c + 12c = $1.10 for $1 of payout
+    assert betting.blend(0.60, 0.90, 0.5) == pytest.approx(0.75) and betting.blend(0.60, 0.90, 0.0) == pytest.approx(0.90)
+    assert betting.trust_from_record(0, 0) == 0.5                     # no history: the forecast and the market weigh the same
+    assert betting.trust_from_record(8, 10) == 0.75 and betting.trust_from_record(0, 10) == 0.25 and betting.trust_from_record(3, 6) == 0.5
 
 
-def test_bet_down_follows_a_negative_lean_and_the_risk_cap_binds():
-    r = betting.advise(0.20, -0.10, 1_000.0, P)
-    assert r["action"] == "BUY_NO" and r["prob_win"] == pytest.approx(0.80) and r["entry_price"] == 0.75 and r["cost"] == 50.0
-    capped = betting.advise(0.95, 0.20, 1_000.0, P)                                             # Kelly says 12.5%; the cap is 10%
-    assert capped["fraction"] == 0.10 and capped["cost"] == 100.0
+def test_a_favourite_with_an_edge_is_sized_by_half_kelly():
+    r = betting.advise(0.65, 1.90, 1.90, 200.0, P)
+    assert r["action"] == "BUY_YES" and r["multiplier"] == 1.90 and r["prob_win"] == 0.65 and not r["long_shot"]
+    assert r["kelly_full"] == pytest.approx(0.2611, abs=1e-4)                      # (0.65 * 1.9 - 1) / 0.9
+    assert r["cost"] == 26.11 and r["fraction"] == pytest.approx(0.1306, abs=1e-4)   # half of Kelly on $200
+    assert r["max_profit"] == pytest.approx(23.50) and r["expected_return"] == pytest.approx(0.235)
 
 
-@pytest.mark.parametrize("p,lean,active,action,needle", [
-    (0.65, 0.0, 200.0, "HOLD_CASH", "No edge"),                    # no calibrated lean: a coin flip
-    (0.65, 0.005, 200.0, "HOLD_CASH", "No edge"),                  # a lean under one point is noise
-    (0.65, 0.10, 8.0, "HOLD_CASH", "below the minimum order"),     # 3.1% of $8 = $0.25
-    (0.05, 0.10, 200.0, "HOLD_CASH", "too unlikely"),              # the strike is far above: no price is low enough
-    (0.65, 0.10, 0.5, "HALT", "Trading stops"),                    # bankrupt: the vault is not touched
+def test_a_long_shot_gets_a_small_stake_and_the_cap_binds_on_a_huge_edge():
+    r = betting.advise(0.70, 1.02, 8.31, 100.0, P)                                  # DOWN: 30% at 8.31x
+    assert r["action"] == "BUY_NO" and r["long_shot"] and r["prob_win"] == pytest.approx(0.30) and "long shot" in r["reason"]
+    assert r["kelly_full"] == pytest.approx(0.2042, abs=1e-4) and r["cost"] == 10.21 and r["max_profit"] == pytest.approx(74.64, abs=0.01)
+    assert betting.advise(0.95, 1.50, 3.0, 100.0, P)["cost"] == 30.0                # Kelly says 42%; the cap is 30%
+
+
+def test_a_small_bankroll_bets_the_sites_minimum_when_it_fits_under_the_cap():
+    r = betting.advise(0.70, 1.90, 1.90, 4.0, P)                                    # half Kelly: $0.73; full Kelly allows $1.20
+    assert r["action"] == "BUY_YES" and r["cost"] == 1.0 and r["fraction"] == 0.25 and "smallest bet" in r["reason"]
+    assert betting.advise(0.60, 1.90, 1.90, 4.0, Params(min_trade=0.10))["cost"] == 0.31   # a site with 10c bets: plain Kelly
+
+
+@pytest.mark.parametrize("p,up,down,active,action,needle", [
+    (0.52, 1.90, 1.90, 200.0, "HOLD_CASH", "No edge"),                 # 52% vs a cost of 53%
+    (0.89, 1.02, 8.31, 200.0, "HOLD_CASH", "No edge"),                 # we agree with the market: both sides cost more than they are worth
+    (0.60, 1.90, 1.90, 4.0, "HOLD_CASH", "justifies at most $0.62"),   # full Kelly is 15.6% of $4: a $1 bet would over-bet
+    (0.90, 1.90, 1.90, 3.0, "HOLD_CASH", "justifies at most $0.90"),   # a big edge, but the 30% cap is $0.90
+    (0.65, 1.90, 1.90, 0.5, "HALT", "Trading stops"),                  # bankrupt: the vault is not touched
 ])
-def test_no_bet_cases(p, lean, active, action, needle):
-    r = betting.advise(p, lean, active, P)
+def test_no_bet_cases(p, up, down, active, action, needle):
+    r = betting.advise(p, up, down, active, P)
     assert r["action"] == action and needle in r["reason"] and r["shares"] == 0 and r["cost"] == 0.0
+
+
+def test_no_bet_means_ask_again_later_with_the_quotes_that_would_change_the_answer():
+    r = betting.advise(0.52, 1.90, 1.90, 200.0, P)
+    assert r["need_up_x"] == pytest.approx(2.04) and r["need_down_x"] == pytest.approx(2.22)   # 1 / (p - 3 points)
+    assert betting.recheck_hours(20, 1, "HOLD_CASH") == 6.0 and betting.recheck_hours(7, 1, "HOLD_CASH") == 3.5
+    assert betting.recheck_hours(20, 9, "HOLD_CASH") == 2.0             # the forecast is old: come back sooner
+    assert betting.recheck_hours(1.5, 1, "HOLD_CASH") is None and betting.recheck_hours(20, 1, "BUY_YES") is None
 
 
 # ------------------------------------------------------------------ vault (high-water mark sweep)
@@ -100,19 +122,20 @@ async def test_daily_check_in_flow(btc_db, monkeypatch):  # noqa: F811
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c:
             empty = (await c.get("/api/bitcoin/bet")).json()
-            assert empty["state"] is None and empty["last"] is None and empty["history"] == [] and empty["params"]["kelly"] == 0.25
+            assert empty["state"] is None and empty["last"] is None and empty["history"] == [] and empty["params"]["kelly"] == 0.5
             assert 0 < empty["defaults"]["hours_to_settle"] <= 24 and "18:00" in empty["defaults"]["settle_label"]
 
-            ask = {"balance": 200, "hours_to_settle": 24}                                       # the balance is the only thing you report
+            ask = {"balance": 200, "up_x": 2.5, "down_x": 1.5, "hours_to_settle": 24}          # what the site shows: balance + two quotes
             r = await c.post("/api/bitcoin/bet", json=ask)
             assert r.status_code == 409 and "no Bitcoin forecast" in r.json()["detail"]        # nothing to base a probability on yet
 
             generate_prediction(trigger="cli", llm=FakeBtcLLM())  # spot 75,123.45; 1d call: up, low confidence
             a = (await c.post("/api/bitcoin/bet", json=ask)).json()
-            # no strike = up/down from the current price; no scored track record: the stated edge is halved
+            # no target = up/down from the current price. The site sells UP for 40% (2.5x); the model says a bit over 50%
             assert a["inputs"]["strike"] == 75_123.45 and a["model"]["shrink"] == 0.5 and 0.5 < a["model"]["p_yes"] < 0.6
-            assert a["action"] == "BUY_YES" and 0 < a["cost"] <= 20.0                           # <= 10% of $200
-            assert a["entry_price"] == pytest.approx(a["prob_win"] - 0.05, abs=0.006)           # the highest price worth paying
+            assert a["market"]["p_market"] == pytest.approx(0.375) and a["market"]["trust"] == 0.5 and a["record"]["n"] == 0
+            assert a["market"]["p_used"] == pytest.approx((a["model"]["p_yes"] + 0.375) / 2, abs=1e-3)   # halfway: equal weight
+            assert a["action"] == "BUY_YES" and a["multiplier"] == 2.5 and 0 < a["cost"] <= 60.0 and a["next_check"] is None
             assert a["bankroll"] == {"balance": 200.0, "active": 200.0, "vault": 0.0, "peak": 200.0, "swept": 0.0, "pnl": None}
 
             chk = (await c.post("/api/bitcoin/bet/check", json={"sell_price": 0.80})).json()   # the market now overpays: sell
@@ -120,26 +143,44 @@ async def test_daily_check_in_flow(btc_db, monkeypatch):  # noqa: F811
             held = (await c.post("/api/bitcoin/bet/check", json={"sell_price": 0.42, "paid_price": 0.40})).json()
             assert held["action"] == "HOLD" and held["entry_price"] == 0.40
 
-            # next day: the balance grew to $230 -> a new peak, half of the $30 gain is vaulted
-            b = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 230})).json()
+            # next day: the balance grew to $230 -> a new peak, half of the $30 gain is vaulted. Fair quotes: nothing to bet on
+            b = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 230, "up_x": 1.85, "down_x": 1.85})).json()
             assert b["bankroll"] == {"balance": 230.0, "active": 215.0, "vault": 15.0, "peak": 230.0, "swept": 15.0, "pnl": 30.0}
-            assert b["action"] == "BUY_YES"
-
-            # a losing day: nothing comes back out of the vault; a strike far above the price is too unlikely to bet on
-            d = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 180, "strike": 90_000})).json()
-            assert d["bankroll"]["vault"] == 15.0 and d["bankroll"]["active"] == 165.0 and d["bankroll"]["pnl"] == -50.0
-            assert d["action"] == "HOLD_CASH" and d["cost"] == 0.0
+            assert b["action"] == "HOLD_CASH" and b["cost"] == 0.0 and b["next_check"]["hours"] == 6.0 and b["need_up_x"] > 1.85
             assert (await c.post("/api/bitcoin/bet/check", json={"sell_price": 0.5})).status_code == 409   # no open position
+
+            # a losing day: nothing comes back out of the vault. A lopsided quote with no target entered earns a warning
+            d = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 180, "up_x": 1.02, "down_x": 8.31, "min_bet": 0.5})).json()
+            assert d["bankroll"]["vault"] == 15.0 and d["bankroll"]["active"] == 165.0 and d["bankroll"]["pnl"] == -50.0
+            assert d["action"] == "BUY_NO" and d["long_shot"] and d["inputs"]["min_bet"] == 0.5
+            assert any("price to beat" in w for w in d["warnings"])
             assert (await c.post("/api/bitcoin/bet", json=ask | {"balance": -1})).status_code == 422
+            assert (await c.post("/api/bitcoin/bet", json={"balance": 200})).status_code == 422          # the quotes are required
+            assert (await c.post("/api/bitcoin/bet", json=ask | {"up_x": 0.9})).status_code == 422       # a multiplier is above 1
 
             fresh = (await c.post("/api/bitcoin/bet", json=ask | {"balance": 50, "reset": True})).json()   # after a deposit/withdrawal
             assert fresh["bankroll"] == {"balance": 50.0, "active": 50.0, "vault": 0.0, "peak": 50.0, "swept": 0.0, "pnl": None}
 
             o = (await c.get("/api/bitcoin/bet")).json()
             assert o["state"]["active"] == 50.0 and len(o["history"]) == 4 and o["history"][0]["is_reset"] and o["last"]["id"] == fresh["id"]
-            assert [h["action"] for h in o["history"]][1:] == ["HOLD_CASH", "BUY_YES", "BUY_YES"] and "Not financial advice" in o["disclaimer"]
+            assert [h["action"] for h in o["history"]][1:] == ["BUY_NO", "HOLD_CASH", "BUY_YES"] and o["record"]["trust"] == 0.5 and o["defaults"]["min_bet"] == 1.0 and "Not financial advice" in o["disclaimer"]
+
+            # learning from settled days: on both, BTC ended above the target. The model was closer once, the market once
+            from datetime import datetime, timedelta, timezone
+            from psycopg.types.json import Jsonb
+            with psycopg.connect(btc_db, autocommit=True) as conn:
+                for days_ago, p_model in ((2, 0.70), (3, 0.30)):
+                    at = datetime.now(timezone.utc) - timedelta(days=days_ago)
+                    conn.execute("insert into bitcoin_prices (price_usd, source, fetched_at) values (72000, 'test', %s)", (at + timedelta(minutes=20),))
+                    detail = {"inputs": {"strike": 70_000, "settle_at": at.isoformat(), "up_x": 2.5, "down_x": 1.5}, "cost": 5,
+                              "model": {"p_yes": p_model}, "market": {"p_market": 0.4}}
+                    conn.execute("insert into bitcoin_bets (created_at, balance, active, vault, peak, action, detail) values (%s, 10, 10, 0, 10, 'BUY_YES', %s)",
+                                 (at - timedelta(hours=5), Jsonb(detail)))
+            rec = (await c.get("/api/bitcoin/bet")).json()["record"]
+            assert rec["n"] == 2 and rec["model_closer"] == 1 and rec["bets"] == 2 and rec["wins"] == 2 and rec["trust"] == 0.5
+            assert "closer to the outcome than the market on 1" in rec["note"] and "2 of 2 recommended bets won" in rec["note"]
     with psycopg.connect(btc_db) as conn:
-        assert conn.execute("select count(*) from bitcoin_bets").fetchone()[0] == 4
+        assert conn.execute("select count(*) from bitcoin_bets").fetchone()[0] == 6
     get_settings.cache_clear()
 
 

@@ -54,6 +54,20 @@ def summarize_recent_articles_task(self) -> dict:
     return summarize_pending()
 
 
+@app.task(name="app.tasks.record_bitcoin_price")
+def record_bitcoin_price() -> dict:
+    """Store the spot price once an hour (one small HTTP request, no LLM). The bet advisor scores its past calls against
+    the price at settlement, so that price has to exist even when nobody had the Bitcoin page open at that moment."""
+    from app.bitcoin import ingest
+
+    try:
+        row = ingest.ingest_price()
+        return {"price_usd": float(row["price_usd"])}
+    except Exception as exc:  # noqa: BLE001 - an exchange hiccup is not worth a retry storm; the next hour tries again
+        log.warning("hourly btc price not stored: %r", exc)
+        return {"skipped": repr(exc)[:200]}
+
+
 @app.task(
     bind=True, name="app.tasks.generate_bitcoin_daily_insight",
     autoretry_for=_TRANSIENT, retry_backoff=True, retry_backoff_max=900, max_retries=3,

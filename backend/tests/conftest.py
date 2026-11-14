@@ -6,6 +6,10 @@ from pathlib import Path
 import psycopg
 import pytest
 
+# Lessons are not generated on weekends by default (settings.weekend_lessons). The suite builds lessons for "today", so it
+# must not depend on the day it runs: switch the rule off here; the tests of the rule itself pass weekend_lessons=False.
+os.environ.setdefault("WEEKEND_LESSONS", "true")
+
 MIGRATIONS = sorted((Path(__file__).parents[2] / "supabase" / "migrations").glob("*.sql"))
 
 
