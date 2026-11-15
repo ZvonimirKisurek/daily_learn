@@ -1,6 +1,6 @@
 # One image, three roles: the API (default CMD), a Celery worker, and Celery beat. Override the command per service
 # (Render: dockerCommand in render.yaml). Build context is backend/.
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PYTHONPATH=/srv ENABLE_DOCS=false
 WORKDIR /srv
