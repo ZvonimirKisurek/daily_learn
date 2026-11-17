@@ -35,7 +35,7 @@ export function NewsFeed({ news, citedRefs }: { news: BitcoinNews[]; citedRefs: 
         <p className="p-4 text-sm text-muted-foreground">No headlines yet. They arrive with the first analysis run.</p>
       ) : (
         <ol ref={scroller}
-          className="max-h-[640px] overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent,black_24px,black_calc(100%-32px),transparent)]">
+          className="max-h-[640px] overflow-y-auto overflow-x-hidden [mask-image:linear-gradient(to_bottom,transparent,black_24px,black_calc(100%-32px),transparent)]">
           {news.map((n, i) => {
             const href = safeHref(n.url);
             const ref = citedRefs[n.url];

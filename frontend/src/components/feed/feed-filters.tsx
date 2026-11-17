@@ -30,7 +30,8 @@ function Chip({ to, active, children }: { to: string; active: boolean; children:
 }
 
 const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="flex flex-wrap items-center gap-1.5">
+  // Phones: one row per filter that scrolls sideways (like app filter chips); wider screens: the chips wrap.
+  <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&>*]:shrink-0">
     <span className="mr-1 w-16 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{label}</span>
     {children}
   </div>

@@ -2,24 +2,34 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Bitcoin, CalendarDays, Gauge, Newspaper, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/", label: "Command Center" },
-  { href: "/path", label: "Learning Path" },
-  { href: "/feed", label: "Intelligence Feed" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/bitcoin", label: "Bitcoin" },
+  { href: "/", label: "Command Center", short: "Today", icon: Gauge },
+  { href: "/path", label: "Learning Path", short: "Path", icon: Route },
+  { href: "/feed", label: "Intelligence Feed", short: "Feed", icon: Newspaper },
+  { href: "/calendar", label: "Calendar", short: "Calendar", icon: CalendarDays },
+  { href: "/bitcoin", label: "Bitcoin", short: "Bitcoin", icon: Bitcoin },
 ];
 
-// Client Component only because it needs usePathname() for the active state; everything else in the layout stays on the server.
+function isActive(href: string, pathname: string): boolean {
+  // A past day (/day/2026-10-28) is part of the Calendar section, so the Calendar tab stays lit there.
+  if (href === "/") return pathname === "/";
+  if (href === "/calendar") return pathname.startsWith("/calendar") || pathname.startsWith("/day/");
+  if (href === "/path") return pathname.startsWith("/path") || pathname.startsWith("/exam");
+  return pathname.startsWith(href);
+}
+
+// Client Components only because they need usePathname() for the active state; everything else in the layout stays on the server.
+
+/** Desktop and tablet: the links in the top bar. Hidden on phones, which get the bottom tab bar instead. */
 export function NavLinks() {
   const pathname = usePathname();
   return (
-    <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 text-sm [scrollbar-width:none]">
+    <nav className="-mx-1 hidden min-w-0 items-center gap-1 overflow-x-auto px-1 text-sm [scrollbar-width:none] md:flex">
       {LINKS.map((l) => {
-        // A past day (/day/2026-10-28) is part of the Calendar section, so the Calendar tab stays lit there.
-        const active = l.href === "/" ? pathname === "/" : l.href === "/calendar" ? pathname.startsWith("/calendar") || pathname.startsWith("/day/") : l.href === "/path" ? pathname.startsWith("/path") || pathname.startsWith("/exam") : pathname.startsWith(l.href);
+        const active = isActive(l.href, pathname);
         return (
           <Link
             key={l.href}
@@ -31,6 +41,37 @@ export function NavLinks() {
           </Link>
         );
       })}
+    </nav>
+  );
+}
+
+/** Phones: a fixed bottom tab bar, like a native app, so every section is one thumb-tap away. */
+export function MobileTabBar() {
+  const pathname = usePathname();
+  return (
+    <nav
+      aria-label="Sections"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-[#07080c]/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+    >
+      <ul className="mx-auto grid max-w-md grid-cols-5">
+        {LINKS.map((l) => {
+          const active = isActive(l.href, pathname);
+          const Icon = l.icon;
+          return (
+            <li key={l.href}>
+              <Link
+                href={l.href}
+                aria-current={active ? "page" : undefined}
+                className={cn("flex h-14 flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors",
+                  active ? "text-emerald-300" : "text-muted-foreground hover:text-foreground")}
+              >
+                <Icon className="size-5" aria-hidden />
+                {l.short}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }

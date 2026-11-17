@@ -39,9 +39,9 @@ export function PriceChart({ prediction, height = 300 }: { prediction: BitcoinPr
   const lo = Math.min(...values), hi = Math.max(...values), pad = (hi - lo) * 0.08 || 500;
 
   return (
-    <div className="w-full" style={{ height }} role="img"
+    <div className="w-full min-w-0 overflow-hidden" style={{ height }} role="img"
       aria-label={`BTC price over the last ${history.length} days with AI forecasts: ${horizons.map((h) => `${h.label} ${usd(h.predicted_price)}`).join(", ")}`}>
-      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 800, height }}>
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height }}>
         <ComposedChart data={rows} margin={{ top: 12, right: 4, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="btc-hist-fill" x1="0" y1="0" x2="0" y2="1">
