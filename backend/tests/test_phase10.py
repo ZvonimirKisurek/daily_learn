@@ -544,3 +544,18 @@ def test_cards_for_past_days_are_never_born_overdue(db):
     old = cards.teachback_cards(week_start=TODAY - timedelta(days=21), theme={"core_questions": ["Old question?"], "focus_skills": ["rag"]})
     assert old[0]["due_on"] < TODAY and repository.save_cards(old) == 1
     assert _sql(db, "select due_on from review_cards")[0][0] == TODAY
+
+
+def test_a_detailed_primary_source_focus_fits_without_a_repair_round_trip():
+    from app.curriculum.schemas import PrimarySourcePick
+
+    ctx = GroundingContext(frozenset(), frozenset(), source_ids=frozenset({"leakage"}))
+    pick = PrimarySourcePick.model_validate({"source_id": "leakage", "focus": "x" * 650, "guiding_question": "What leaks?"}, context=ctx)
+    assert len(pick.focus) == 650  # the live model routinely wrote 450-650 characters; 400 forced an extra paid call each time
+    with pytest.raises(ValidationError):
+        PrimarySourcePick.model_validate({"source_id": "leakage", "focus": "x" * 701, "guiding_question": "?"}, context=ctx)
+
+
+def test_beginner_topics_have_dedicated_primary_sources():
+    ids = {s.id for s in canon.for_skill("ai-foundations", limit=100)}
+    assert {"mlcc-generalization", "mlcc-fairness", "leakage", "datasheets", "islp-ch2"} <= ids  # train/test, bias, leakage, data quality
