@@ -9,6 +9,9 @@ dependencies = [
   "pydantic>=2.7", "pydantic-settings>=2.3", "pyyaml>=6.0",
   "psycopg[binary,pool]>=3.2", "pgvector>=0.3", "numpy>=1.26",
   "openai>=3.39", "tenacity>=8.5",
+  # runtime, not just dev: the worker runs each generated acceptance suite against its reference solution
+  # (app/mastery/sandbox.py). Without pytest in the image every suite would be stored as "unverified".
+  "pytest>=8",
 ]
 
 [project.optional-dependencies]

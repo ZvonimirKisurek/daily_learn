@@ -13,7 +13,7 @@ linearly from 1.0 at level 0 to 0.25 at level 100, so 20 -> 25 takes about a wee
 """
 from __future__ import annotations
 
-BASE_POINTS = {"reading": 0.15, "hands_on": 0.60, "insight": 0.05}  # building teaches more than reading
+BASE_POINTS = {"reading": 0.15, "hands_on": 0.60, "insight": 0.05, "math": 0.12}  # building teaches more than reading; math = per first-try correct drill problem
 DIFFICULTY_MULTIPLIER = {1: 1.0, 2: 1.25, 3: 1.5}
 
 

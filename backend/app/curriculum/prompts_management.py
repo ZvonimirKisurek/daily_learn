@@ -100,6 +100,11 @@ list the articles that evidence it.
 # Budget
 reading.estimated_minutes + hands_on_task.estimated_minutes must be at most 20.
 
+# Learner signals and the primary source
+<learner_signals> lists what the learner keeps forgetting (review cards with lapses) and their own decision from the
+last weekly retrospective. When one relates to today's skill, revisit it explicitly in the reading or the exercise.
+<primary_sources> is empty for this track: always set primary_source to null.
+
 {GROUNDING_RULES}"""
 
 CHAPTER_SYSTEM = f"""\

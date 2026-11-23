@@ -2,15 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bitcoin, CalendarDays, Gauge, Newspaper, Route } from "lucide-react";
+import { Bitcoin, BrainCircuit, CalendarCheck2, CalendarDays, Gauge, Newspaper, Route, Sigma } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// `mobile: false` = top bar only. On phones, Math and Retro are reached from the dashboard's mastery tiles, so the
+// bottom bar stays at six thumb-sized tabs.
 const LINKS = [
-  { href: "/", label: "Command Center", short: "Today", icon: Gauge },
-  { href: "/path", label: "Learning Path", short: "Path", icon: Route },
-  { href: "/feed", label: "Intelligence Feed", short: "Feed", icon: Newspaper },
-  { href: "/calendar", label: "Calendar", short: "Calendar", icon: CalendarDays },
-  { href: "/bitcoin", label: "Bitcoin", short: "Bitcoin", icon: Bitcoin },
+  { href: "/", label: "Command Center", short: "Today", icon: Gauge, mobile: true },
+  { href: "/path", label: "Learning Path", short: "Path", icon: Route, mobile: true },
+  { href: "/review", label: "Review", short: "Review", icon: BrainCircuit, mobile: true },
+  { href: "/math", label: "Math", short: "Math", icon: Sigma, mobile: false },
+  { href: "/retro", label: "Retro", short: "Retro", icon: CalendarCheck2, mobile: false },
+  { href: "/feed", label: "Intelligence Feed", short: "Feed", icon: Newspaper, mobile: true },
+  { href: "/calendar", label: "Calendar", short: "Calendar", icon: CalendarDays, mobile: true },
+  { href: "/bitcoin", label: "Bitcoin", short: "Bitcoin", icon: Bitcoin, mobile: true },
 ];
 
 function isActive(href: string, pathname: string): boolean {
@@ -53,8 +58,8 @@ export function MobileTabBar() {
       aria-label="Sections"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-[#07080c]/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
     >
-      <ul className="mx-auto grid max-w-md grid-cols-5">
-        {LINKS.map((l) => {
+      <ul className="mx-auto grid max-w-md grid-cols-6">
+        {LINKS.filter((l) => l.mobile).map((l) => {
           const active = isActive(l.href, pathname);
           const Icon = l.icon;
           return (

@@ -100,6 +100,7 @@ def main():
     ap.add_argument("--no-briefing", action="store_true", help="skip today's briefing to see the empty state")
     ap.add_argument("--no-bitcoin", action="store_true", help="skip the Bitcoin forecast (otherwise: LIVE price + news, demo LLM)")
     ap.add_argument("--seed-skills", action="store_true", help="fake skill levels/history (default: everything starts at 0, as after the Phase 7 reset)")
+    ap.add_argument("--locked", action="store_true", help="make the review cards overdue and owe last week's retro, to see the gate")
     args = ap.parse_args()
 
     import pixeltable_pgserver as pgs
@@ -180,15 +181,26 @@ def main():
             elif name == "DailyPlanOutput":
                 skill = grounding.required_skill or "rag"
                 d = F.daily_dict(ids[0], skill=skill, evidence=ids[1:3] or [ids[0]],
-                                 insight_skill="vector-db" if "vector-db" in grounding.skill_slugs else skill)
+                                 insight_skill="vector-db" if "vector-db" in grounding.skill_slugs else skill,
+                                 source_id=sorted(grounding.source_ids)[0] if grounding.source_ids else None)
             elif name == "LevelExamOutput":
                 d = {"questions": [{**q, "question": f"DEMO exam question {i + 1}: which statement is true?"} for i, q in enumerate(F.quiz_dict(10))]}
             elif name == "TaskEvaluationSchema":
                 good = "np.linalg.norm" in user or "norm(" in user
                 d = F.evaluation_dict(grounding.rubric.model_dump(), full=good)
+            elif name == "AcceptanceSuite":
+                d = F.acceptance_dict()
+            elif name == "RecallCheck":
+                good = "norm" in user.split("<answer>")[-1]
+                d = {"verdict": "correct" if good else "partial", "missing_points": [] if good else ["Dividing by the norms removes the effect of vector length."],
+                     "model_answer": "Cosine similarity divides the dot product by both norms, so it measures only the angle between the vectors.",
+                     "feedback": "Right idea." if good else "You have the dot product but not why the norms matter."}
             else:
                 raise NotImplementedError(name)
-            return output_model.model_validate(d, context=grounding)
+            out = output_model.model_validate(d, context=grounding)
+            if _.get("check"):
+                assert not _["check"](out)  # runs the real sandbox verification for the acceptance suite
+            return out
 
         def generate_text(self, *, system, user, check, purpose, **_):
             found = sorted(set(re.findall(r"\bA\d+\b", user)), key=lambda x: (len(x), x))[:2] or ["A1"]
@@ -227,6 +239,13 @@ def main():
             conn.execute("update skills set level=%s where slug=%s", (lvl, slug))
             for d in (6, 4, 2):
                 conn.execute("insert into skill_history (skill_id, level, delta, recorded_at) select id, %s, 0.6, now() - %s * interval '1 day' from skills where slug=%s", (lvl - d * 0.3, d, slug))
+
+    # Mastery demo: today's chapter questions are due now (normally they are first due tomorrow).
+    with get_pool().connection() as conn:
+        today = datetime.now(timezone.utc).date()
+        conn.execute("update review_cards set due_on=%s where source in ('chapter', 'primary_source')", (today - timedelta(days=1) if args.locked else today,))
+        if args.locked:
+            conn.execute("insert into daily_briefings (day, payload) values (%s, '{}'::jsonb)", (monday - timedelta(days=5),))
 
     import uvicorn
     from app.api import deps

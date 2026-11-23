@@ -14,7 +14,7 @@ envVarGroups:
         sync: false
       - key: TIMEZONE                # drives "today" and the 06:30 / Sunday 22:00 schedules
         value: Europe/Zagreb
-      - key: ROADMAP_START           # Monday you start the 4-week roadmap, YYYY-MM-DD (empty = off)
+      - key: ROADMAP_START           # Monday you start the 24-week roadmap, YYYY-MM-DD (empty = off)
         sync: false
       - key: LLM_MODEL
         value: gpt-4o

@@ -177,7 +177,7 @@ async def get_task_detail(conn: AsyncConnection, task_id: UUID, max_attempts: in
         """select t.id, t.kind, t.skill_slug, t.difficulty, t.title, t.completed_at, t.points_awarded, t.attempt_count,
                   t.evaluation_score, t.evaluation_passed, (t.reading_content is not null) as has_content,
                   t.reading_content, t.notes, t.user_submission, t.evaluation_result, t.quiz, t.quiz_attempts, t.quiz_score,
-                  t.xp_awarded, b.day, b.payload, b.level, b.track
+                  t.xp_awarded, t.acceptance_tests, t.reference_solution, t.test_report, b.day, b.payload, b.level, b.track
            from daily_tasks t join daily_briefings b on b.id = t.briefing_id where t.id = %s""", (task_id,))).fetchone()
     if row is None:
         return None
@@ -202,6 +202,10 @@ async def get_task_detail(conn: AsyncConnection, task_id: UUID, max_attempts: in
         "notes": row["notes"], "submission": row["user_submission"], "evaluation": row["evaluation_result"],
         "quiz": lv.public_questions(row["quiz"]) if row["quiz"] and kind == "reading" else None,
         "lesson": payload.get("lesson"), "locked": locked, "track": row["track"],
+        "acceptance_tests": row["acceptance_tests"] if kind == "hands_on" else None,
+        "test_output": (row["test_report"] or {}).get("output"),
+        # the hidden reference solution is a learning aid AFTER the attempt, never a shortcut before it
+        "reference_solution": row["reference_solution"] if kind == "hands_on" and (task["completed"] or row["attempt_count"] >= max_attempts) else None,
     }
 
 
@@ -216,11 +220,15 @@ async def save_notes(conn: AsyncConnection, task_id: UUID, notes: str) -> dict |
         (notes, task_id))).fetchone()
 
 
-async def begin_submission(conn: AsyncConnection, task_id: UUID, submission: str, max_attempts: int, max_chars: int) -> dict:
+async def begin_submission(conn: AsyncConnection, task_id: UUID, submission: str, max_attempts: int, max_chars: int,
+                           test_output: str | None = None) -> dict:
     """Validate that this task can be graded, then record the submission and use up an attempt, atomically.
-    The row lock (`for update`) serialises concurrent submissions; the attempt counter is the per-task cost guard."""
+    The row lock (`for update`) serialises concurrent submissions; the attempt counter is the per-task cost guard.
+    A task with acceptance tests needs the learner's pytest output: it is parsed here, BEFORE an attempt is spent."""
+    from app.mastery import pytest_report
+
     row = await (await conn.execute(
-        """select t.kind, t.completed_at, t.evaluation_rubric, t.attempt_count, b.payload
+        """select t.kind, t.completed_at, t.evaluation_rubric, t.attempt_count, t.acceptance_tests, b.payload
            from daily_tasks t join daily_briefings b on b.id = t.briefing_id where t.id = %s for update of t""", (task_id,))).fetchone()
     if row is None:
         raise SubmissionRejected(404, "task not found")
@@ -238,9 +246,18 @@ async def begin_submission(conn: AsyncConnection, task_id: UUID, submission: str
         raise SubmissionRejected(413, f"submission is {len(submission):,} characters; the limit is {max_chars:,}")
     if row["attempt_count"] >= max_attempts:
         raise SubmissionRejected(429, f"attempt limit reached ({max_attempts}); study the feedback and try again tomorrow")
-    await conn.execute("update daily_tasks set attempt_count = attempt_count + 1, user_submission = %s, submitted_at = now() where id = %s",
-                       (submission, task_id))
-    return {"task": row["payload"]["hands_on_task"], "rubric": row["evaluation_rubric"], "attempts_used": row["attempt_count"] + 1}
+    report = None
+    suite = row["acceptance_tests"]
+    if suite:
+        report = pytest_report.parse(test_output or "", suite["test_names"])
+        if len(report["missing"]) == report["expected"]:
+            raise SubmissionRejected(422, f"paste the output of `{suite['run_command']}` (with -v, so each test's PASSED/FAILED line is shown); "
+                                          "none of the acceptance tests appear in what you pasted. No attempt was used.")
+        report["output"] = (test_output or "")[-20000:]
+    await conn.execute("update daily_tasks set attempt_count = attempt_count + 1, user_submission = %s, submitted_at = now(), "
+                       "test_report = coalesce(%s, test_report) where id = %s", (submission, Jsonb(report) if report else None, task_id))
+    return {"task": row["payload"]["hands_on_task"], "rubric": row["evaluation_rubric"], "attempts_used": row["attempt_count"] + 1,
+            "report": report}
 
 
 async def refund_attempt(conn: AsyncConnection, task_id: UUID) -> None:

@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import build_pool
+from app.api.mastery_routes import router as mastery_router
 from app.api.routes import router
 from app.config import Settings, get_settings
 
@@ -41,6 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Authorization", "Content-Type"], allow_credentials=False, max_age=600,
     )
     app.include_router(router)
+    app.include_router(mastery_router)
 
     @app.get("/health", tags=["ops"])
     async def health():

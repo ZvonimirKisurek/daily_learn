@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { ApiProblem } from "@/components/api-problem";
+import { MasteryCard } from "@/components/mastery/mastery-card";
 import { MissionBoard } from "@/components/mission/mission-board";
 import { PendingBriefing } from "@/components/mission/pending-briefing";
 import { RestDay } from "@/components/mission/rest-day";
@@ -8,7 +9,7 @@ import { WeeklyThemeCard } from "@/components/mission/weekly-theme-card";
 import { LevelCard } from "@/components/progress/level-card";
 import { SkillProgress } from "@/components/skills/skill-progress";
 import { TrackTabs } from "@/components/track-tabs";
-import { attempt, getProgress, getToday } from "@/lib/api";
+import { attempt, getMastery, getProgress, getToday } from "@/lib/api";
 import { parseTrack, TRACK_SHORT, TRACKS, type Track } from "@/lib/tracks";
 import { longDate } from "@/lib/utils";
 
@@ -32,7 +33,8 @@ export default function Page({ searchParams }: { searchParams: SearchParams }) {
 
 async function CommandCenter({ searchParams }: { searchParams: SearchParams }) {
   const track: Track = parseTrack((await searchParams).track);
-  const [data, err] = await attempt(Promise.all([getToday(track), getProgress(track)])); // parallel, not sequential
+  // parallel, not sequential; the mastery summary is optional (the page still works if it fails)
+  const [[data, err], [mastery]] = await Promise.all([attempt(Promise.all([getToday(track), getProgress(track)])), attempt(getMastery())]);
   if (!data) return <ApiProblem error={err} />;
   const [today, progress] = data;
   return (
@@ -43,6 +45,7 @@ async function CommandCenter({ searchParams }: { searchParams: SearchParams }) {
           <TrackTabs track={track} base="/" />
         </div>
         <LevelCard progress={progress} />
+        {mastery && <MasteryCard m={mastery} />}
         {today.state === "ready" && today.briefing ? <MissionBoard briefing={today.briefing} />
           : today.state === "rest" ? <RestDay track={track} /> : <PendingBriefing track={track} />}
         {today.weekly_theme && <WeeklyThemeCard weekly={today.weekly_theme} today={today.date} />}
