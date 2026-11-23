@@ -54,7 +54,34 @@ celery -A app.celery_app worker -l info & celery -A app.celery_app beat -l info
 - **Run it locally with real keys, first run, calibration, roadmap mode:** [`docs/RUNBOOK.md`](docs/RUNBOOK.md)
 - **Deploy (Vercel + Supabase + one container + GitHub Actions cron), Docker, CI:** [`docs/DEPLOY.md`](docs/DEPLOY.md)
 - **Day 1, code tour, cost and security checks, weekly retrospective:** [`docs/RUNBOOK.md`](docs/RUNBOOK.md) (5b), [`docs/CODE_TOUR.md`](docs/CODE_TOUR.md), [`docs/SAFETY.md`](docs/SAFETY.md), [`docs/RETROSPECTIVE.md`](docs/RETROSPECTIVE.md)
-- **4-week roadmap that steers the weekly generator:** [`backend/curriculum/roadmap.yaml`](backend/curriculum/roadmap.yaml)
+- **24-week roadmap (two quarters, each ending in public work) that steers the weekly generator and the math drill:** [`backend/curriculum/roadmap.yaml`](backend/curriculum/roadmap.yaml)
+- **The mastery loop (spaced review, gates, acceptance tests, primary sources, math drill):** [`docs/RUNBOOK.md`](docs/RUNBOOK.md) section 8
+
+## The mastery loop: from "I ticked it" to "I can still do it next month"
+
+```
+chapter "Check Your Understanding" ─┐
+primary source guiding question ────┼─► review cards ─► /review: answer from memory ─► (optional AI check) ─► grade ─► SM-2 schedule
+week's core questions (teach-back) ─┘                                                                       │
+                                                  cards due before today ──► 423 on new tasks ◄─────────────┘   (review gate)
+/retro on Sunday: teach-back answered + evidence per milestone + decision ──► unlocks next week                (retro gate)
+           └─ decision, most-forgotten cards, missed math topics ──► <learner_signals> in next week's planner prompt
+hands-on lab ─► pytest suite + reference solution, RUN in a sandbox at generation ─► learner runs it ─► PASSED counted by code
+/math: 5 problems/day generated + graded by code (exact answers) ─► missed topics resurface ─► math-foundations skill
+```
+
+The research behind it is old and robust: **retrieval practice** (recalling beats rereading), **spacing** (review at growing intervals,
+just before forgetting) and **objective feedback** (a test that fails, an answer that is wrong). Each piece is enforced by code, not by
+willpower: overdue reviews and a missing retrospective lock new work; a lab passes only when its tests pass; math answers are exact.
+
+**Primary sources.** Every chapter is an LLM's summary of the field. Next to it, the planner assigns one human-written source (a
+paper, a textbook chapter, a course) from `backend/curriculum/canon.yaml`. As with articles, the model can only *point at* an id;
+title, authors, locator and link are written by a human, so no reference can be invented.
+
+**Acceptance tests that are proven passable.** A test suite written by a model is untested code. So the model also writes a minimal
+reference solution, and the worker runs the suite against it in a sandbox (empty environment, resource limits, timeout) before
+storing it; failures go back through the repair loop. Learners run the suite on their own machine (`tools/mle_check.py` automates
+it); the parsed result is a code-scored, must-pass rubric criterion. Learner code is never executed on the server.
 
 ## Learning path (Duolingo-style levels, XP, quizzes, exams)
 Daily lessons follow a **21-level path from "What is AI?" to expert** ([`backend/curriculum/levels.yaml`](backend/curriculum/levels.yaml)), in six tiers: Beginner, Novice, Intermediate, Advanced, Proficient, Expert. The weekly theme is unchanged.

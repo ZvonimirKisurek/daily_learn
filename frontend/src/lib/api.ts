@@ -1,7 +1,11 @@
 import "server-only";
 
 import { withTrack, type Track } from "./tracks";
-import type { BetAdvice, BetCheck, BetInput, BetOverview, BitcoinLatest, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, FeedPage, FeedQuery, Progress, QuizResult, Skill, SubmissionResult, TaskDetail, Today } from "./types";
+import type {
+  BetAdvice, BetCheck, BetInput, BetOverview, BitcoinLatest, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, FeedPage, FeedQuery,
+  GradeResult, Mastery, MathAnswer, MathDrill, Progress, QuizResult, RecallCheck, Retro, RetroInput, ReviewCard, Skill, SubmissionResult,
+  TaskDetail, Today,
+} from "./types";
 
 /**
  * Server-side client for the FastAPI backend.
@@ -54,8 +58,8 @@ export const getSkills = () => request<Skill[]>("/api/skills");
 export const completeTask = (id: string) => request<Completion>(`/api/tasks/${id}/complete`, { method: "POST" });
 export const getTask = (id: string) => request<TaskDetail>(`/api/tasks/${id}`);
 /** Grading is an LLM call that can take 10-60 s, so this one request gets a long timeout. */
-export const submitTask = (id: string, submission: string) =>
-  request<SubmissionResult>(`/api/tasks/${id}/submit`, { method: "POST", body: JSON.stringify({ submission }) }, 150_000);
+export const submitTask = (id: string, submission: string, testOutput?: string) =>
+  request<SubmissionResult>(`/api/tasks/${id}/submit`, { method: "POST", body: JSON.stringify({ submission, test_output: testOutput || null }) }, 150_000);
 /** Learning path: level, XP, streak, knowledge score, exam status and every level's status. */
 export const getProgress = (track: Track = "ai") => request<Progress>(withTrack("/api/progress", track));
 export const submitQuiz = (id: string, answers: number[]) =>
@@ -96,3 +100,20 @@ export async function attempt<T>(p: Promise<T>): Promise<[T, null] | [null, unkn
     return [null, e];
   }
 }
+
+// ---------------------------------------------------------------------------- mastery loop
+export const getMastery = () => request<Mastery>("/api/mastery");
+export const getReviews = (limit?: number) => request<ReviewCard[]>(`/api/reviews${limit ? `?limit=${limit}` : ""}`);
+export const getReviewReference = (id: string) => request<{ id: string; context: string }>(`/api/reviews/${id}/reference`);
+/** An LLM call (a few seconds); schedules nothing. */
+export const checkReview = (id: string, answer: string) =>
+  request<RecallCheck>(`/api/reviews/${id}/check`, { method: "POST", body: JSON.stringify({ answer }) }, 90_000);
+export const gradeReview = (id: string, grade: number, answer: string, feedback: RecallCheck | null) =>
+  request<GradeResult>(`/api/reviews/${id}/grade`, { method: "POST", body: JSON.stringify({ grade, answer, feedback }) });
+export const suspendReview = (id: string, suspended: boolean) =>
+  request<ReviewCard>(`/api/reviews/${id}/suspend`, { method: "POST", body: JSON.stringify({ suspended }) });
+export const getRetro = (weekStart: string) => request<Retro>(`/api/retro/${weekStart}`);
+export const putRetro = (weekStart: string, body: RetroInput) => request<Retro>(`/api/retro/${weekStart}`, { method: "PUT", body: JSON.stringify(body) });
+export const getMath = () => request<MathDrill>("/api/math/today");
+export const answerMath = (day: string, idx: number, answer: string) =>
+  request<MathAnswer>(`/api/math/${day}/${idx}/answer`, { method: "POST", body: JSON.stringify({ answer }) });

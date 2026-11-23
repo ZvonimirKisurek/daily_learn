@@ -1,4 +1,4 @@
-"""A fixed multi-week roadmap that steers the weekly generator.
+"""A fixed multi-week roadmap (backend/curriculum/roadmap.yaml) that steers the weekly generator and the math drill.
 
 Without a roadmap the weekly theme is *emergent*: the LLM weighs your skill gaps against this week's news.
 With one, the roadmap is the SPINE (what to learn, in what order) and the news only chooses timely readings and
@@ -33,12 +33,30 @@ class RoadmapWeek(BaseModel):
     deliverable: str
     milestones: list[str]
     daily_outline: list[RoadmapDay] = Field(min_length=7, max_length=7)
+    math_topics: list[str] = Field(default_factory=list, description="keys of mastery.mathdrill.GENERATORS drilled this week")
+
+
+class Quarter(BaseModel):
+    """A block of weeks that ends in something PUBLIC: a write-up, a reproduced paper, an open-source contribution.
+    Being good is not enough to be recognised as good; the public artifact is the evidence others can check."""
+    model_config = ConfigDict(extra="forbid")
+    index: int
+    title: str
+    weeks: list[int] = Field(min_length=2, max_length=2, description="[first, last] week index, inclusive")
+    public_deliverable: str
+    success_criteria: list[str] = Field(min_length=1)
 
 
 class Roadmap(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str
     weeks: list[RoadmapWeek]
+    quarters: list[Quarter] = Field(default_factory=list)
+    beyond: list[str] = Field(default_factory=list, description="what to do after the last scheduled week")
+
+
+def quarter_for(roadmap: Roadmap, week_index: int) -> Quarter | None:
+    return next((q for q in roadmap.quarters if q.weeks[0] <= week_index <= q.weeks[1]), None)
 
 
 def load_roadmap(path: str | Path) -> Roadmap:

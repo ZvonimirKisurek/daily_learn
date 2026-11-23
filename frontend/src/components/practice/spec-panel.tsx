@@ -67,7 +67,7 @@ export function SpecPanel({ spec }: { spec: HandsOnSpec }) {
             </li>
           ))}
         </ul>
-        <p className="mt-4 text-xs text-muted-foreground">A must-pass criterion needs at least half its points or the task fails regardless of the total. The grader reads your code and output; it does not execute anything, so show your terminal output.</p>
+        <p className="mt-4 text-xs text-muted-foreground">A must-pass criterion needs at least half its points or the task fails regardless of the total. The AI grader reads your code and output; it does not execute it. When the lab has acceptance tests, you run them and they are counted by code: every test must pass.</p>
       </Block>
     </div>
   );

@@ -126,7 +126,10 @@ class StructuredLLM:
 
     # ------------------------------------------------------------------ mode 1: structured JSON (strict schema + Pydantic + repair)
     def generate(self, *, system: str, user: str, output_model: type[T], grounding: object,
-                 model: str | None = None, temperature: float | None = None) -> T:
+                 model: str | None = None, temperature: float | None = None,
+                 check: Callable[[T], list[str]] | None = None) -> T:
+        """`check` (optional) runs AFTER schema validation and can do what Pydantic cannot, e.g. execute a generated test
+        suite. Its problems go through the same repair loop as validation errors."""
         s = self._s
         model = model or s.llm_model
         response_format = {"type": "json_schema", "json_schema": {"name": output_model.__name__, "strict": True, "schema": strict_schema(output_model)}}
@@ -137,7 +140,7 @@ class StructuredLLM:
             text = self._chat(purpose=output_model.__name__, model=model, messages=messages, response_format=response_format,
                               temperature=temperature, max_tokens=s.llm_max_tokens, attempt=attempt)
             try:
-                return output_model.model_validate_json(text, context=grounding)
+                out = output_model.model_validate_json(text, context=grounding)
             except ValidationError as exc:
                 last_errors = format_errors(exc)
                 raw_outputs.append(text)
@@ -149,6 +152,17 @@ class StructuredLLM:
                     {"role": "assistant", "content": text},
                     {"role": "user", "content": "Your JSON failed validation:\n" + last_errors + "\nReturn the complete corrected JSON object."},
                 ]
+                continue
+            problems = check(out) if check else []
+            if not problems:
+                return out
+            last_errors = "\n".join(f"- {p}" for p in problems)
+            raw_outputs.append(text)
+            log.warning("%s failed checks (attempt %d):\n%s", output_model.__name__, attempt, last_errors)
+            messages += [
+                {"role": "assistant", "content": text},
+                {"role": "user", "content": "Your JSON is well-formed but failed these checks:\n" + last_errors + "\nReturn the complete corrected JSON object."},
+            ]
         err = LLMValidationFailed(f"still invalid after {s.llm_max_repairs} repairs:\n{last_errors}")
         err.errors, err.raw_outputs = last_errors, raw_outputs  # for callers that want to log or surface the details
         raise err

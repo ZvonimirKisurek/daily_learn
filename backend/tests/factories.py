@@ -67,7 +67,7 @@ def quiz_dict(n: int = 4) -> list[dict]:
              "answer": 0, "explanation": "Cosine similarity compares directions, so length does not matter."} for i in range(1, n + 1)]
 
 
-def daily_dict(article_id, skill="rag", evidence=None, minutes=(8, 10), insight_skill="vector-db"):
+def daily_dict(article_id, skill="rag", evidence=None, minutes=(8, 10), insight_skill="vector-db", source_id=None):
     """A valid DailyPlanOutput (stage 1 of the daily chain): a short lesson with a quiz."""
     return {
         "reading": {"chapter_title": "Embeddings and Cosine Similarity from Scratch", "skill_slug": skill, "difficulty": 1,
@@ -82,7 +82,25 @@ def daily_dict(article_id, skill="rag", evidence=None, minutes=(8, 10), insight_
                           "docs_to_consult": ["numpy.linalg.norm"], "estimated_minutes": minutes[1], "stretch_goal": None, "rubric": rubric_dict()},
         "market_insight": {"headline": "Postgres is becoming the default vector store", "thesis": "Teams consolidate vector search into Postgres.",
                            "skill_slug": insight_skill, "evidence_article_ids": evidence or [article_id]},
+        "primary_source": None if source_id is None else {
+            "source_id": source_id, "focus": "Read the indexing section and note what ef_search trades.",
+            "guiding_question": "What does HNSW's ef_search parameter trade off?"},
     }
+
+
+REFERENCE_COSINE = "import numpy as np\n\n\ndef cosine(a, b):\n    a, b = np.asarray(a, float), np.asarray(b, float)\n    return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))\n"
+TEST_COSINE = (
+    "import numpy as np\nimport pytest\nfrom cosine import cosine\n\n\n"
+    "def test_identical_vectors_have_similarity_one():\n    assert cosine([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]) == pytest.approx(1.0, abs=1e-6), 'cos(a, a) must be 1'\n\n\n"
+    "def test_orthogonal_vectors_have_similarity_zero():\n    assert cosine([1.0, 0.0], [0.0, 1.0]) == pytest.approx(0.0, abs=1e-9), 'orthogonal -> 0'\n\n\n"
+    "def test_matches_numpy_on_random_vectors():\n    rng = np.random.default_rng(0)\n    a, b = rng.normal(size=8), rng.normal(size=8)\n"
+    "    expected = a @ b / (np.linalg.norm(a) * np.linalg.norm(b))\n    assert cosine(a, b) == pytest.approx(expected, rel=1e-9), 'must match the definition'\n"
+)
+
+
+def acceptance_dict(test_code=TEST_COSINE, reference=REFERENCE_COSINE, test_path="lab/test_acceptance.py"):
+    return {"interface": ["lab/cosine.py: cosine(a, b) -> float"], "test_path": test_path, "test_code": test_code,
+            "reference_files": [{"path": "lab/cosine.py", "content": reference}]}
 
 
 def chapter_text(words: int = 800, cites=("A1",)) -> str:

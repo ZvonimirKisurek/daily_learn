@@ -63,3 +63,15 @@ exercise to add.)
 ## 5. Bonus: `ingestion/repository.py` `find_nearest` (L67-82) + `pipeline.py` L113
 The same cosine idea decides "is this the same story?" with threshold `DEDUP_THRESHOLD` = 0.92. Precision/recall again:
 too low merges different stories (false duplicates), too high shows the same story twice. Inspect `articles.duplicate_sim` for pairs near the threshold.
+
+## Phase 10 stops: the mastery loop
+1. `backend/app/mastery/srs.py` `schedule()`: SM-2 in 30 lines. Run `pytest tests/test_phase10.py -k sm2` and change the ease
+   constants to see intervals move.
+2. `backend/app/mastery/sandbox.py` `run_suite()` and `acceptance.py` `static_problems()` / `verify()`: how a model-written
+   test suite is checked statically, then executed against its reference solution, before a learner ever sees it.
+3. `backend/app/curriculum/llm.py` `generate(check=...)`: the post-validation hook that sends a failing pytest run back through
+   the repair loop, the same way a schema error is.
+4. `backend/app/mastery/pytest_report.py` `parse()` and `acceptance.apply_tests()`: the grade's test criterion is computed by code.
+5. `backend/app/mastery/queries.py` `gate_reasons()`: the two gates (overdue reviews, missing retrospective) behind the 423s.
+6. `backend/app/mastery/mathdrill.py`: problem generators with exact answers; `drill_topics()` mixes the week's topics with missed ones.
+7. `backend/app/curriculum/canon.py` + `curriculum/canon.yaml`: primary sources as a closed world (`SourceRef` in `schemas.py`).

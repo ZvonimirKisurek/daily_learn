@@ -15,12 +15,16 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import openai
+
 from app.config import Settings, get_settings
-from app.curriculum import content_checks as cc, levels, prompts, repository, roadmap as roadmap_mod
+from app.curriculum import canon, content_checks as cc, levels, prompts, repository, roadmap as roadmap_mod
+from app.curriculum.errors import LLMError
 from app.curriculum.llm import StructuredLLM, make_llm
 from app.curriculum.ranking import rank_articles
-from app.curriculum.schemas import DailyPlanOutput, GroundingContext, LevelExamOutput, WeeklyThemeOutput
+from app.curriculum.schemas import AcceptanceSuite, DailyPlanOutput, GroundingContext, HandsOnTask, LevelExamOutput, WeeklyThemeOutput
 from app.curriculum.types import RankedArticle, Skill
+from app.mastery import acceptance, cards
 
 log = logging.getLogger(__name__)
 
@@ -93,7 +97,8 @@ def generate_weekly_theme(
     active = roadmap_mod.active_week(settings, week_start)
     block = prompts.render_roadmap_week(active[0].title, active[1], len(active[0].weeks)) if active else None
     system = prompts.WEEKLY_SYSTEM + (prompts.ROADMAP_RULES if active else "")
-    user = prompts.build_weekly_prompt(week_start, today, skills, articles, settings.candidate_window_days, block)
+    signals = repo.learner_signals(week_start)
+    user = prompts.build_weekly_prompt(week_start, today, skills, articles, settings.candidate_window_days, block, signals)
     if dry_run:
         return {"system": system, "user": user, "articles": len(articles)}
 
@@ -108,8 +113,14 @@ def generate_weekly_theme(
         wk = active[1]
         payload["roadmap"] = {"index": wk.index, "of": len(active[0].weeks), "title": wk.title, "goal": wk.goal,
                               "deliverable": wk.deliverable, "milestones": wk.milestones}
+        quarter = roadmap_mod.quarter_for(active[0], wk.index)
+        if quarter:
+            payload["roadmap"]["quarter"] = quarter.model_dump()
     payload["key_articles"] = [_article_ref(by_id[i]) for i in out.key_article_ids]  # ids -> real URLs, by code
+    if active and wk.math_topics:
+        payload["math_topics"] = wk.math_topics
     theme_id = repo.save_weekly_theme(week_start, payload, replace=force)
+    repo.save_cards(cards.teachback_cards(week_start=week_start, theme=payload))  # the Sunday teach-back test, as review cards
     log.info("weekly theme saved: %s", out.title)
     return {"id": theme_id, "week_start": week_start.isoformat(), "payload": payload, "cached": False}
 
@@ -170,7 +181,10 @@ def generate_daily_briefing(
     skills = ensure_skill_embeddings(repo.load_skills(track), embedder, repo, settings)
     articles = _select(skills, settings, repo, exclude=repo.used_reading_ids(), track=track,
                        boost={lesson["skill"]: 1.3})  # bias retrieval toward the level's skill
-    user = prompts.build_daily_plan_prompt(day, lesson, skills, articles, repo.recent_work(day, track=track), settings.candidate_window_days)
+    # Primary sources: only the AI track has a canon (papers, textbook chapters, courses); the list is empty otherwise.
+    sources = canon.for_skill(lesson["skill"], difficulty=2, exclude=repo.used_source_ids()) if track == "ai" else []
+    user = prompts.build_daily_plan_prompt(day, lesson, skills, articles, repo.recent_work(day, track=track), settings.candidate_window_days,
+                                           sources=sources, signals=repo.learner_signals(day))
     if dry_run:  # prints stage 1 (the plan); stages 2-3 are written from the plan's output
         return {"system": systems["plan"], "user": user, "articles": len(articles)}
     ensure_level_embedding(lesson, embedder, repo, settings)
@@ -179,12 +193,17 @@ def generate_daily_briefing(
     by_id = {a.short_id: a for a in articles}
     window = settings.candidate_window_days
 
-    # Stage 1 - PLAN (structured): reading outline + quiz, hands-on exercise with rubric, essay thesis.
+    # Stage 1 - PLAN (structured): reading outline + quiz, hands-on exercise with rubric, primary source, essay thesis.
     grounding = _grounding(articles, skills)
-    grounding = GroundingContext(grounding.article_ids, grounding.skill_slugs, required_skill=lesson["skill"])
+    grounding = GroundingContext(grounding.article_ids, grounding.skill_slugs, required_skill=lesson["skill"],
+                                 source_ids=frozenset(x.id for x in sources))
     plan = llm.generate(system=systems["plan"], user=user, output_model=DailyPlanOutput,
                         grounding=grounding, temperature=settings.temp_daily)
     reading, hands_on, insight = plan.reading, plan.hands_on_task, plan.market_insight
+    primary = None
+    if plan.primary_source is not None:  # always None on the management track (no canon there)
+        picked = canon.load_canon()[plan.primary_source.source_id]
+        primary = {**picked.model_dump(), "focus": plan.primary_source.focus, "guiding_question": plan.primary_source.guiding_question}
     inspiration = [by_id[i] for i in reading.inspiration_article_ids]
     evidence = [by_id[i] for i in insight.evidence_article_ids]
     chapter_ids = frozenset(a.short_id for a in inspiration)  # the reading may cite only the articles it was shown
@@ -194,7 +213,7 @@ def generate_daily_briefing(
     # Stages 2 and 3 are independent given the plan, so they run concurrently (halves the latency).
     def write_chapter() -> str:
         return llm.generate_text(
-            system=systems["chapter"], user=prompts.build_chapter_prompt(reading.model_dump(), lesson, inspiration, window),
+            system=systems["chapter"], user=prompts.build_chapter_prompt(reading.model_dump(), lesson, inspiration, window, primary),
             check=lambda t: cc.check_chapter(t, min_words=settings.chapter_min_words, max_words=settings.chapter_max_words,
                                              min_python=min_python, article_ids=chapter_ids,
                                              required_heading=prompts.LECTURE_HALL if lesson["canon"] else None),
@@ -206,9 +225,14 @@ def generate_daily_briefing(
             check=lambda t: cc.check_essay(t, min_words=settings.essay_min_words, max_words=settings.essay_max_words, article_ids=essay_ids),
             purpose="Essay", temperature=settings.temp_chapter, max_tokens=settings.llm_max_tokens, clean=cc.strip_h1)
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         chapter_f, essay_f = pool.submit(write_chapter), pool.submit(write_essay)
+        # Executable tests only make sense for a CODE exercise (AI track, a .py file in the layout); written exercises
+        # (answers in the submission box, the whole management track) stay graded by the rubric alone.
+        is_code = track == "ai" and any(p.strip().endswith(".py") for p in hands_on.project_layout)
+        tests_f = pool.submit(write_acceptance_tests, llm, settings, hands_on) if settings.acceptance_tests and is_code else None
         chapter, essay = chapter_f.result(), essay_f.result()
+        tests = tests_f.result() if tests_f else None
 
     rng = random.Random(f"{day}-{track}-{lesson['level']}")
     quiz = [levels.shuffle_question(q.model_dump(), rng) for q in reading.quiz]  # answer key: stored server-side only
@@ -218,7 +242,7 @@ def generate_daily_briefing(
             "chapter_title": reading.chapter_title, "skill_slug": reading.skill_slug, "difficulty": reading.difficulty,
             "learning_goals": reading.learning_goals, "estimated_minutes": reading.estimated_minutes,
             "word_count": cc.count_words(chapter), "section_headings": [s.heading for s in reading.sections],
-            "inspiration": [_article_ref(a) for a in inspiration], "quiz_questions": len(quiz),
+            "inspiration": [_article_ref(a) for a in inspiration], "quiz_questions": len(quiz), "primary_source": primary,
         },
         "hands_on_task": hands_on.model_dump(),
         "market_insight": {
@@ -226,11 +250,17 @@ def generate_daily_briefing(
             "word_count": cc.count_words(essay), "evidence": [_article_ref(a) for a in evidence],
         },
     }
+    # Review cards: every quiz question again, a day later, answered from memory WITHOUT the options (recall, not
+    # recognition), plus the primary source's guiding question when there is one.
+    reading_cards = cards.quiz_cards(day=day, skill_slug=reading.skill_slug, quiz=quiz, chapter_md=chapter)
+    if primary:
+        reading_cards.append(cards.primary_source_card(task_id="", day=day, skill_slug=reading.skill_slug, source=primary))
     tasks = [
         {"kind": "reading", "skill_slug": reading.skill_slug, "difficulty": reading.difficulty, "title": reading.chapter_title,
-         "reading_content": chapter, "quiz": quiz},
+         "reading_content": chapter, "quiz": quiz, "cards": reading_cards},
         {"kind": "hands_on", "skill_slug": hands_on.skill_slug, "difficulty": hands_on.difficulty, "title": hands_on.title,
-         "evaluation_rubric": hands_on.rubric.model_dump()},
+         "evaluation_rubric": hands_on.rubric.model_dump(),
+         "acceptance_tests": tests[0] if tests else None, "reference_solution": tests[1] if tests else None},
         {"kind": "insight", "skill_slug": insight.skill_slug, "difficulty": 1, "title": insight.headline},
     ]
     briefing_id = repo.save_briefing(day, str(theme_row["id"]) if theme_row else None, payload, tasks, replace=force,
@@ -287,6 +317,29 @@ def generate_level_exam(level_index: int, recent_titles: list[str], *, llm, sett
         output_model=LevelExamOutput, grounding=GroundingContext(frozenset(), frozenset()), temperature=settings.temp_daily)
     rng = random.Random()
     return [levels.shuffle_question(q.model_dump(), rng) for q in out.questions]
+
+
+def write_acceptance_tests(llm, settings: Settings, hands_on: HandsOnTask) -> tuple[dict, list[dict]] | None:
+    """Stage 5: an executable pytest suite + a reference solution, run against each other in a sandbox before storing.
+
+    Degrades gracefully: if the model cannot produce a consistent pair within the repair budget, the task is stored
+    WITHOUT tests and is graded by the rubric alone (as before), rather than failing the whole briefing."""
+    outcome: dict = {}
+
+    def run(suite: AcceptanceSuite) -> list[str]:
+        status, detail, problems = acceptance.verify(suite, enabled=settings.verify_acceptance_tests, timeout_s=settings.acceptance_timeout_s)
+        outcome.update(status=status, detail=detail)
+        return problems
+
+    try:
+        suite = llm.generate(system=prompts.ACCEPTANCE_SYSTEM, user=prompts.build_acceptance_prompt(hands_on.model_dump()),
+                             output_model=AcceptanceSuite, temperature=settings.temp_tests, check=run,
+                             grounding=GroundingContext(frozenset(), frozenset(), project_files=frozenset(hands_on.project_layout)))
+    except (LLMError, openai.OpenAIError, ValueError) as exc:
+        log.warning("acceptance tests skipped for %r: %s", hands_on.title, exc)
+        return None
+    log.info("acceptance suite for %r: %s (%s)", hands_on.title, outcome.get("status"), outcome.get("detail"))
+    return acceptance.stored(suite, outcome.get("status", "unverified"), outcome.get("detail", ""))
 
 
 def _default_embedder(settings: Settings):

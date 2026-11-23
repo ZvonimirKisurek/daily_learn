@@ -40,6 +40,8 @@ class GroundingContext:
     required_focus: frozenset[str] | None = None  # set in roadmap mode: focus_skills must equal this
     rubric: "Rubric | None" = None  # set when GRADING: the evaluation must score exactly these criteria
     required_skill: str | None = None  # set for a daily lesson: the learner's current level fixes the skill
+    source_ids: frozenset[str] | None = None  # canon ids shown in <primary_sources>; primary_source.source_id must be one
+    project_files: frozenset[str] | None = None  # the hands-on task's project_layout; acceptance suites may only touch these
 
 
 def _grounding(info: ValidationInfo) -> GroundingContext | None:
@@ -60,6 +62,13 @@ def _skill_slug(v: str, info: ValidationInfo) -> str:
     return v
 
 
+def _source_id(v: str, info: ValidationInfo) -> str:
+    g = _grounding(info)
+    if g is not None and g.source_ids is not None and v not in g.source_ids:
+        raise ValueError(f"{v!r} is not one of the ids in <primary_sources>; allowed: {sorted(g.source_ids)}")
+    return v
+
+
 def _no_urls(v: str) -> str:
     # Links come from our database, never from the model. A URL in generated text is, by construction, something the
     # model recalled or invented - reject it and let the repair loop remove it. (localhost addresses are fine: commands use them.)
@@ -70,6 +79,7 @@ def _no_urls(v: str) -> str:
 
 ArticleRef = Annotated[str, AfterValidator(_article_id)]
 SkillSlug = Annotated[str, AfterValidator(_skill_slug)]
+SourceRef = Annotated[str, AfterValidator(_source_id)]
 Text = Annotated[str, AfterValidator(_no_urls)]
 
 
@@ -236,10 +246,17 @@ class InsightPlan(_Strict):
     evidence_article_ids: list[ArticleRef] = Field(min_length=1, max_length=4)
 
 
+class PrimarySourcePick(_Strict):
+    source_id: SourceRef = Field(description="The id of ONE entry from <primary_sources>")
+    focus: Text = Field(max_length=400, description="What exactly to read in it today and what to look for, tied to today's chapter")
+    guiding_question: Text = Field(max_length=300, description="One question the learner must be able to answer from memory after reading it")
+
+
 class DailyPlanOutput(_Strict):
     reading: ReadingPlan
     hands_on_task: HandsOnTask
     market_insight: InsightPlan
+    primary_source: PrimarySourcePick | None = Field(description="One entry from <primary_sources>, or null when that list is empty")
 
     @model_validator(mode="after")
     def _time_budget(self, info: ValidationInfo) -> DailyPlanOutput:
@@ -253,7 +270,44 @@ class DailyPlanOutput(_Strict):
         g = _grounding(info)
         if g is not None and g.required_skill and {self.reading.skill_slug, h.skill_slug} != {g.required_skill}:
             raise ValueError(f"reading.skill_slug and hands_on_task.skill_slug must both be {g.required_skill!r} (the learner's current level)")
+        if g is not None and g.source_ids and self.primary_source is None:
+            raise ValueError("primary_source is required: pick one id from <primary_sources>")
         return self
+
+
+# ------------------------------------------------------------------------------ acceptance tests (stage 4 of the daily chain)
+class SourceFile(_Strict):
+    path: str = Field(max_length=120, description="Relative path from project_layout, e.g. 'lab/cosine.py'")
+    content: str = Field(max_length=20000, description="The complete file")
+
+
+class AcceptanceSuite(_Strict):
+    """An executable pytest suite for the hands-on task, plus a minimal reference solution that PROVES it is passable
+    (both are run in a sandbox at generation time; see mastery/sandbox.py). The learner sees the tests and the
+    interface; the reference solution stays hidden until they pass or run out of attempts."""
+
+    interface: list[Text] = Field(min_length=1, max_length=10, description="The exact public API the tests rely on, one item per function/class, e.g. \"lab/cosine.py: cosine(a, b) -> float\"")
+    test_path: str = Field(max_length=120, description="Where the suite lives: a test_*.py file in the SAME folder as the modules it imports, e.g. 'lab/test_acceptance.py'")
+    test_code: str = Field(max_length=15000, description="The complete pytest file: 3-8 top-level test_* functions")
+    reference_files: list[SourceFile] = Field(min_length=1, max_length=6, description="A minimal correct solution: every first-party module the tests import")
+
+    @model_validator(mode="after")
+    def _static_checks(self, info: ValidationInfo) -> AcceptanceSuite:
+        from app.mastery import acceptance
+
+        g = _grounding(info)
+        problems = acceptance.static_problems(self, g.project_files if g else None)
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self
+
+
+# ------------------------------------------------------------------------------ recall check (spaced-repetition review)
+class RecallCheck(_Strict):
+    verdict: Literal["correct", "partial", "incorrect"] = Field(description="Judged only against the reference")
+    missing_points: list[Text] = Field(max_length=5, description="Key ideas the answer omitted or got wrong; empty if correct")
+    model_answer: Text = Field(max_length=1500, description="A concise, complete answer grounded in the reference")
+    feedback: Text = Field(max_length=800, description="1-3 sentences: what was right, what to fix in your understanding")
 
 
 # ------------------------------------------------------------------------------ evaluation (grading a submission)

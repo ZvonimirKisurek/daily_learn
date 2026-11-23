@@ -11,7 +11,7 @@ from app.config import Settings
 from app.curriculum import generators, repository as crepo
 from app.ingestion import repository as irepo
 from app.ingestion.models import RawItem, SourceSpec
-from tests.factories import chapter_text, daily_dict, essay_text, evaluation_dict, quiz_dict, unit_vec, weekly_dict
+from tests.factories import acceptance_dict, chapter_text, daily_dict, essay_text, evaluation_dict, quiz_dict, unit_vec, weekly_dict
 
 rng = np.random.default_rng(1)
 pytestmark = pytest.mark.integration
@@ -45,14 +45,27 @@ class FakeLLM:
             d = weekly_dict(ids, skills=("rag", "vector-db"))
         elif name == "DailyPlanOutput":
             skill = grounding.required_skill or "rag"
-            d = daily_dict(ids[0], skill=skill, evidence=ids[:2], insight_skill="vector-db" if "vector-db" in grounding.skill_slugs else skill)
+            d = daily_dict(ids[0], skill=skill, evidence=ids[:2], insight_skill="vector-db" if "vector-db" in grounding.skill_slugs else skill,
+                         source_id=sorted(grounding.source_ids)[0] if grounding.source_ids else None)
         elif name == "LevelExamOutput":
             d = {"questions": [{**q, "question": f"Exam question {i}?"} for i, q in enumerate(quiz_dict(10))]}
         elif name == "TaskEvaluationSchema":
             d = evaluation_dict(grounding.rubric.model_dump(), full="FAILME" not in user)
+        elif name == "PrimarySourcePick":
+            d = {"source_id": sorted(grounding.source_ids)[0], "focus": "Read the method section.", "guiding_question": "What problem does it solve?"}
+        elif name == "AcceptanceSuite":
+            d = acceptance_dict()
+        elif name == "RecallCheck":
+            d = {"verdict": "partial" if "PARTIAL" in user else "correct", "missing_points": [], "model_answer": "Because it normalises length.",
+                 "feedback": "Good recall."}
         else:
             raise AssertionError(f"unexpected model {name}")
-        return output_model.model_validate(d, context=grounding)
+        out = output_model.model_validate(d, context=grounding)
+        check = kw.get("check")
+        if check:
+            problems = check(out)
+            assert not problems, problems
+        return out
 
     def generate_text(self, *, system, user, check, purpose, **kw):
         ids = re.findall(r'<article id="(A\d+)"', user)
@@ -66,7 +79,7 @@ def test_migrations_applied(db):
     with psycopg.connect(db) as conn:
         tables = {r[0] for r in conn.execute("select tablename from pg_tables where schemaname='public'")}
         assert {"sources", "articles", "ingestion_runs", "skills", "skill_history", "weekly_themes", "daily_briefings", "daily_tasks"} <= tables
-        assert conn.execute("select count(*) from skills").fetchone()[0] == 16
+        assert conn.execute("select count(*) from skills").fetchone()[0] == 17
         assert conn.execute("select data_type from information_schema.columns where table_name='skills' and column_name='level'").fetchone()[0] == "real"
         assert conn.execute("select bool_and(relrowsecurity) from pg_class where relname in ('articles','daily_tasks','skills')").fetchone()[0]
 
@@ -110,7 +123,7 @@ def test_weekly_then_daily_end_to_end(db):
         rub = conn.execute("select evaluation_rubric from daily_tasks where kind='hands_on'").fetchone()[0]
         assert rub["pass_score"] == 6 and len(rub["criteria"]) == 3             # the rubric is stored on the hands-on task
         assert conn.execute("select count(*) from daily_tasks where kind='insight' and reading_content is null and evaluation_rubric is null").fetchone()[0] == 1
-        assert conn.execute("select count(*) from skills where embedding is not null and track = 'ai'").fetchone()[0] == 8
+        assert conn.execute("select count(*) from skills where embedding is not null and track = 'ai'").fetchone()[0] == 9
 
     # next day must not reuse yesterday's reading
     used = crepo.used_reading_ids()

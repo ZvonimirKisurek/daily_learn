@@ -97,7 +97,9 @@ class ClaudeCodeLLM:
 
     # ------------------------------------------------------------------ mode 1: structured JSON
     def generate(self, *, system: str, user: str, output_model: type[T], grounding: object,
-                 model: str | None = None, temperature: float | None = None) -> T:
+                 model: str | None = None, temperature: float | None = None,
+                 check: Callable[[T], list[str]] | None = None) -> T:
+        """Same contract as StructuredLLM.generate, including the optional post-validation `check` (see llm.py)."""
         from app.curriculum.llm import format_errors, strict_schema
 
         s = self._s
@@ -111,13 +113,21 @@ class ClaudeCodeLLM:
                 raise LLMRefusal(f"Claude returned no structured output: {str(data.get('result') or '')[:300]}")
             text = json.dumps(data["structured_output"])
             try:
-                return output_model.model_validate_json(text, context=grounding)
+                out = output_model.model_validate_json(text, context=grounding)
             except ValidationError as exc:
                 last_errors = format_errors(exc)
                 raw_outputs.append(text)
                 log.error("%s failed validation (attempt %d/%d):\n%s\n----- raw model output -----\n%s\n----- end raw output -----",
                           output_model.__name__, attempt + 1, s.llm_max_repairs + 1, last_errors, text[:12_000])
                 history.append((text, "Your JSON failed validation:\n" + last_errors + "\nReturn the complete corrected JSON object."))
+                continue
+            problems = check(out) if check else []
+            if not problems:
+                return out
+            last_errors = "\n".join(f"- {p}" for p in problems)
+            raw_outputs.append(text)
+            log.warning("%s failed checks (attempt %d):\n%s", output_model.__name__, attempt, last_errors)
+            history.append((text, "Your JSON is well-formed but failed these checks:\n" + last_errors + "\nReturn the complete corrected JSON object."))
         err = LLMValidationFailed(f"still invalid after {s.llm_max_repairs} repairs:\n{last_errors}")
         err.errors, err.raw_outputs = last_errors, raw_outputs
         raise err

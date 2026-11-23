@@ -2,6 +2,12 @@
 
 Completing a task is a behaviour signal, not proof of learning. The app measures behaviour; you must test understanding.
 
+**Since Phase 10 this ritual is built into the app and enforced.** Open `/retro` on Sunday: it shows the numbers below, lists the
+week's teach-back questions (answer them from memory in `/review` first), asks for evidence per milestone and for your decision.
+Until you submit it, the next week's tasks return 423 Locked. Your decision and your weakest cards are fed to next week's planner.
+Spaced retrieval (step 4's "re-ask last week's questions") is automatic: every chapter question comes back on an SM-2 schedule.
+The sections below remain the reasoning behind each step, and the CLI (`python -m app.cli retro`) still works.
+
 ## 1. The numbers (5 min)
 ```bash
 cd backend && source .venv/bin/activate

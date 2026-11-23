@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { ArrowLeft, FlaskConical } from "lucide-react";
 import { ApiProblem } from "@/components/api-problem";
 import { Reveal } from "@/components/motion";
+import { AcceptancePanel, ReferenceSolution } from "@/components/practice/acceptance-panel";
 import { PracticeSkeleton } from "@/components/practice/skeletons";
 import { SpecPanel } from "@/components/practice/spec-panel";
 import { Workspace } from "@/components/practice/workspace";
@@ -35,7 +36,7 @@ async function Content({ params }: { params: Promise<{ taskId: string }> }) {
         <header className="mb-8 max-w-3xl">
           <div className="eyebrow mb-3 flex items-center gap-2 !text-primary"><FlaskConical className="size-3.5" /> Hands-on lab · {skillLabel(spec.skill_slug)}</div>
           <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl"><span className="gradient-text">{spec.title}</span></h1>
-          <div className="mt-4 flex flex-wrap gap-2"><Badge variant="outline">{spec.estimated_minutes} min</Badge><Badge variant="outline">graded by AI review</Badge>{detail.lesson && <Badge variant="violet">Level {detail.lesson.level} · {detail.lesson.title}</Badge>}{detail.task.completed && <Badge variant="primary">passed</Badge>}</div>
+          <div className="mt-4 flex flex-wrap gap-2"><Badge variant="outline">{spec.estimated_minutes} min</Badge><Badge variant="outline">{detail.acceptance_tests ? "graded by tests + AI review" : "graded by AI review"}</Badge>{detail.lesson && <Badge variant="violet">Level {detail.lesson.level} · {detail.lesson.title}</Badge>}{detail.task.completed && <Badge variant="primary">passed</Badge>}</div>
         </header>
       </Reveal>
       {detail.locked && !detail.task.completed && (
@@ -44,7 +45,11 @@ async function Content({ params }: { params: Promise<{ taskId: string }> }) {
         </p>
       )}
       <div className="grid gap-8 lg:grid-cols-2">
-        <SpecPanel spec={spec} />
+        <div className="space-y-5">
+          {detail.acceptance_tests && <AcceptancePanel suite={detail.acceptance_tests} />}
+          <SpecPanel spec={spec} />
+          {detail.reference_solution && <ReferenceSolution files={detail.reference_solution} />}
+        </div>
         <div className="lg:sticky lg:top-20 lg:self-start"><Workspace detail={detail} /></div>
       </div>
     </div>

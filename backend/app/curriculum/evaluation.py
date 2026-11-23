@@ -17,11 +17,14 @@ from app.curriculum.llm import StructuredLLM
 from app.curriculum.schemas import GroundingContext, Rubric, TaskEvaluationSchema
 
 
-def evaluate(llm: StructuredLLM, settings: Settings, *, task: dict, rubric: dict, submission: str) -> TaskEvaluationSchema:
+def evaluate(llm: StructuredLLM, settings: Settings, *, task: dict, rubric: dict, submission: str,
+             tests: str | None = None) -> TaskEvaluationSchema:
+    """`tests` is a one-line description of the parsed acceptance-test report; the grader sees it as evidence, and
+    app.mastery.acceptance.apply_tests adds the code-scored test criterion afterwards."""
     rubric_model = Rubric.model_validate(rubric)
     return llm.generate(
         system=prompts.EVALUATOR_SYSTEM,
-        user=prompts.build_evaluation_prompt(task, rubric, submission, settings.max_submission_chars),
+        user=prompts.build_evaluation_prompt(task, rubric, submission, settings.max_submission_chars, tests),
         output_model=TaskEvaluationSchema,
         grounding=GroundingContext(frozenset(), frozenset(), None, rubric_model),
         temperature=settings.temp_eval,
