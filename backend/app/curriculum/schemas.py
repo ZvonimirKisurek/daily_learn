@@ -248,7 +248,7 @@ class InsightPlan(_Strict):
 
 class PrimarySourcePick(_Strict):
     source_id: SourceRef = Field(description="The id of ONE entry from <primary_sources>")
-    focus: Text = Field(max_length=400, description="What exactly to read in it today and what to look for, tied to today's chapter")
+    focus: Text = Field(max_length=700, description="What exactly to read in it and what to look for, tied to today's lesson; 2-4 sentences, at most 600 characters")
     guiding_question: Text = Field(max_length=300, description="One question the learner must be able to answer from memory after reading it")
 
 
