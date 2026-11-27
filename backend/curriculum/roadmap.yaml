@@ -1,11 +1,36 @@
-# 4-week Skill Acceleration Plan: senior mobile/backend engineer -> ML engineer foundations.
-# ~90 min/weekday (25 reading + 60 building), lighter weekends: ~40-45 hours in total.
-# Each week's deliverable feeds the next: retrieval -> training -> deployment -> LLM internals.
-# Activate by setting ROADMAP_START=<the Monday you begin> in .env.
-title: "MLE foundations in 4 weeks"
+# 24-week MLE roadmap: senior mobile/backend engineer -> ML engineer with depth and public proof of work.
+# ~90 min/weekday (25 reading + 60 building) + a 15-minute math drill + spaced review; lighter weekends.
+# Two quarters. Each ends with something PUBLIC (a write-up, a reproduction, an open-source PR): skill others can verify.
+# Each week's deliverable feeds the next. Activate by setting ROADMAP_START=<the Monday you begin> in .env.
+# math_topics: keys of app/mastery/mathdrill.py GENERATORS, drilled daily that week (missed topics resurface automatically).
+title: "MLE in 24 weeks: foundations, depth, public proof"
+quarters:
+  - index: 1
+    title: "Foundations that compound"
+    weeks: [1, 12]
+    public_deliverable: "A public repository plus a technical write-up (blog post or README-as-article) on the retrieval stack you built and measured: rag-lab v2 (week 11) compared against week 1, with the eval set, ablations, plots and an honest limitations section."
+    success_criteria:
+      - "A stranger can clone the repo and reproduce the headline numbers with one documented command"
+      - "Every claim in the write-up is backed by a number from your own eval set"
+      - "Posted publicly (blog, GitHub, LinkedIn or a forum) and shared with at least one engineer for feedback"
+  - index: 2
+    title: "Depth and a reproduction"
+    weeks: [13, 24]
+    public_deliverable: "A small-scale reproduction of a key result from a paper in the canon (e.g. LoRA vs full fine-tuning, DPR vs BM25, RRF on a BEIR subset), published as a repo + report comparing your numbers with the paper's, plus at least one open-source pull request."
+    success_criteria:
+      - "The report states the paper's claim, your setup, your numbers, and where and why they differ"
+      - "Results include variance across at least 3 seeds"
+      - "An open-source pull request is opened (merged is a bonus) on a library you actually used"
+beyond:
+  - "Months 7-12: pick ONE specialisation and go deep: (a) retrieval and search, (b) LLM training and alignment, or (c) ML infrastructure and inference. Rewrite this roadmap for it with the same rhythm: weekly deliverables, quarterly public artifacts."
+  - "Reproduce two more papers, one of them recent (under 12 months old), and publish both."
+  - "Contribute to one open-source ML project regularly (a PR a month) instead of one-off fixes."
+  - "Write publicly once a month: a result, a failure analysis, or a paper explained with your own experiments."
+  - "Practise ML system design out loud: one design per week (a recommender, a RAG product, an eval platform), timed, then compare with published designs."
 weeks:
   - index: 1
     title: "Retrieval engineering: RAG on pgvector, measured"
+    math_topics: [dot-product, vector-norm, cosine-similarity, precision-recall]
     focus_skills: [rag, vector-db, llm-evals]
     goal: "Build and MEASURE a retrieval pipeline on Postgres/pgvector. Understand embeddings, chunking, ANN indexes, hybrid search and why evaluation comes first."
     deliverable: "A `rag-lab` repo: corpus ingestion, 3 chunkers, pgvector HNSW index, hybrid (BM25 + dense) retrieval with reciprocal rank fusion, and an eval report (recall@k, MRR) on >= 30 labeled queries."
@@ -27,6 +52,7 @@ weeks:
 
   - index: 2
     title: "Training from first principles: PyTorch and classical ML"
+    math_topics: [derivative, chain-rule, gradient-descent, regression-slope, mse]
     focus_skills: [pytorch, classical-ml]
     goal: "Understand how models learn: gradients, loss, optimisation, over/under-fitting, evaluation. Finish by training a real model on YOUR data."
     deliverable: "A relevance classifier trained on the labels you created with `python -m app.cli calibrate` (embeddings as features), compared against the plain cosine-threshold baseline using precision/recall and PR-AUC."
@@ -48,6 +74,7 @@ weeks:
 
   - index: 3
     title: "From notebook to production: MLOps and model deployment"
+    math_topics: [expectation, variance, conditional-probability, matmul-cost]
     focus_skills: [mlops, llm-evals]
     goal: "Take last week's model from a notebook to a tracked, tested, containerised, monitored service. This is where your backend background is an advantage."
     deliverable: "The relevance model served by a FastAPI endpoint from an ONNX file, with MLflow run tracking, a parity test, a load-test report (p50/p95), a CI job, and a drift monitor on the feed's similarity distribution."
@@ -69,6 +96,7 @@ weeks:
 
   - index: 4
     title: "Inside the LLM: transformers and fine-tuning"
+    math_topics: [softmax, attention-score, cross-entropy, lora-params, parameter-count]
     focus_skills: [llm-finetuning, pytorch, llm-evals]
     goal: "Understand what an LLM is made of by building a small one, then adapt a small open model with LoRA and decide, with evidence, when fine-tuning beats prompting."
     deliverable: "(1) A ~100-line GPT trained on tiny text with a loss curve. (2) A LoRA fine-tune of a small open model on a narrow task from your own data. (3) An eval comparing it with a prompted baseline (quality, cost, latency) and a decision memo."
@@ -87,3 +115,428 @@ weeks:
       - {day: 5, skill: llm-finetuning, focus: "Run the fine-tune; track loss; check for train/test leakage"}
       - {day: 6, skill: llm-evals, focus: "Evaluate fine-tuned vs prompted baseline on held-out data (quality, cost, latency)"}
       - {day: 7, skill: llm-finetuning, focus: "Decision memo and a retrospective: what to study next quarter"}
+
+  - index: 5
+    title: "The math under the hood: linear algebra, probability, likelihood"
+    math_topics: [eigenvalues, determinant, matmul-entry, bayes-rule, entropy, kl-divergence]
+    focus_skills: [math-foundations, classical-ml]
+    goal: "Turn the formulas you have been using into things you can derive. Consolidate the math behind weeks 1-4 so later weeks do not rest on memorised recipes."
+    deliverable: "A `math-lab` notebook/repo: PCA derived and implemented from the eigen-decomposition (matching sklearn), logistic regression derived from maximum likelihood with a numerical gradient check, and cross-entropy/KL explained with your own plots."
+    milestones:
+      - "Implement PCA with numpy's eigen-decomposition of the covariance matrix; match sklearn up to sign"
+      - "Derive the logistic-regression gradient from the log-likelihood; verify it with finite differences"
+      - "Show numerically that minimising cross-entropy equals maximising likelihood"
+      - "Compute entropy and KL divergence for real distributions from your feed data (e.g. category mix per week)"
+      - "Write a one-page 'math I now own' note with one derivation in your own words"
+    daily_outline:
+      - {day: 1, skill: math-foundations, focus: "Vectors, matrices and linear maps; matrix multiplication as composition; shapes as types"}
+      - {day: 2, skill: math-foundations, focus: "Eigenvectors and eigenvalues; covariance matrices; PCA from scratch in numpy"}
+      - {day: 3, skill: math-foundations, focus: "Probability refresher: Bayes' rule, expectation, variance; simulate to check every formula"}
+      - {day: 4, skill: classical-ml, focus: "Maximum likelihood: derive logistic regression's loss and gradient; gradient check"}
+      - {day: 5, skill: math-foundations, focus: "Information theory: entropy, cross-entropy, KL divergence, and why they are the losses we use"}
+      - {day: 6, skill: math-foundations, focus: "Matrix calculus essentials: gradients of linear layers and softmax, by hand then by autograd"}
+      - {day: 7, skill: math-foundations, focus: "Write-up: the derivations you can now do without notes"}
+
+  - index: 6
+    title: "Training dynamics: initialisation, normalisation, optimisers, schedules"
+    math_topics: [sigmoid, gradient-descent, variance, partial-derivative]
+    focus_skills: [pytorch, math-foundations]
+    goal: "Understand why deep networks train or fail to train, and run controlled experiments instead of guessing hyper-parameters."
+    deliverable: "A `train-dynamics` repo with ablations on a small MLP/CNN (MNIST-sized synthetic or torchvision data): init scale, BatchNorm vs LayerNorm vs none, SGD vs momentum vs AdamW, LR warmup + cosine decay; plots of loss, gradient norms and activation statistics, and a findings table."
+    milestones:
+      - "Show vanishing/exploding activations with bad init; fix with He/Xavier init and explain the variance argument"
+      - "Compare SGD, momentum and AdamW at matched tuning effort; report the best LR for each"
+      - "Add normalisation layers and measure their effect on stable learning rates"
+      - "Implement LR warmup and cosine decay; show when warmup matters"
+      - "Overfit a single batch on purpose as a debugging step (Karpathy's recipe)"
+      - "Findings table: each change, its effect, and your explanation"
+    daily_outline:
+      - {day: 1, skill: pytorch, focus: "Forward and backward signal propagation; initialisation schemes and why scale matters"}
+      - {day: 2, skill: pytorch, focus: "Instrumenting training: hooks for activation and gradient statistics; overfit one batch"}
+      - {day: 3, skill: pytorch, focus: "Optimisers from scratch: SGD, momentum, Adam/AdamW; compare against torch.optim"}
+      - {day: 4, skill: pytorch, focus: "BatchNorm and LayerNorm: implement, compare, and the train/eval mode trap"}
+      - {day: 5, skill: pytorch, focus: "Learning-rate schedules: warmup, cosine decay, LR range test"}
+      - {day: 6, skill: math-foundations, focus: "Loss landscapes and conditioning: why momentum helps on ill-conditioned quadratics"}
+      - {day: 7, skill: pytorch, focus: "Findings write-up and plots; what you would try first on a new model"}
+
+  - index: 7
+    title: "Build and train a GPT end to end"
+    math_topics: [softmax, attention-score, cross-entropy, parameter-count, matmul-cost]
+    focus_skills: [pytorch, llm-finetuning]
+    goal: "Own the full stack of a language model: tokenizer, model, training loop, sampling. Extend week 4's mini-GPT into a small but complete system."
+    deliverable: "A `tiny-gpt` repo: BPE tokenizer trained on your corpus (e.g. the feed's article text), a decoder-only transformer with KV-cache sampling, a training run with validation loss, and sampling with temperature/top-k/top-p, plus a parameter and FLOP count."
+    milestones:
+      - "Train a byte-level BPE tokenizer and measure compression (bytes per token) on held-out text"
+      - "Implement multi-head causal self-attention and a pre-norm transformer block; unit-test shapes and masking"
+      - "Train with AdamW, warmup and gradient clipping; track train/validation loss"
+      - "Implement a KV cache and show the generation speed-up"
+      - "Implement temperature, top-k and top-p sampling; show their effect on samples"
+      - "Count parameters and approximate training FLOPs (6ND) for your run"
+    daily_outline:
+      - {day: 1, skill: llm-finetuning, focus: "Byte-pair encoding: train a tokenizer on your corpus; compression and edge cases"}
+      - {day: 2, skill: pytorch, focus: "The decoder-only transformer: embeddings, causal attention, MLP, residuals, pre-norm"}
+      - {day: 3, skill: pytorch, focus: "The training loop at scale-in-miniature: batching, AdamW, warmup, clipping, checkpoints"}
+      - {day: 4, skill: pytorch, focus: "Sampling: greedy, temperature, top-k, top-p; perplexity on held-out text"}
+      - {day: 5, skill: pytorch, focus: "KV cache: implement it and measure the generation speed-up"}
+      - {day: 6, skill: llm-finetuning, focus: "Scaling intuition: parameter counts, FLOPs (6ND), and what scaling laws predict"}
+      - {day: 7, skill: llm-finetuning, focus: "README with loss curves and samples; what limits your model's quality"}
+
+  - index: 8
+    title: "Evaluating LLM systems rigorously"
+    math_topics: [precision-recall, conditional-probability, variance, expectation]
+    focus_skills: [llm-evals]
+    goal: "Measure LLM output quality with the same rigour as a unit test suite: datasets, judges, agreement, uncertainty."
+    deliverable: "An `eval-lab` harness that scores MLE-Sprint's own generated chapters (or another LLM feature you built): a labelled set of >= 40 items, an LLM-as-judge with a written rubric, judge-human agreement (Cohen's kappa), bootstrap confidence intervals, and a regression report comparing two prompt versions."
+    milestones:
+      - "Write an eval spec: what 'good' means, failure categories, and how each is measured"
+      - "Hand-label >= 40 outputs against the spec"
+      - "Build an LLM judge and measure agreement with your labels (accuracy and Cohen's kappa)"
+      - "Report every metric with a bootstrap 95% confidence interval"
+      - "Compare two prompt versions and decide whether the difference is real"
+      - "Document the judge's biases you observed (position, length, self-preference)"
+    daily_outline:
+      - {day: 1, skill: llm-evals, focus: "Eval design: defining quality, failure taxonomies, and choosing metrics"}
+      - {day: 2, skill: llm-evals, focus: "Building a labelled eval set: sampling, labelling guidelines, inter-annotator thinking"}
+      - {day: 3, skill: llm-evals, focus: "LLM-as-judge: rubric prompts, structured verdicts, and known biases"}
+      - {day: 4, skill: llm-evals, focus: "Agreement statistics: accuracy, Cohen's kappa, confusion matrices"}
+      - {day: 5, skill: llm-evals, focus: "Uncertainty: bootstrap confidence intervals and paired comparisons"}
+      - {day: 6, skill: llm-evals, focus: "Regression testing prompts: run two versions, compare, decide"}
+      - {day: 7, skill: llm-evals, focus: "Eval report: what you can and cannot claim from your numbers"}
+
+  - index: 9
+    title: "Efficient inference: latency, memory and cost"
+    math_topics: [matmul-cost, parameter-count, lora-params, expectation]
+    focus_skills: [mlops, pytorch]
+    goal: "Know where inference time and memory go, and how quantisation, batching and caching change them. Measure everything on CPU."
+    deliverable: "An `inference-lab` benchmark of a small open model (or your week 7 GPT) on CPU: latency and throughput vs batch size, int8 dynamic quantisation (accuracy/perplexity vs speed vs size), KV-cache memory accounting, and a cost model for serving 1M requests."
+    milestones:
+      - "Profile a forward pass and attribute time to layers (torch.profiler)"
+      - "Measure latency (p50/p95) and throughput across batch sizes; explain the curve"
+      - "Apply int8 dynamic quantisation; report perplexity, latency and size before and after"
+      - "Compute KV-cache memory for a given context length and batch, and verify it empirically"
+      - "Explain speculative decoding and continuous batching in your own words, with a toy simulation"
+      - "Cost model: requests/day x tokens x latency -> machines and dollars"
+    daily_outline:
+      - {day: 1, skill: mlops, focus: "Where inference time goes: memory bandwidth vs compute, profiling a forward pass"}
+      - {day: 2, skill: mlops, focus: "Batching: throughput vs latency; measure p50/p95 across batch sizes"}
+      - {day: 3, skill: pytorch, focus: "Quantisation: affine int8, scale and zero-point; dynamic quantisation in PyTorch"}
+      - {day: 4, skill: mlops, focus: "The KV cache and its memory cost; why long contexts are expensive"}
+      - {day: 5, skill: mlops, focus: "Serving systems: continuous batching, PagedAttention, speculative decoding (simulate)"}
+      - {day: 6, skill: mlops, focus: "Cost modelling: from tokens and latency to machines and dollars"}
+      - {day: 7, skill: mlops, focus: "Benchmark report with plots and recommendations"}
+
+  - index: 10
+    title: "Agents and tool use, measured"
+    math_topics: [bayes-rule, entropy, conditional-probability, precision-recall]
+    focus_skills: [rag, llm-evals]
+    goal: "Build an LLM agent that calls tools, and evaluate it by task success rather than by impressions."
+    deliverable: "A small agent over a read-only tool set (e.g. search the feed, look up a skill, query a calculator) with a ReAct-style loop, structured tool calls, error handling, and an evaluation on >= 20 scripted tasks reporting success rate, steps and cost."
+    milestones:
+      - "Implement a tool-calling loop with typed tool schemas and validated arguments"
+      - "Handle tool errors, retries and a step budget"
+      - "Write >= 20 tasks with checkable success criteria"
+      - "Report success rate, average steps and tokens per task, with failure analysis"
+      - "Compare the agent with a single-shot RAG baseline on the same tasks"
+    daily_outline:
+      - {day: 1, skill: rag, focus: "Tool use: function-calling APIs, tool schemas, and argument validation"}
+      - {day: 2, skill: rag, focus: "The ReAct loop: reasoning, acting, observing; step budgets and stopping"}
+      - {day: 3, skill: rag, focus: "Robustness: tool errors, retries, and guarding against prompt injection in tool output"}
+      - {day: 4, skill: llm-evals, focus: "Agent evaluation: task suites with programmatic success checks"}
+      - {day: 5, skill: llm-evals, focus: "Failure analysis: categorise failures and fix the top one"}
+      - {day: 6, skill: rag, focus: "Agent vs single-shot RAG: when is the loop worth its cost?"}
+      - {day: 7, skill: llm-evals, focus: "Write-up: success rate, cost, and the failure taxonomy"}
+
+  - index: 11
+    title: "Advanced retrieval: rerankers, query rewriting, tuned embeddings"
+    math_topics: [cosine-similarity, softmax, cross-entropy, precision-recall]
+    focus_skills: [rag, vector-db]
+    goal: "Push week 1's rag-lab measurably further with the techniques production search teams use, keeping the same eval set so the gains are real."
+    deliverable: "rag-lab v2: a cross-encoder reranker, query rewriting (HyDE or multi-query), an embedding model fine-tuned with a contrastive loss on your labelled pairs, and an ablation table vs week 1 (recall@k, MRR, nDCG, latency)."
+    milestones:
+      - "Add a cross-encoder reranker and measure quality vs latency"
+      - "Implement HyDE or multi-query rewriting and measure its effect"
+      - "Fine-tune a small embedding model with in-batch negatives (InfoNCE) on your labelled pairs"
+      - "Re-run the week 1 eval set; produce an ablation table with confidence intervals"
+      - "Write down which change helped most and why"
+    daily_outline:
+      - {day: 1, skill: rag, focus: "Bi-encoders vs cross-encoders vs late interaction; where each sits on the cost/quality curve"}
+      - {day: 2, skill: rag, focus: "Reranking: add a cross-encoder stage and measure"}
+      - {day: 3, skill: rag, focus: "Query rewriting: HyDE and multi-query; when they help and when they hurt"}
+      - {day: 4, skill: vector-db, focus: "Contrastive learning: InfoNCE with in-batch negatives, from scratch on toy data"}
+      - {day: 5, skill: vector-db, focus: "Fine-tune a small embedding model on your pairs; re-index and evaluate"}
+      - {day: 6, skill: rag, focus: "Ablations with confidence intervals against week 1"}
+      - {day: 7, skill: rag, focus: "Results write-up: the material for the Q1 public post"}
+
+  - index: 12
+    title: "Q1 capstone: publish your retrieval work"
+    math_topics: [cosine-similarity, gradient-descent, cross-entropy, bayes-rule, variance]
+    focus_skills: [llm-evals, mlops, rag]
+    goal: "Turn twelve weeks of private work into public, reproducible evidence of skill. Writing it up is where you find the gaps in your understanding."
+    deliverable: "The Q1 public deliverable: a public repo that reproduces your rag-lab results with one command, and a published technical write-up with your numbers, plots and limitations."
+    milestones:
+      - "Fresh-clone reproducibility: one command rebuilds the eval numbers"
+      - "Figures: the 3-4 plots that tell the story, each with a one-sentence takeaway"
+      - "Draft the write-up: problem, setup, results, what surprised you, limitations"
+      - "Get feedback from one engineer (or a careful self-review against a checklist) and revise"
+      - "Publish and share; record the link in the weekly retrospective"
+      - "Q1 retrospective: skill matrix, review retention, math accuracy, and what to change for Q2"
+    daily_outline:
+      - {day: 1, skill: mlops, focus: "Reproducibility: pin dependencies, seed everything, one-command pipeline"}
+      - {day: 2, skill: llm-evals, focus: "Choosing the story: which result matters, and the evidence for it"}
+      - {day: 3, skill: llm-evals, focus: "Figures and tables that communicate: one message per plot"}
+      - {day: 4, skill: rag, focus: "Write the draft: setup, method, results, limitations"}
+      - {day: 5, skill: llm-evals, focus: "Review and revise: check every claim against a number"}
+      - {day: 6, skill: mlops, focus: "Publish: README, license, a clean history; share it"}
+      - {day: 7, skill: llm-evals, focus: "Quarter retrospective and Q2 plan"}
+
+  - index: 13
+    title: "Supervised fine-tuning for real"
+    math_topics: [lora-params, cross-entropy, kl-divergence, parameter-count]
+    focus_skills: [llm-finetuning, llm-evals]
+    goal: "Fine-tune a small open model on a narrow task end to end, with clean data, a proper eval and an honest comparison to prompting."
+    deliverable: "An SFT pipeline (Colab-friendly): dataset curation from your own data, chat templates, LoRA training with loss masking on prompts, held-out eval vs a prompted baseline (quality, cost, latency), and a model card."
+    milestones:
+      - "Curate >= 300 training examples with a documented format and a leak-free split"
+      - "Apply the model's chat template and mask the loss on prompt tokens"
+      - "Train LoRA adapters; track train/validation loss"
+      - "Evaluate against a prompted baseline with week 8's harness"
+      - "Write a model card: data, intended use, limitations, eval results"
+    daily_outline:
+      - {day: 1, skill: llm-finetuning, focus: "When to fine-tune vs prompt vs retrieve; framing the task"}
+      - {day: 2, skill: llm-finetuning, focus: "Dataset curation: format, quality filters, deduplication, splits"}
+      - {day: 3, skill: llm-finetuning, focus: "Chat templates and loss masking: what the model is actually trained on"}
+      - {day: 4, skill: llm-finetuning, focus: "LoRA training run on Colab; reading loss curves"}
+      - {day: 5, skill: llm-evals, focus: "Evaluate against the prompted baseline; significance"}
+      - {day: 6, skill: llm-finetuning, focus: "Error analysis and one improvement iteration"}
+      - {day: 7, skill: llm-finetuning, focus: "Model card and write-up"}
+
+  - index: 14
+    title: "Preference optimisation: reward models and DPO"
+    math_topics: [kl-divergence, sigmoid, softmax, entropy]
+    focus_skills: [llm-finetuning, math-foundations]
+    goal: "Understand how models are aligned to preferences: the Bradley-Terry model, reward models, the KL penalty, and DPO's closed form."
+    deliverable: "A DPO implementation from scratch on a tiny model (e.g. your week 7 GPT or a small open model) with a preference dataset you build, plus a reward-model baseline; plots of preference accuracy, reward margins and KL to the reference model."
+    milestones:
+      - "Derive the Bradley-Terry preference probability and train a tiny reward model"
+      - "Derive the DPO loss from the KL-regularised objective; implement it in PyTorch"
+      - "Build a small preference dataset (>= 200 pairs) and train with DPO"
+      - "Track KL divergence to the reference model and show over-optimisation"
+      - "Compare SFT-only vs SFT+DPO on held-out preferences"
+    daily_outline:
+      - {day: 1, skill: llm-finetuning, focus: "RLHF overview: SFT, reward modelling, policy optimisation with a KL penalty"}
+      - {day: 2, skill: math-foundations, focus: "Bradley-Terry and the logistic link; train a tiny reward model"}
+      - {day: 3, skill: math-foundations, focus: "Derive DPO from the KL-constrained objective"}
+      - {day: 4, skill: llm-finetuning, focus: "Implement the DPO loss; unit-test it on hand-computed cases"}
+      - {day: 5, skill: llm-finetuning, focus: "Train with DPO; monitor preference accuracy and KL"}
+      - {day: 6, skill: llm-finetuning, focus: "Reward hacking and over-optimisation: show it, explain it"}
+      - {day: 7, skill: llm-finetuning, focus: "Write-up: what alignment methods optimise, and their failure modes"}
+
+  - index: 15
+    title: "Data-centric ML: quality, duplicates, leakage, labels"
+    math_topics: [conditional-probability, bayes-rule, precision-recall, entropy]
+    focus_skills: [classical-ml, llm-evals]
+    goal: "Most model problems are data problems. Learn to audit data systematically and to measure what data fixes are worth."
+    deliverable: "A data audit of the MLE-Sprint article corpus (or another dataset you own): near-duplicate detection (MinHash vs embeddings), label-noise experiment (train with injected noise, then detect it with confident-learning style methods), a leakage check, and a 'datasheet' for the dataset."
+    milestones:
+      - "Implement MinHash near-duplicate detection; compare with embedding dedup on the same data"
+      - "Inject label noise at several rates; plot model accuracy vs noise"
+      - "Detect noisy labels using out-of-fold predicted probabilities"
+      - "Find and fix one train/test leakage path"
+      - "Write a datasheet: provenance, composition, known issues"
+    daily_outline:
+      - {day: 1, skill: classical-ml, focus: "Data quality dimensions and how to measure each"}
+      - {day: 2, skill: classical-ml, focus: "Near-duplicates: shingling, MinHash, LSH vs embedding similarity"}
+      - {day: 3, skill: classical-ml, focus: "Label noise: its effect on training, simulated"}
+      - {day: 4, skill: classical-ml, focus: "Finding mislabeled examples with out-of-fold probabilities"}
+      - {day: 5, skill: llm-evals, focus: "Leakage: temporal, duplicate and target leakage; contamination of LLM evals"}
+      - {day: 6, skill: classical-ml, focus: "Synthetic data: when it helps, how to validate it"}
+      - {day: 7, skill: classical-ml, focus: "Datasheet and audit report"}
+
+  - index: 16
+    title: "Ranking and recommendation"
+    math_topics: [dot-product, cosine-similarity, precision-recall, softmax]
+    focus_skills: [classical-ml, vector-db]
+    goal: "Learn the systems behind most ML revenue: candidate generation, ranking, implicit feedback and ranking metrics."
+    deliverable: "A two-stage recommender on MovieLens-small (a ~1 MB download) or your own completion/click data: a two-tower retrieval model with sampled softmax, a ranking model (gradient boosting with ranking features), offline metrics (recall@k, nDCG), and a popularity baseline."
+    milestones:
+      - "Popularity and matrix-factorisation baselines with recall@k and nDCG"
+      - "Two-tower model with in-batch sampled softmax; ANN retrieval in pgvector"
+      - "A second-stage ranker with engineered features"
+      - "Handle position bias and implicit feedback correctly in evaluation"
+      - "Write-up: where each stage wins and the offline-online gap"
+    daily_outline:
+      - {day: 1, skill: classical-ml, focus: "Recommender architecture: candidate generation, ranking, re-ranking"}
+      - {day: 2, skill: classical-ml, focus: "Implicit feedback and matrix factorisation; ranking metrics"}
+      - {day: 3, skill: vector-db, focus: "Two-tower retrieval with sampled softmax"}
+      - {day: 4, skill: vector-db, focus: "Serving retrieval with an ANN index; recall vs latency"}
+      - {day: 5, skill: classical-ml, focus: "Learning to rank with gradient boosting; pointwise vs pairwise"}
+      - {day: 6, skill: classical-ml, focus: "Bias in logged data: position bias, feedback loops"}
+      - {day: 7, skill: classical-ml, focus: "Write-up and comparison table"}
+
+  - index: 17
+    title: "Experimentation and statistics for ML engineers"
+    math_topics: [variance, expectation, bayes-rule, conditional-probability]
+    focus_skills: [llm-evals, math-foundations]
+    goal: "Decide whether a model change actually helped. Online experiments, power, confidence intervals and the traps that fool teams."
+    deliverable: "An `ab-lab` notebook: an A/B test simulator, a power/sample-size calculator verified by simulation, CUPED variance reduction, a multiple-comparisons demonstration, and a checklist for trustworthy experiments."
+    milestones:
+      - "Simulate A/B tests and show the false-positive rate of peeking"
+      - "Implement a sample-size calculator and verify it by simulation"
+      - "Implement CUPED and measure the variance reduction"
+      - "Show how multiple comparisons inflate false discoveries; apply a correction"
+      - "Write a pre-registration template for your next model experiment"
+    daily_outline:
+      - {day: 1, skill: llm-evals, focus: "Offline vs online evaluation; what an A/B test measures"}
+      - {day: 2, skill: math-foundations, focus: "Hypothesis tests and confidence intervals by simulation"}
+      - {day: 3, skill: math-foundations, focus: "Power and sample size: derive, implement, verify"}
+      - {day: 4, skill: llm-evals, focus: "Peeking, novelty effects and sample-ratio mismatch"}
+      - {day: 5, skill: math-foundations, focus: "Variance reduction with CUPED"}
+      - {day: 6, skill: llm-evals, focus: "Multiple comparisons and guardrail metrics"}
+      - {day: 7, skill: llm-evals, focus: "Checklist and pre-registration template"}
+
+  - index: 18
+    title: "Classical ML at depth: boosting, calibration, imbalance"
+    math_topics: [regression-slope, mse, gradient-descent, entropy]
+    focus_skills: [classical-ml]
+    goal: "Master the models that still win on tabular data, and the evaluation details that decide whether a classifier is usable."
+    deliverable: "Gradient-boosted decision stumps implemented from scratch and compared with sklearn/XGBoost; a calibration study (reliability diagrams, ECE, temperature/Platt/isotonic) and an imbalanced-data study (class weights vs resampling vs threshold moving)."
+    milestones:
+      - "Implement regression trees and gradient boosting on residuals from scratch"
+      - "Match sklearn's GradientBoostingRegressor within a tolerance on a toy problem"
+      - "Measure calibration with reliability diagrams and ECE; fix it with temperature or isotonic scaling"
+      - "Compare strategies for class imbalance with PR-AUC"
+      - "Write-up: when you would choose boosting over a neural network"
+    daily_outline:
+      - {day: 1, skill: classical-ml, focus: "Decision trees: impurity, splits, overfitting"}
+      - {day: 2, skill: classical-ml, focus: "Gradient boosting as gradient descent in function space; implement it"}
+      - {day: 3, skill: classical-ml, focus: "XGBoost/LightGBM ideas: regularisation, histogram splits, shrinkage"}
+      - {day: 4, skill: classical-ml, focus: "Calibration: reliability diagrams, ECE, temperature/Platt/isotonic"}
+      - {day: 5, skill: classical-ml, focus: "Imbalanced data and threshold selection with PR curves"}
+      - {day: 6, skill: classical-ml, focus: "Feature importance and its pitfalls; permutation importance"}
+      - {day: 7, skill: classical-ml, focus: "Write-up and decision guide"}
+
+  - index: 19
+    title: "Interpretability and debugging models"
+    math_topics: [attention-score, softmax, partial-derivative, eigenvalues]
+    focus_skills: [pytorch, llm-finetuning]
+    goal: "Look inside the models you built: attention patterns, linear probes, attributions, and circuits in a small transformer."
+    deliverable: "An interpretability notebook on your week 7 tiny-gpt: attention-pattern visualisation, a linear probe for a property of the input, gradient-based attributions, and a search for induction-head behaviour on repeated sequences."
+    milestones:
+      - "Visualise attention patterns and describe two heads' behaviour"
+      - "Train a linear probe on hidden states and report accuracy vs a control task"
+      - "Implement gradient x input attributions and sanity-check them"
+      - "Test for induction heads on repeated random token sequences"
+      - "Write-up: what you can and cannot conclude from each method"
+    daily_outline:
+      - {day: 1, skill: pytorch, focus: "Why interpretability: debugging, trust, and science; the main families of methods"}
+      - {day: 2, skill: pytorch, focus: "Attention patterns: extraction and visualisation; their limits as explanations"}
+      - {day: 3, skill: pytorch, focus: "Linear probes and control tasks"}
+      - {day: 4, skill: pytorch, focus: "Attributions: saliency, gradient x input, and sanity checks"}
+      - {day: 5, skill: llm-finetuning, focus: "Transformer circuits: the residual stream view and induction heads"}
+      - {day: 6, skill: llm-finetuning, focus: "Find induction-like heads in your model"}
+      - {day: 7, skill: pytorch, focus: "Write-up with figures"}
+
+  - index: 20
+    title: "Representation learning and multimodal models"
+    math_topics: [cosine-similarity, softmax, cross-entropy, entropy]
+    focus_skills: [vector-db, pytorch]
+    goal: "Understand contrastive learning as the engine behind embeddings and CLIP, and evaluate representations properly."
+    deliverable: "A tiny CLIP-style contrastive model on a small paired dataset (synthetic or a small public set), trained with symmetric InfoNCE; zero-shot retrieval evaluation; and a comparison of embedding evaluation methods (linear probe, kNN, retrieval recall)."
+    milestones:
+      - "Implement symmetric InfoNCE with a learnable temperature"
+      - "Train a two-encoder model on paired data and plot the similarity matrix"
+      - "Evaluate zero-shot retrieval (recall@k) in both directions"
+      - "Compare linear-probe and kNN evaluation of the embeddings"
+      - "Write-up: what makes a good embedding space"
+    daily_outline:
+      - {day: 1, skill: vector-db, focus: "Representation learning: what makes an embedding space good"}
+      - {day: 2, skill: pytorch, focus: "Contrastive losses: triplet, InfoNCE, and the temperature"}
+      - {day: 3, skill: pytorch, focus: "A two-encoder model and symmetric InfoNCE"}
+      - {day: 4, skill: pytorch, focus: "Training and debugging: collapse, batch size effects"}
+      - {day: 5, skill: vector-db, focus: "Evaluation: zero-shot retrieval, linear probes, kNN"}
+      - {day: 6, skill: vector-db, focus: "Multimodal systems in production: indexing and serving"}
+      - {day: 7, skill: vector-db, focus: "Write-up"}
+
+  - index: 21
+    title: "Production LLM systems: reliability, cost and safety"
+    math_topics: [expectation, variance, matmul-cost, precision-recall]
+    focus_skills: [mlops, llm-evals]
+    goal: "Harden a real LLM application: MLE-Sprint itself. Caching, fallbacks, guardrails, observability and prompt regression tests in CI."
+    deliverable: "Pull requests to this repository: a prompt-regression suite run in CI with recorded fixtures, response caching with a measured hit rate, a fallback model path, per-feature cost and latency metrics, and an injection test set for the grader."
+    milestones:
+      - "Prompt regression tests with recorded LLM fixtures, running in CI"
+      - "Caching for deterministic calls; measure hit rate and savings"
+      - "A fallback path when the primary model fails or times out"
+      - "Per-feature cost and latency dashboards from the usage ledger"
+      - "A prompt-injection test set for the grader; report the pass rate"
+    daily_outline:
+      - {day: 1, skill: mlops, focus: "Failure modes of LLM apps: latency spikes, outages, drift, cost blow-ups"}
+      - {day: 2, skill: llm-evals, focus: "Prompt regression testing with recorded fixtures in CI"}
+      - {day: 3, skill: mlops, focus: "Caching and request deduplication; measuring savings"}
+      - {day: 4, skill: mlops, focus: "Fallbacks, timeouts and circuit breakers for model calls"}
+      - {day: 5, skill: mlops, focus: "Observability: tracing, per-feature cost and latency"}
+      - {day: 6, skill: llm-evals, focus: "Guardrails and prompt-injection testing"}
+      - {day: 7, skill: mlops, focus: "Write-up of the changes and their measured effect"}
+
+  - index: 22
+    title: "Open-source contribution"
+    math_topics: [dot-product, chain-rule, softmax, bayes-rule, kl-divergence]
+    focus_skills: [mlops, pytorch]
+    goal: "Contribute to a library you depend on. Reading other people's production ML code is one of the fastest ways to level up."
+    deliverable: "An opened pull request (a bug fix, test, docs improvement or small feature) to an open-source ML library you used (e.g. pgvector-python, sentence-transformers, PEFT, scikit-learn docs), with a write-up of what you learned from the codebase."
+    milestones:
+      - "Pick a project and find a good-first or documentation issue you can reproduce"
+      - "Set up the project's dev environment and run its test suite"
+      - "Reproduce the issue with a failing test"
+      - "Fix it, following the project's contribution guidelines"
+      - "Open the pull request and respond to review"
+    daily_outline:
+      - {day: 1, skill: mlops, focus: "Choosing a project and an issue; reading CONTRIBUTING guides"}
+      - {day: 2, skill: mlops, focus: "Building the project from source and running its tests"}
+      - {day: 3, skill: pytorch, focus: "Reading a production ML codebase: architecture tour"}
+      - {day: 4, skill: mlops, focus: "Reproduce the issue with a failing test"}
+      - {day: 5, skill: mlops, focus: "Implement the fix and its tests"}
+      - {day: 6, skill: mlops, focus: "Open the PR; write a clear description"}
+      - {day: 7, skill: mlops, focus: "Write-up: what you learned from the codebase"}
+
+  - index: 23
+    title: "Paper reproduction I: setup and baseline"
+    math_topics: [cross-entropy, kl-divergence, lora-params, precision-recall, variance]
+    focus_skills: [llm-finetuning, rag, llm-evals]
+    goal: "Pick one paper from the canon and reproduce a key result at small scale. Reproduction is the highest-signal skill in ML engineering: it forces you to understand every detail."
+    deliverable: "A reproduction plan and a working baseline: the paper's claim stated precisely, the scaled-down setup, the baseline numbers, and the first run of the paper's method."
+    milestones:
+      - "Choose the paper and the exact table/figure to reproduce; write down the claim"
+      - "Design the scaled-down setup and say what it can and cannot test"
+      - "Implement and run the baseline"
+      - "Implement the paper's method"
+      - "First comparison with at least 3 seeds"
+    daily_outline:
+      - {day: 1, skill: llm-evals, focus: "Reading a paper for reproduction: claims, setup, hidden details"}
+      - {day: 2, skill: llm-evals, focus: "Designing a faithful scaled-down experiment"}
+      - {day: 3, skill: llm-finetuning, focus: "Implement the baseline"}
+      - {day: 4, skill: llm-finetuning, focus: "Implement the method"}
+      - {day: 5, skill: rag, focus: "First runs and debugging discrepancies"}
+      - {day: 6, skill: llm-evals, focus: "Seeds and variance: is the difference real?"}
+      - {day: 7, skill: llm-evals, focus: "Interim notes: what matches, what does not, hypotheses"}
+
+  - index: 24
+    title: "Paper reproduction II and the Q2 public report"
+    math_topics: [variance, expectation, cross-entropy, cosine-similarity, gradient-descent]
+    focus_skills: [llm-evals, llm-finetuning, mlops]
+    goal: "Finish the reproduction, publish it, and plan the next six months from evidence."
+    deliverable: "The Q2 public deliverable: the reproduction repo and report (claim, setup, your numbers vs the paper's, discrepancies explained), published and shared; plus the half-year retrospective and the next roadmap."
+    milestones:
+      - "Ablate the one detail most likely to explain any discrepancy"
+      - "Final results with confidence intervals across seeds"
+      - "Report: claim, setup, results, discrepancies, lessons"
+      - "Publish the repo and report; record the link in the retrospective"
+      - "Half-year retrospective: skill matrix, retention, math accuracy, public artifacts; choose a specialisation"
+    daily_outline:
+      - {day: 1, skill: llm-finetuning, focus: "Ablations to explain discrepancies"}
+      - {day: 2, skill: llm-evals, focus: "Final runs with confidence intervals"}
+      - {day: 3, skill: llm-evals, focus: "Figures and tables"}
+      - {day: 4, skill: llm-evals, focus: "Write the report"}
+      - {day: 5, skill: mlops, focus: "Reproducibility pass and publish"}
+      - {day: 6, skill: llm-evals, focus: "Share and collect feedback"}
+      - {day: 7, skill: llm-evals, focus: "Half-year retrospective and the next roadmap"}

@@ -1,0 +1,336 @@
+# The canon: primary sources (papers, textbook chapters, courses) the daily plan assigns alongside the generated chapter.
+#
+# Why a fixed list? A model asked to "recommend a paper" will sometimes invent one, or the right title with the wrong
+# year or authors. Here the model can only POINT AT an id below (closed world, validated like article ids), and every
+# title, locator and link is written by a human. Add entries freely; keep `skills` accurate, since the prompt only shows
+# entries tagged with the day's skill. `url: null` means "search the title"; never guess a URL.
+#
+# level: 1 = first exposure, 2 = working knowledge, 3 = research depth.
+sources:
+  # ------------------------------------------------------------------ math foundations
+  - {id: mml-ch2, kind: book, title: "Mathematics for Machine Learning", authors: "Deisenroth, Faisal, Ong", year: 2020,
+     locator: "Chapter 2: Linear Algebra", url: "https://mml-book.github.io/", skills: [math-foundations, classical-ml], level: 1, minutes: 60,
+     summary: "Vectors, matrices, linear maps and bases, written for ML; the vocabulary everything else assumes."}
+  - {id: mml-ch5, kind: book, title: "Mathematics for Machine Learning", authors: "Deisenroth, Faisal, Ong", year: 2020,
+     locator: "Chapter 5: Vector Calculus", url: "https://mml-book.github.io/", skills: [math-foundations, pytorch], level: 2, minutes: 60,
+     summary: "Gradients, Jacobians and the chain rule for vectors and matrices; the math of backpropagation."}
+  - {id: mml-ch6, kind: book, title: "Mathematics for Machine Learning", authors: "Deisenroth, Faisal, Ong", year: 2020,
+     locator: "Chapter 6: Probability and Distributions", url: "https://mml-book.github.io/", skills: [math-foundations, classical-ml, llm-evals], level: 2, minutes: 60,
+     summary: "Probability spaces, Bayes' theorem, expectation and variance, Gaussians: the language of uncertainty in ML."}
+  - {id: mml-ch7, kind: book, title: "Mathematics for Machine Learning", authors: "Deisenroth, Faisal, Ong", year: 2020,
+     locator: "Chapter 7: Continuous Optimization", url: "https://mml-book.github.io/", skills: [math-foundations, pytorch, classical-ml], level: 2, minutes: 50,
+     summary: "Gradient descent, step sizes, momentum, constrained optimisation and convexity."}
+  - {id: mml-ch10, kind: book, title: "Mathematics for Machine Learning", authors: "Deisenroth, Faisal, Ong", year: 2020,
+     locator: "Chapter 10: Dimensionality Reduction with Principal Component Analysis", url: "https://mml-book.github.io/", skills: [math-foundations, classical-ml, vector-db], level: 2, minutes: 50,
+     summary: "PCA derived from variance maximisation and from eigen-decomposition."}
+  - {id: 3b1b-linalg, kind: video, title: "Essence of linear algebra", authors: "Grant Sanderson (3Blue1Brown)", year: 2016,
+     locator: "Video series, chapters 1-9", url: "https://www.3blue1brown.com/topics/linear-algebra", skills: [math-foundations, ai-foundations], level: 1, minutes: 90,
+     summary: "Geometric intuition for vectors, linear transformations, determinants, dot products and eigenvectors."}
+  - {id: seeing-theory, kind: course, title: "Seeing Theory", authors: "Daniel Kunin et al. (Brown University)", year: 2018,
+     locator: "Chapters 1-3: Basic Probability, Compound Probability, Probability Distributions", url: "https://seeing-theory.brown.edu/", skills: [math-foundations, ai-foundations], level: 1, minutes: 45,
+     summary: "Interactive visual introduction to probability and statistics."}
+  - {id: colah-info, kind: blog, title: "Visual Information Theory", authors: "Christopher Olah", year: 2015,
+     locator: "Full post", url: "https://colah.github.io/posts/2015-09-Visual-Information/", skills: [math-foundations, classical-ml], level: 1, minutes: 40,
+     summary: "Entropy, cross-entropy and KL divergence explained visually; why cross-entropy is the classification loss."}
+  - {id: distill-momentum, kind: blog, title: "Why Momentum Really Works", authors: "Gabriel Goh (Distill)", year: 2017,
+     locator: "Full article", url: "https://distill.pub/2017/momentum/", skills: [math-foundations, pytorch], level: 3, minutes: 60,
+     summary: "Gradient descent with momentum analysed through the eigenvalues of a quadratic; interactive."}
+
+  # ------------------------------------------------------------------ beginner: data, evaluation, bias (ai-foundations)
+  - {id: elements-of-ai, kind: course, title: "Elements of AI", authors: "University of Helsinki and MinnaLearn", year: 2018,
+     locator: "Chapter 1 (What is AI?) and Chapter 4 (Machine learning)", url: "https://www.elementsofai.com/", skills: [ai-foundations], level: 1, minutes: 120,
+     summary: "A free, non-technical first course: what AI is and isn't, and how machine learning learns from examples."}
+  - {id: mlcc-generalization, kind: course, title: "Machine Learning Crash Course", authors: "Google", year: 2024,
+     locator: "Module: Datasets, generalization, and overfitting", url: "https://developers.google.com/machine-learning/crash-course", skills: [ai-foundations, classical-ml, llm-evals], level: 1, minutes: 60,
+     summary: "Data quality, labels, training/validation/test splits and overfitting, with short interactive exercises."}
+  - {id: mlcc-fairness, kind: course, title: "Machine Learning Crash Course", authors: "Google", year: 2024,
+     locator: "Module: Fairness", url: "https://developers.google.com/machine-learning/crash-course", skills: [ai-foundations, llm-evals], level: 1, minutes: 45,
+     summary: "Where bias enters a model (data, labels, evaluation) and how to measure it across groups."}
+  - {id: islp-ch2, kind: book, title: "An Introduction to Statistical Learning (with Applications in Python)", authors: "James, Witten, Hastie, Tibshirani, Taylor", year: 2023,
+     locator: "Chapter 2: Statistical Learning (training vs test error, the bias-variance trade-off)", url: "https://www.statlearning.com/", skills: [ai-foundations, classical-ml], level: 1, minutes: 60,
+     summary: "Why a model's error on its training data understates its error on new data, explained from first principles."}
+  - {id: domingos-useful, kind: paper, title: "A Few Useful Things to Know About Machine Learning", authors: "Pedro Domingos", year: 2012,
+     locator: "Communications of the ACM 55(10), full article", url: null, skills: [ai-foundations, classical-ml], level: 1, minutes: 40,
+     summary: "Practical lessons: generalisation is what counts, overfitting has many faces, more data beats a cleverer algorithm."}
+  - {id: leakage, kind: paper, title: "Leakage in Data Mining: Formulation, Detection, and Avoidance", authors: "Kaufman, Rosset, Perlich", year: 2011,
+     locator: "KDD 2011, sections 1-3", url: null, skills: [ai-foundations, classical-ml, llm-evals], level: 2, minutes: 40,
+     summary: "How information from the test set or the future sneaks into training, and how to detect it."}
+  - {id: datasheets, kind: paper, title: "Datasheets for Datasets", authors: "Gebru et al.", year: 2018,
+     locator: "arXiv:1803.09010, sections 1-3", url: "https://arxiv.org/abs/1803.09010", skills: [ai-foundations, llm-evals, mlops], level: 1, minutes: 30,
+     summary: "The questions to ask of any dataset: who collected it, how, for what, and what it leaves out."}
+  - {id: model-cards, kind: paper, title: "Model Cards for Model Reporting", authors: "Mitchell et al.", year: 2018,
+     locator: "arXiv:1810.03993, sections 1-4", url: "https://arxiv.org/abs/1810.03993", skills: [ai-foundations, llm-evals, mlops], level: 1, minutes: 30,
+     summary: "Reporting how a model performs for different groups and conditions, not just one headline accuracy."}
+  - {id: gender-shades, kind: paper, title: "Gender Shades: Intersectional Accuracy Disparities in Commercial Gender Classification", authors: "Buolamwini, Gebru", year: 2018,
+     locator: "Proceedings of Machine Learning Research 81 (FAT* 2018), full paper", url: "https://proceedings.mlr.press/v81/buolamwini18a.html", skills: [ai-foundations, llm-evals], level: 1, minutes: 40,
+     summary: "A landmark audit showing how unrepresentative evaluation data hid large error gaps between groups."}
+  - {id: fairml-intro, kind: book, title: "Fairness and Machine Learning: Limitations and Opportunities", authors: "Barocas, Hardt, Narayanan", year: 2023,
+     locator: "Chapter 1: Introduction", url: "https://fairmlbook.org/", skills: [ai-foundations, llm-evals], level: 2, minutes: 60,
+     summary: "How data reflects the world's inequalities, and why accuracy alone cannot tell you if a model is fair."}
+
+  # ------------------------------------------------------------------ classical ML
+  - {id: islp-ch3, kind: book, title: "An Introduction to Statistical Learning (with Applications in Python)", authors: "James, Witten, Hastie, Tibshirani, Taylor", year: 2023,
+     locator: "Chapter 3: Linear Regression", url: "https://www.statlearning.com/", skills: [classical-ml, ai-foundations], level: 1, minutes: 60,
+     summary: "Least squares, inference on coefficients, and the assumptions behind linear models."}
+  - {id: islp-ch4, kind: book, title: "An Introduction to Statistical Learning (with Applications in Python)", authors: "James, Witten, Hastie, Tibshirani, Taylor", year: 2023,
+     locator: "Chapter 4: Classification", url: "https://www.statlearning.com/", skills: [classical-ml, ai-foundations], level: 1, minutes: 60,
+     summary: "Logistic regression, discriminant analysis, naive Bayes and how to compare classifiers."}
+  - {id: islp-ch5, kind: book, title: "An Introduction to Statistical Learning (with Applications in Python)", authors: "James, Witten, Hastie, Tibshirani, Taylor", year: 2023,
+     locator: "Chapter 5: Resampling Methods", url: "https://www.statlearning.com/", skills: [classical-ml, llm-evals, ai-foundations], level: 1, minutes: 45,
+     summary: "Cross-validation and the bootstrap: estimating test error and uncertainty honestly."}
+  - {id: islp-ch6, kind: book, title: "An Introduction to Statistical Learning (with Applications in Python)", authors: "James, Witten, Hastie, Tibshirani, Taylor", year: 2023,
+     locator: "Chapter 6: Linear Model Selection and Regularization", url: "https://www.statlearning.com/", skills: [classical-ml], level: 2, minutes: 60,
+     summary: "Ridge, lasso and the bias-variance trade-off made concrete."}
+  - {id: islp-ch8, kind: book, title: "An Introduction to Statistical Learning (with Applications in Python)", authors: "James, Witten, Hastie, Tibshirani, Taylor", year: 2023,
+     locator: "Chapter 8: Tree-Based Methods", url: "https://www.statlearning.com/", skills: [classical-ml], level: 2, minutes: 60,
+     summary: "Decision trees, bagging, random forests and boosting."}
+  - {id: prml-ch3, kind: book, title: "Pattern Recognition and Machine Learning", authors: "Christopher M. Bishop", year: 2006,
+     locator: "Chapter 3: Linear Models for Regression", url: "https://www.microsoft.com/en-us/research/people/cmbishop/prml-book/", skills: [classical-ml, math-foundations], level: 3, minutes: 90,
+     summary: "The probabilistic view of regression: maximum likelihood, regularisation as a prior, Bayesian linear regression."}
+  - {id: xgboost, kind: paper, title: "XGBoost: A Scalable Tree Boosting System", authors: "Chen, Guestrin", year: 2016,
+     locator: "arXiv:1603.02754, sections 1-3", url: "https://arxiv.org/abs/1603.02754", skills: [classical-ml], level: 2, minutes: 45,
+     summary: "The regularised objective and split-finding behind the most-used tabular model."}
+  - {id: calibration, kind: paper, title: "On Calibration of Modern Neural Networks", authors: "Guo, Pleiss, Sun, Weinberger", year: 2017,
+     locator: "arXiv:1706.04599, sections 1-4", url: "https://arxiv.org/abs/1706.04599", skills: [classical-ml, llm-evals, pytorch], level: 2, minutes: 45,
+     summary: "Why accurate networks are over-confident, how to measure it (ECE) and fix it with temperature scaling."}
+  - {id: cs229-notes, kind: course, title: "CS229: Machine Learning, lecture notes", authors: "Andrew Ng, Tengyu Ma et al. (Stanford)", year: 2023,
+     locator: "Part I (supervised learning: linear regression, LMS, logistic regression, GLMs)", url: "https://cs229.stanford.edu/", skills: [classical-ml, math-foundations], level: 2, minutes: 90,
+     summary: "The classic derivations of supervised learning from first principles."}
+  - {id: kohavi-ab, kind: book, title: "Trustworthy Online Controlled Experiments", authors: "Kohavi, Tang, Xu", year: 2020,
+     locator: "Chapters 1-3", url: null, skills: [llm-evals, mlops, classical-ml], level: 2, minutes: 90,
+     summary: "How A/B tests are designed, analysed and sanity-checked at large companies (Twyman's law)."}
+  - {id: wide-deep, kind: paper, title: "Wide & Deep Learning for Recommender Systems", authors: "Cheng et al. (Google)", year: 2016,
+     locator: "arXiv:1606.07792", url: "https://arxiv.org/abs/1606.07792", skills: [classical-ml, mlops], level: 2, minutes: 30,
+     summary: "Memorisation plus generalisation in one production ranking model."}
+
+  # ------------------------------------------------------------------ deep learning / PyTorch
+  - {id: dlbook-ch6, kind: book, title: "Deep Learning", authors: "Goodfellow, Bengio, Courville", year: 2016,
+     locator: "Chapter 6: Deep Feedforward Networks", url: "https://www.deeplearningbook.org/", skills: [pytorch], level: 2, minutes: 90,
+     summary: "MLPs, output units and losses, and back-propagation derived carefully."}
+  - {id: dlbook-ch7, kind: book, title: "Deep Learning", authors: "Goodfellow, Bengio, Courville", year: 2016,
+     locator: "Chapter 7: Regularization for Deep Learning", url: "https://www.deeplearningbook.org/", skills: [pytorch, classical-ml], level: 2, minutes: 90,
+     summary: "Weight decay, early stopping, dropout, data augmentation and why they work."}
+  - {id: dlbook-ch8, kind: book, title: "Deep Learning", authors: "Goodfellow, Bengio, Courville", year: 2016,
+     locator: "Chapter 8: Optimization for Training Deep Models", url: "https://www.deeplearningbook.org/", skills: [pytorch, math-foundations], level: 3, minutes: 90,
+     summary: "SGD, momentum, adaptive methods, initialisation and the pathologies of deep optimisation."}
+  - {id: dlbook-ch11, kind: book, title: "Deep Learning", authors: "Goodfellow, Bengio, Courville", year: 2016,
+     locator: "Chapter 11: Practical Methodology", url: "https://www.deeplearningbook.org/", skills: [pytorch, mlops, llm-evals, ai-foundations], level: 1, minutes: 45,
+     summary: "Baselines, metrics, debugging and hyper-parameter selection: how practitioners actually work."}
+  - {id: udl-ch5, kind: book, title: "Understanding Deep Learning", authors: "Simon J. D. Prince", year: 2023,
+     locator: "Chapter 5: Loss functions", url: "https://udlbook.github.io/udlbook/", skills: [pytorch, math-foundations], level: 1, minutes: 50,
+     summary: "Losses derived from maximum likelihood: why MSE for regression and cross-entropy for classification."}
+  - {id: udl-ch6, kind: book, title: "Understanding Deep Learning", authors: "Simon J. D. Prince", year: 2023,
+     locator: "Chapter 6: Fitting models", url: "https://udlbook.github.io/udlbook/", skills: [pytorch], level: 1, minutes: 50,
+     summary: "Gradient descent, SGD, momentum and Adam with clear figures."}
+  - {id: udl-ch7, kind: book, title: "Understanding Deep Learning", authors: "Simon J. D. Prince", year: 2023,
+     locator: "Chapter 7: Gradients and initialization", url: "https://udlbook.github.io/udlbook/", skills: [pytorch, math-foundations], level: 2, minutes: 50,
+     summary: "Backpropagation on computational graphs and why initialisation scale matters."}
+  - {id: udl-ch12, kind: book, title: "Understanding Deep Learning", authors: "Simon J. D. Prince", year: 2023,
+     locator: "Chapter 12: Transformers", url: "https://udlbook.github.io/udlbook/", skills: [pytorch, llm-finetuning], level: 2, minutes: 60,
+     summary: "Self-attention, positional encoding and transformer architectures, from the ground up."}
+  - {id: pytorch-basics, kind: doc, title: "PyTorch tutorials: Learn the Basics", authors: "PyTorch", year: 2024,
+     locator: "Tensors, Datasets & DataLoaders, Autograd, Optimization", url: "https://pytorch.org/tutorials/beginner/basics/intro.html", skills: [pytorch, ai-foundations], level: 1, minutes: 60,
+     summary: "The official end-to-end walk-through of a PyTorch training workflow."}
+  - {id: micrograd, kind: video, title: "The spelled-out intro to neural networks and backpropagation: building micrograd", authors: "Andrej Karpathy", year: 2022,
+     locator: "Neural Networks: Zero to Hero, lecture 1", url: "https://karpathy.ai/zero-to-hero.html", skills: [pytorch, math-foundations, ai-foundations], level: 1, minutes: 150,
+     summary: "Builds autograd from scratch in plain Python; the best intuition for backpropagation."}
+  - {id: karpathy-recipe, kind: blog, title: "A Recipe for Training Neural Networks", authors: "Andrej Karpathy", year: 2019,
+     locator: "Full post", url: "https://karpathy.github.io/2019/04/25/recipe/", skills: [pytorch, mlops], level: 2, minutes: 30,
+     summary: "A disciplined process for training: overfit one batch, add complexity slowly, verify everything."}
+  - {id: tuning-playbook, kind: doc, title: "Deep Learning Tuning Playbook", authors: "Godbole, Dahl, Gilmer, Shallue, Nado (Google Research)", year: 2023,
+     locator: "Sections: choosing the model architecture, optimizer and batch size; the incremental tuning strategy", url: "https://github.com/google-research/tuning_playbook", skills: [pytorch, mlops], level: 3, minutes: 60,
+     summary: "How experienced teams tune deep learning models scientifically."}
+  - {id: adam, kind: paper, title: "Adam: A Method for Stochastic Optimization", authors: "Kingma, Ba", year: 2014,
+     locator: "arXiv:1412.6980, sections 1-3", url: "https://arxiv.org/abs/1412.6980", skills: [pytorch, math-foundations], level: 2, minutes: 40,
+     summary: "The default optimiser: first and second moment estimates with bias correction."}
+  - {id: adamw, kind: paper, title: "Decoupled Weight Decay Regularization", authors: "Loshchilov, Hutter", year: 2017,
+     locator: "arXiv:1711.05101, sections 1-3", url: "https://arxiv.org/abs/1711.05101", skills: [pytorch], level: 3, minutes: 40,
+     summary: "Why L2 regularisation and weight decay differ under Adam, and the AdamW fix."}
+  - {id: batchnorm, kind: paper, title: "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift", authors: "Ioffe, Szegedy", year: 2015,
+     locator: "arXiv:1502.03167, sections 1-3", url: "https://arxiv.org/abs/1502.03167", skills: [pytorch], level: 2, minutes: 40,
+     summary: "Normalising activations per mini-batch; the train/eval behaviour difference every engineer trips on."}
+  - {id: layernorm, kind: paper, title: "Layer Normalization", authors: "Ba, Kiros, Hinton", year: 2016,
+     locator: "arXiv:1607.06450, sections 1-3", url: "https://arxiv.org/abs/1607.06450", skills: [pytorch, llm-finetuning], level: 2, minutes: 30,
+     summary: "Normalisation per example, used in every transformer."}
+  - {id: he-init, kind: paper, title: "Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification", authors: "He, Zhang, Ren, Sun", year: 2015,
+     locator: "arXiv:1502.01852, section 2.2 (initialization)", url: "https://arxiv.org/abs/1502.01852", skills: [pytorch, math-foundations], level: 3, minutes: 30,
+     summary: "The variance argument behind He (Kaiming) initialisation for ReLU networks."}
+  - {id: resnet, kind: paper, title: "Deep Residual Learning for Image Recognition", authors: "He, Zhang, Ren, Sun", year: 2015,
+     locator: "arXiv:1512.03385, sections 1-3", url: "https://arxiv.org/abs/1512.03385", skills: [pytorch], level: 2, minutes: 40,
+     summary: "Residual connections: the idea that made very deep networks trainable (and that transformers reuse)."}
+  - {id: dropout, kind: paper, title: "Dropout: A Simple Way to Prevent Neural Networks from Overfitting", authors: "Srivastava, Hinton, Krizhevsky, Sutskever, Salakhutdinov", year: 2014,
+     locator: "JMLR 15, sections 1-4", url: "https://jmlr.org/papers/v15/srivastava14a.html", skills: [pytorch, classical-ml], level: 2, minutes: 45,
+     summary: "Randomly dropping units as an ensemble approximation."}
+  - {id: mixed-precision, kind: paper, title: "Mixed Precision Training", authors: "Micikevicius et al.", year: 2017,
+     locator: "arXiv:1710.03740", url: "https://arxiv.org/abs/1710.03740", skills: [pytorch, mlops], level: 3, minutes: 30,
+     summary: "FP16 training with loss scaling and FP32 master weights."}
+  - {id: zero, kind: paper, title: "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models", authors: "Rajbhandari, Rasley, Ruwase, He", year: 2019,
+     locator: "arXiv:1910.02054, sections 1-5", url: "https://arxiv.org/abs/1910.02054", skills: [pytorch, mlops], level: 3, minutes: 50,
+     summary: "Sharding optimiser state, gradients and parameters across data-parallel workers."}
+  - {id: distillation, kind: paper, title: "Distilling the Knowledge in a Neural Network", authors: "Hinton, Vinyals, Dean", year: 2015,
+     locator: "arXiv:1503.02531", url: "https://arxiv.org/abs/1503.02531", skills: [pytorch, mlops], level: 2, minutes: 30,
+     summary: "Training a small model on a large model's softened outputs."}
+  - {id: clip, kind: paper, title: "Learning Transferable Visual Models From Natural Language Supervision (CLIP)", authors: "Radford et al.", year: 2021,
+     locator: "arXiv:2103.00020, sections 1-2", url: "https://arxiv.org/abs/2103.00020", skills: [pytorch, vector-db], level: 2, minutes: 45,
+     summary: "Contrastive image-text pre-training; a shared embedding space for two modalities."}
+
+  # ------------------------------------------------------------------ transformers / LLMs / fine-tuning
+  - {id: attention, kind: paper, title: "Attention Is All You Need", authors: "Vaswani et al.", year: 2017,
+     locator: "arXiv:1706.03762, sections 3.1-3.5", url: "https://arxiv.org/abs/1706.03762", skills: [llm-finetuning, pytorch], level: 2, minutes: 60,
+     summary: "The transformer: scaled dot-product and multi-head attention, positional encodings."}
+  - {id: annotated-transformer, kind: blog, title: "The Annotated Transformer", authors: "Harvard NLP (Rush et al.)", year: 2022,
+     locator: "Full notebook", url: "https://nlp.seas.harvard.edu/annotated-transformer/", skills: [llm-finetuning, pytorch], level: 2, minutes: 120,
+     summary: "The original paper as line-by-line runnable PyTorch."}
+  - {id: illustrated-transformer, kind: blog, title: "The Illustrated Transformer", authors: "Jay Alammar", year: 2018,
+     locator: "Full post", url: "https://jalammar.github.io/illustrated-transformer/", skills: [llm-finetuning, pytorch, ai-foundations], level: 1, minutes: 30,
+     summary: "A visual first pass through the transformer before the paper."}
+  - {id: build-gpt, kind: video, title: "Let's build GPT: from scratch, in code, spelled out.", authors: "Andrej Karpathy", year: 2023,
+     locator: "Neural Networks: Zero to Hero", url: "https://karpathy.ai/zero-to-hero.html", skills: [llm-finetuning, pytorch], level: 2, minutes: 120,
+     summary: "A character-level GPT built and trained live, attention included."}
+  - {id: build-tokenizer, kind: video, title: "Let's build the GPT Tokenizer", authors: "Andrej Karpathy", year: 2024,
+     locator: "Neural Networks: Zero to Hero", url: "https://karpathy.ai/zero-to-hero.html", skills: [llm-finetuning], level: 2, minutes: 130,
+     summary: "Byte-pair encoding implemented from scratch, and the LLM failure modes tokenisation explains."}
+  - {id: bpe, kind: paper, title: "Neural Machine Translation of Rare Words with Subword Units", authors: "Sennrich, Haddow, Birch", year: 2015,
+     locator: "arXiv:1508.07909, sections 1-3", url: "https://arxiv.org/abs/1508.07909", skills: [llm-finetuning], level: 2, minutes: 30,
+     summary: "The paper that brought byte-pair encoding to NLP."}
+  - {id: gpt3, kind: paper, title: "Language Models are Few-Shot Learners", authors: "Brown et al.", year: 2020,
+     locator: "arXiv:2005.14165, sections 1-2", url: "https://arxiv.org/abs/2005.14165", skills: [llm-finetuning, llm-evals], level: 2, minutes: 45,
+     summary: "In-context learning emerges with scale."}
+  - {id: scaling-laws, kind: paper, title: "Scaling Laws for Neural Language Models", authors: "Kaplan et al.", year: 2020,
+     locator: "arXiv:2001.08361, sections 1-3", url: "https://arxiv.org/abs/2001.08361", skills: [llm-finetuning, pytorch], level: 3, minutes: 45,
+     summary: "Loss falls as a power law in parameters, data and compute."}
+  - {id: chinchilla, kind: paper, title: "Training Compute-Optimal Large Language Models", authors: "Hoffmann et al.", year: 2022,
+     locator: "arXiv:2203.15556, sections 1-3", url: "https://arxiv.org/abs/2203.15556", skills: [llm-finetuning], level: 3, minutes: 45,
+     summary: "For a fixed compute budget, scale data and parameters together."}
+  - {id: lora, kind: paper, title: "LoRA: Low-Rank Adaptation of Large Language Models", authors: "Hu et al.", year: 2021,
+     locator: "arXiv:2106.09685, sections 1-4", url: "https://arxiv.org/abs/2106.09685", skills: [llm-finetuning], level: 2, minutes: 45,
+     summary: "Freeze the model, train a low-rank update; the default parameter-efficient fine-tuning method."}
+  - {id: qlora, kind: paper, title: "QLoRA: Efficient Finetuning of Quantized LLMs", authors: "Dettmers, Pagnoni, Holtzman, Zettlemoyer", year: 2023,
+     locator: "arXiv:2305.14314, sections 1-3", url: "https://arxiv.org/abs/2305.14314", skills: [llm-finetuning, mlops], level: 3, minutes: 45,
+     summary: "LoRA on a 4-bit quantised base model: fine-tuning large models on one GPU."}
+  - {id: peft-docs, kind: doc, title: "Hugging Face PEFT documentation", authors: "Hugging Face", year: 2024,
+     locator: "Quicktour and the LoRA conceptual guide", url: "https://huggingface.co/docs/peft/index", skills: [llm-finetuning], level: 1, minutes: 30,
+     summary: "The library you will actually use to run LoRA."}
+  - {id: instructgpt, kind: paper, title: "Training language models to follow instructions with human feedback", authors: "Ouyang et al.", year: 2022,
+     locator: "arXiv:2203.02155, sections 1-3", url: "https://arxiv.org/abs/2203.02155", skills: [llm-finetuning, llm-evals], level: 2, minutes: 60,
+     summary: "SFT, a reward model and PPO: the RLHF recipe behind instruction-following models."}
+  - {id: dpo, kind: paper, title: "Direct Preference Optimization: Your Language Model is Secretly a Reward Model", authors: "Rafailov et al.", year: 2023,
+     locator: "arXiv:2305.18290, sections 1-4", url: "https://arxiv.org/abs/2305.18290", skills: [llm-finetuning], level: 3, minutes: 60,
+     summary: "Preference tuning without a separate reward model or RL loop."}
+  - {id: flashattention, kind: paper, title: "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness", authors: "Dao, Fu, Ermon, Rudra, Re", year: 2022,
+     locator: "arXiv:2205.14135, sections 1-3", url: "https://arxiv.org/abs/2205.14135", skills: [mlops, pytorch], level: 3, minutes: 50,
+     summary: "Attention is memory-bound; tiling to avoid materialising the attention matrix."}
+  - {id: dedup-data, kind: paper, title: "Deduplicating Training Data Makes Language Models Better", authors: "Lee et al.", year: 2021,
+     locator: "arXiv:2107.06499", url: "https://arxiv.org/abs/2107.06499", skills: [llm-finetuning, llm-evals], level: 2, minutes: 40,
+     summary: "Near-duplicate removal reduces memorisation and train/test leakage."}
+  - {id: cot, kind: paper, title: "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models", authors: "Wei et al.", year: 2022,
+     locator: "arXiv:2201.11903", url: "https://arxiv.org/abs/2201.11903", skills: [llm-evals, llm-finetuning], level: 1, minutes: 30,
+     summary: "Intermediate reasoning steps in the prompt improve multi-step problems."}
+  - {id: react, kind: paper, title: "ReAct: Synergizing Reasoning and Acting in Language Models", authors: "Yao et al.", year: 2022,
+     locator: "arXiv:2210.03629", url: "https://arxiv.org/abs/2210.03629", skills: [rag, llm-evals], level: 2, minutes: 40,
+     summary: "Interleaving reasoning traces with tool calls: the pattern behind most agents."}
+  - {id: toolformer, kind: paper, title: "Toolformer: Language Models Can Teach Themselves to Use Tools", authors: "Schick et al.", year: 2023,
+     locator: "arXiv:2302.04761", url: "https://arxiv.org/abs/2302.04761", skills: [rag, llm-finetuning], level: 2, minutes: 40,
+     summary: "Self-supervised learning of when and how to call APIs."}
+  - {id: circuits-framework, kind: paper, title: "A Mathematical Framework for Transformer Circuits", authors: "Elhage et al. (Anthropic)", year: 2021,
+     locator: "Full article", url: "https://transformer-circuits.pub/2021/framework/index.html", skills: [llm-finetuning, pytorch], level: 3, minutes: 120,
+     summary: "Reading attention-only transformers as sums of interpretable paths; induction heads."}
+
+  # ------------------------------------------------------------------ retrieval / vector search / RAG
+  - {id: iir-ch6, kind: book, title: "Introduction to Information Retrieval", authors: "Manning, Raghavan, Schutze", year: 2008,
+     locator: "Chapter 6: Scoring, term weighting and the vector space model", url: "https://nlp.stanford.edu/IR-book/", skills: [rag, vector-db, ai-foundations], level: 1, minutes: 60,
+     summary: "tf-idf and cosine scoring: the vector-space model that dense retrieval generalises."}
+  - {id: iir-ch8, kind: book, title: "Introduction to Information Retrieval", authors: "Manning, Raghavan, Schutze", year: 2008,
+     locator: "Chapter 8: Evaluation in information retrieval", url: "https://nlp.stanford.edu/IR-book/", skills: [rag, llm-evals], level: 1, minutes: 50,
+     summary: "Precision, recall, MAP, nDCG and test-collection design: how retrieval is measured."}
+  - {id: bm25, kind: paper, title: "The Probabilistic Relevance Framework: BM25 and Beyond", authors: "Robertson, Zaragoza", year: 2009,
+     locator: "Foundations and Trends in Information Retrieval 3(4), sections 1-3", url: null, skills: [rag], level: 3, minutes: 60,
+     summary: "Where BM25 comes from and why its saturation and length normalisation work."}
+  - {id: rrf, kind: paper, title: "Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods", authors: "Cormack, Clarke, Buettcher", year: 2009,
+     locator: "SIGIR 2009 short paper", url: null, skills: [rag], level: 1, minutes: 15,
+     summary: "The two-page paper behind the fusion method used in most hybrid search systems."}
+  - {id: word2vec, kind: paper, title: "Efficient Estimation of Word Representations in Vector Space", authors: "Mikolov, Chen, Corrado, Dean", year: 2013,
+     locator: "arXiv:1301.3781", url: "https://arxiv.org/abs/1301.3781", skills: [vector-db, rag, ai-foundations], level: 1, minutes: 30,
+     summary: "The paper that made 'meaning as geometry' mainstream."}
+  - {id: sbert, kind: paper, title: "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks", authors: "Reimers, Gurevych", year: 2019,
+     locator: "arXiv:1908.10084, sections 1-3", url: "https://arxiv.org/abs/1908.10084", skills: [vector-db, rag], level: 2, minutes: 40,
+     summary: "Training transformers to produce sentence embeddings comparable with cosine similarity."}
+  - {id: dpr, kind: paper, title: "Dense Passage Retrieval for Open-Domain Question Answering", authors: "Karpukhin et al.", year: 2020,
+     locator: "arXiv:2004.04906, sections 1-3", url: "https://arxiv.org/abs/2004.04906", skills: [rag, vector-db], level: 2, minutes: 45,
+     summary: "Dual-encoder dense retrieval with in-batch negatives beats BM25 on open-domain QA."}
+  - {id: colbert, kind: paper, title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT", authors: "Khattab, Zaharia", year: 2020,
+     locator: "arXiv:2004.12832, sections 1-3", url: "https://arxiv.org/abs/2004.12832", skills: [rag, vector-db], level: 3, minutes: 45,
+     summary: "Token-level late interaction: between bi-encoders and cross-encoders in cost and quality."}
+  - {id: rag-paper, kind: paper, title: "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks", authors: "Lewis et al.", year: 2020,
+     locator: "arXiv:2005.11401, sections 1-2", url: "https://arxiv.org/abs/2005.11401", skills: [rag], level: 2, minutes: 45,
+     summary: "The paper that named RAG: a retriever and a generator trained together."}
+  - {id: lost-in-middle, kind: paper, title: "Lost in the Middle: How Language Models Use Long Contexts", authors: "Liu et al.", year: 2023,
+     locator: "arXiv:2307.03172", url: "https://arxiv.org/abs/2307.03172", skills: [rag, llm-evals], level: 1, minutes: 30,
+     summary: "Models use information at the start and end of the context best; implications for context assembly."}
+  - {id: hyde, kind: paper, title: "Precise Zero-Shot Dense Retrieval without Relevance Labels (HyDE)", authors: "Gao, Ma, Lin, Callan", year: 2022,
+     locator: "arXiv:2212.10496", url: "https://arxiv.org/abs/2212.10496", skills: [rag], level: 2, minutes: 30,
+     summary: "Embed a hypothetical answer instead of the query."}
+  - {id: beir, kind: paper, title: "BEIR: A Heterogenous Benchmark for Zero-shot Evaluation of Information Retrieval Models", authors: "Thakur et al.", year: 2021,
+     locator: "arXiv:2104.08663, sections 1-4", url: "https://arxiv.org/abs/2104.08663", skills: [rag, llm-evals, vector-db], level: 2, minutes: 45,
+     summary: "Dense retrievers often lose to BM25 out of domain; how to evaluate retrieval broadly."}
+  - {id: hnsw, kind: paper, title: "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs", authors: "Malkov, Yashunin", year: 2016,
+     locator: "arXiv:1603.09320, sections 1-4", url: "https://arxiv.org/abs/1603.09320", skills: [vector-db], level: 2, minutes: 60,
+     summary: "The graph index inside pgvector, Qdrant and most vector databases; what M and ef control."}
+  - {id: faiss-gpu, kind: paper, title: "Billion-scale similarity search with GPUs", authors: "Johnson, Douze, Jegou", year: 2017,
+     locator: "arXiv:1702.08734, sections 1-4", url: "https://arxiv.org/abs/1702.08734", skills: [vector-db], level: 3, minutes: 50,
+     summary: "Product quantisation and IVF at scale: the design behind FAISS."}
+  - {id: pgvector-readme, kind: doc, title: "pgvector README", authors: "Andrew Kane", year: 2024,
+     locator: "Sections: Indexing (HNSW, IVFFlat), Querying, Performance", url: "https://github.com/pgvector/pgvector", skills: [vector-db], level: 1, minutes: 30,
+     summary: "The operators, index types and tuning knobs you use in this project."}
+
+  # ------------------------------------------------------------------ evaluation
+  - {id: mt-bench, kind: paper, title: "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena", authors: "Zheng et al.", year: 2023,
+     locator: "arXiv:2306.05685, sections 1-4", url: "https://arxiv.org/abs/2306.05685", skills: [llm-evals], level: 2, minutes: 45,
+     summary: "When an LLM judge agrees with humans, and its position, verbosity and self-enhancement biases."}
+  - {id: helm, kind: paper, title: "Holistic Evaluation of Language Models", authors: "Liang et al.", year: 2022,
+     locator: "arXiv:2211.09110, sections 1-3", url: "https://arxiv.org/abs/2211.09110", skills: [llm-evals], level: 2, minutes: 60,
+     summary: "Evaluating across scenarios and metrics (accuracy, calibration, robustness, fairness, efficiency)."}
+  - {id: ragas, kind: paper, title: "RAGAS: Automated Evaluation of Retrieval Augmented Generation", authors: "Es, James, Espinosa-Anke, Schockaert", year: 2023,
+     locator: "arXiv:2309.15217", url: "https://arxiv.org/abs/2309.15217", skills: [llm-evals, rag], level: 1, minutes: 30,
+     summary: "Faithfulness, answer relevance and context relevance as reference-free RAG metrics."}
+  - {id: swe-bench, kind: paper, title: "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?", authors: "Jimenez et al.", year: 2023,
+     locator: "arXiv:2310.06770, sections 1-3", url: "https://arxiv.org/abs/2310.06770", skills: [llm-evals], level: 2, minutes: 40,
+     summary: "Execution-based evaluation of coding agents on real repositories."}
+
+  # ------------------------------------------------------------------ MLOps / production
+  - {id: tech-debt, kind: paper, title: "Hidden Technical Debt in Machine Learning Systems", authors: "Sculley et al.", year: 2015,
+     locator: "NeurIPS 2015, full paper", url: null, skills: [mlops], level: 1, minutes: 30,
+     summary: "Why ML code is a small part of an ML system, and the debts that accumulate around it."}
+  - {id: rules-of-ml, kind: doc, title: "Rules of Machine Learning: Best Practices for ML Engineering", authors: "Martin Zinkevich (Google)", year: 2017,
+     locator: "Rules 1-20 (before ML, first pipeline)", url: "https://developers.google.com/machine-learning/guides/rules-of-ml", skills: [mlops, classical-ml, ai-foundations], level: 1, minutes: 45,
+     summary: "Pragmatic rules from production: start simple, get the pipeline right, measure first."}
+  - {id: dmls-ch6, kind: book, title: "Designing Machine Learning Systems", authors: "Chip Huyen", year: 2022,
+     locator: "Chapter 6: Model Development and Offline Evaluation", url: "https://huyenchip.com/books/", skills: [mlops, llm-evals], level: 1, minutes: 60,
+     summary: "Experiment tracking, baselines, offline evaluation beyond accuracy."}
+  - {id: dmls-ch7, kind: book, title: "Designing Machine Learning Systems", authors: "Chip Huyen", year: 2022,
+     locator: "Chapter 7: Model Deployment and Prediction Service", url: "https://huyenchip.com/books/", skills: [mlops], level: 1, minutes: 60,
+     summary: "Batch vs online prediction, model compression, edge vs cloud."}
+  - {id: dmls-ch8, kind: book, title: "Designing Machine Learning Systems", authors: "Chip Huyen", year: 2022,
+     locator: "Chapter 8: Data Distribution Shifts and Monitoring", url: "https://huyenchip.com/books/", skills: [mlops, llm-evals], level: 2, minutes: 60,
+     summary: "Kinds of shift, how to detect them, what to monitor."}
+  - {id: dmls-ch9, kind: book, title: "Designing Machine Learning Systems", authors: "Chip Huyen", year: 2022,
+     locator: "Chapter 9: Continual Learning and Test in Production", url: "https://huyenchip.com/books/", skills: [mlops, llm-evals], level: 2, minutes: 60,
+     summary: "Shadow deployment, A/B tests, canaries and bandits."}
+  - {id: mlflow-docs, kind: doc, title: "MLflow Tracking documentation", authors: "MLflow", year: 2024,
+     locator: "Tracking quickstart and concepts", url: "https://mlflow.org/docs/latest/index.html", skills: [mlops], level: 1, minutes: 30,
+     summary: "Runs, parameters, metrics and artifacts."}
+  - {id: onnxruntime-docs, kind: doc, title: "ONNX Runtime documentation", authors: "Microsoft", year: 2024,
+     locator: "Get started (Python) and Performance > Model optimizations / quantization", url: "https://onnxruntime.ai/docs/", skills: [mlops], level: 1, minutes: 30,
+     summary: "Exporting, running and quantising models outside PyTorch."}
+  - {id: int8-quant, kind: paper, title: "Quantization and Training of Neural Networks for Efficient Integer-Arithmetic-Only Inference", authors: "Jacob et al.", year: 2017,
+     locator: "arXiv:1712.05877, sections 1-3", url: "https://arxiv.org/abs/1712.05877", skills: [mlops, pytorch], level: 3, minutes: 50,
+     summary: "Affine int8 quantisation with scale and zero-point: the scheme most runtimes use."}
+  - {id: llm-int8, kind: paper, title: "LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale", authors: "Dettmers, Lewis, Belkada, Zettlemoyer", year: 2022,
+     locator: "arXiv:2208.07339, sections 1-3", url: "https://arxiv.org/abs/2208.07339", skills: [mlops, llm-finetuning], level: 3, minutes: 45,
+     summary: "Outlier features break naive int8 for large transformers, and mixed-precision decomposition fixes it."}
+  - {id: paged-attention, kind: paper, title: "Efficient Memory Management for Large Language Model Serving with PagedAttention", authors: "Kwon et al.", year: 2023,
+     locator: "arXiv:2309.06180, sections 1-4", url: "https://arxiv.org/abs/2309.06180", skills: [mlops], level: 3, minutes: 50,
+     summary: "The KV-cache memory manager behind vLLM; why batching LLM requests is hard."}
+  - {id: speculative, kind: paper, title: "Fast Inference from Transformers via Speculative Decoding", authors: "Leviathan, Kalman, Matias", year: 2022,
+     locator: "arXiv:2211.17192, sections 1-3", url: "https://arxiv.org/abs/2211.17192", skills: [mlops, llm-finetuning], level: 3, minutes: 40,
+     summary: "A small draft model proposes tokens, the large model verifies them in parallel."}

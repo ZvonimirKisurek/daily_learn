@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CheckCircle2, Lightbulb, ShieldAlert, Sparkles, XCircle } from "lucide-react";
+import { CheckCircle2, FlaskConical, Lightbulb, ShieldAlert, Sparkles, XCircle } from "lucide-react";
 import { Markdown } from "@/components/markdown";
 import { skillLabel } from "@/lib/skills";
 import type { Evaluation, SubmissionResult } from "@/lib/types";
@@ -51,6 +51,21 @@ export function EvaluationView({ ev, result }: { ev: Evaluation; result?: Submis
           </div>
         </div>
       </div>
+
+      {ev.tests && (
+        <section className="glass rounded-2xl p-5">
+          <h3 className="eyebrow mb-3 flex items-center gap-2"><FlaskConical className="size-3.5" /> Acceptance tests: {ev.tests.passed}/{ev.tests.expected} passed</h3>
+          <ul className="grid gap-1.5 font-mono text-[13px] sm:grid-cols-2">
+            {Object.entries(ev.tests.results).map(([name, status]) => (
+              <li key={name} className="flex items-center gap-2">
+                {status === "PASSED" ? <CheckCircle2 className="size-3.5 shrink-0 text-emerald-300" /> : <XCircle className="size-3.5 shrink-0 text-red-300" />}
+                <span className="truncate" title={name}>{name}</span>{status !== "PASSED" && <span className="text-xs text-muted-foreground">{status.toLowerCase()}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-muted-foreground">Counted by code from your pytest output. The task passes only when every test passes.</p>
+        </section>
+      )}
 
       <section className="glass rounded-2xl p-5">
         <h3 className="eyebrow mb-4">Rubric breakdown</h3>

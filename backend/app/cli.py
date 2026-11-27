@@ -130,6 +130,10 @@ def main() -> int:
     cal.add_argument("--n", type=int, default=60, help="target number of labels")
     cal.add_argument("--labels", default="calibration_labels.json")
     cal.add_argument("--analyze", action="store_true", help="skip labeling; just analyze the labels file")
+    bf = sub.add_parser("backfill-mastery", help="add review cards, primary sources and acceptance tests to recent lessons (non-destructive)")
+    bf.add_argument("--days", type=int, default=14, help="how far back (default 14, the catch-up window)")
+    bf.add_argument("--no-llm", action="store_true", help="only create review cards; skip primary sources and acceptance tests")
+    bf.add_argument("--dry-run", action="store_true", help="count what would change; write nothing, call no LLM")
     sub.add_parser("feed-stats", help="distribution of article-vs-skill similarity (calibrate MATCH_STRONG/MODERATE)")
     for name, help_ in (("generate-weekly", "generate next week's theme"), ("generate-daily", "generate today's briefing")):
         g = sub.add_parser(name, help=help_)
@@ -259,6 +263,11 @@ def main() -> int:
         from app.curriculum.summaries import summarize_pending
 
         print(summarize_pending(limit=args.limit))
+        return 0
+    if args.cmd == "backfill-mastery":
+        from app.mastery.backfill import backfill
+
+        print(backfill(days=args.days, use_llm=not args.no_llm, dry_run=args.dry_run))
         return 0
     if args.cmd == "feed-stats":
         from app.curriculum import calibration

@@ -10,6 +10,9 @@ dependencies = [
   "psycopg[binary,pool]>=3.2", "pgvector>=0.3", "numpy>=1.26",
   "openai>=3.39", "tenacity>=8.5",
   "scikit-learn>=1.5",  # the short-term BTC model (app/updown): a small neural network + a logistic baseline
+  # runtime, not just dev: the worker runs each generated acceptance suite against its reference solution
+  # (app/mastery/sandbox.py). Without pytest in the image every suite would be stored as "unverified".
+  "pytest>=8",
 ]
 
 [project.optional-dependencies]

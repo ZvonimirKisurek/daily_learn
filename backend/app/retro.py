@@ -80,6 +80,11 @@ def export_progress(path: str | Path) -> dict:
         "weekly_themes": "select week_start, title, rationale, target_skills, payload, created_at from weekly_themes order by week_start",
         "daily_briefings": "select day, payload, completed_at, created_at from daily_briefings order by day",
         "daily_tasks": "select b.day, t.kind, t.skill_slug, t.difficulty, t.title, t.completed_at, t.points_awarded from daily_tasks t join daily_briefings b on b.id=t.briefing_id order by b.day, t.kind",
+        # the mastery loop: your memory schedule, your retrospectives and your math record are as irreplaceable as the skills
+        "review_cards": "select id, source, skill_slug, prompt, due_on, interval_days, ease, reps, lapses, suspended, created_at from review_cards order by created_at",
+        "review_log": "select card_id, reviewed_at, grade, answer, interval_days from review_log order by reviewed_at",
+        "weekly_retros": "select * from weekly_retros order by week_start",
+        "math_attempts": "select day, idx, topic, answer, correct, tries, points from math_attempts order by day, idx",
     }
     with get_pool().connection() as conn:
         data = {k: conn.execute(sql).fetchall() for k, sql in q.items()}

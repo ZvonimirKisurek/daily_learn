@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { ApiProblem } from "@/components/api-problem";
+import { MasteryCard } from "@/components/mastery/mastery-card";
 import { MissionBoard } from "@/components/mission/mission-board";
 import { PendingBriefing } from "@/components/mission/pending-briefing";
 import { RestDay } from "@/components/mission/rest-day";
@@ -7,7 +8,7 @@ import { CommandCenterSkeleton } from "@/components/mission/skeletons";
 import { WeeklyThemeCard } from "@/components/mission/weekly-theme-card";
 import { LevelCard } from "@/components/progress/level-card";
 import { SkillProgress } from "@/components/skills/skill-progress";
-import { attempt, getNext, getProgress } from "@/lib/api";
+import { attempt, getMastery, getNext, getProgress } from "@/lib/api";
 import { TRACK_LABEL, TRACK_SHORT, TRACKS, type Track } from "@/lib/tracks";
 import type { NextLesson, Progress } from "@/lib/types";
 import { cn, longDate } from "@/lib/utils";
@@ -29,14 +30,18 @@ export default function Page() {
 }
 
 async function CommandCenter() {
-  // four requests in parallel, not one after another
-  const [data, err] = await attempt(Promise.all([getNext("ai"), getNext("management"), getProgress("ai"), getProgress("management")]));
+  // five requests in parallel; the mastery summary is optional (the page still works if it fails)
+  const [[data, err], [mastery]] = await Promise.all([
+    attempt(Promise.all([getNext("ai"), getNext("management"), getProgress("ai"), getProgress("management")])), attempt(getMastery())]);
   if (!data) return <ApiProblem error={err} />;
   const [ai, mgmt, pAi, pMgmt] = data;
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
       <div className="space-y-12">
-        <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{longDate(ai.today)}</p>
+        <div className="space-y-6">
+          <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{longDate(ai.today)}</p>
+          {mastery && <MasteryCard m={mastery} />}
+        </div>
         <TrackLesson track="ai" next={ai} progress={pAi} />
         <TrackLesson track="management" next={mgmt} progress={pMgmt} />
         {ai.weekly_theme && <WeeklyThemeCard weekly={ai.weekly_theme} today={ai.today} />}

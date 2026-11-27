@@ -230,7 +230,9 @@ def test_daily_generation_runs_plan_then_chapter_and_essay_with_the_configured_l
     assert calls[0] == ("json", "WeeklyThemeOutput", 0.6)                       # self-healed weekly theme first
     plan_call = calls[1]
     assert plan_call == ("json", "DailyPlanOutput", 0.31)
-    assert sorted(c[1] for c in calls[2:]) == ["Chapter", "Essay"] and all(c[2] == 0.52 for c in calls[2:])
+    later = sorted(calls[2:], key=lambda c: c[1])
+    assert [c[1] for c in later] == ["AcceptanceSuite", "Chapter", "Essay"]                # stage 5 runs alongside the chapter and essay
+    assert all(c[2] == 0.52 for c in later if c[0] == "text") and later[0][2] == s.temp_tests
 
 
 # ------------------------------------------------------------------ migration + reset
@@ -242,7 +244,7 @@ def test_migration_zeroes_skills_and_adds_the_columns(db):
         c.execute("update skills set level = 33")
         c.execute("insert into skill_history (skill_id, level, delta) select id, 1, 1 from skills limit 1")
         c.execute(data_part)
-        assert c.execute("select max(level), count(*) from skills").fetchone() == (0, 16)
+        assert c.execute("select max(level), count(*) from skills").fetchone() == (0, 17)
         assert c.execute("select count(*) from skill_history").fetchone()[0] == 0
         cols = {r[0] for r in c.execute("select column_name from information_schema.columns where table_name='daily_tasks'")}
     assert {"reading_content", "evaluation_rubric", "user_submission", "ai_evaluation_feedback", "evaluation_result",
@@ -259,7 +261,7 @@ def test_reset_progress_cli_requires_confirmation(db):
     with psycopg.connect(db) as c:
         assert c.execute("select min(level) from skills").fetchone()[0] == 40
     yes = subprocess.run([sys.executable, "-m", "app.cli", "reset-progress", "--yes"], env=env, capture_output=True, text=True)
-    assert yes.returncode == 0 and "16 skills reset to 0" in yes.stdout
+    assert yes.returncode == 0 and "17 skills reset to 0" in yes.stdout
     with psycopg.connect(db) as c:
         assert c.execute("select max(level) from skills").fetchone()[0] == 0
 

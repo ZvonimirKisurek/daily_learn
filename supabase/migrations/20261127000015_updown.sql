@@ -1,6 +1,6 @@
 -- Short-term BTC Up/Down markets (Polymarket 5m / 15m), the model that learns them, and the Telegram assistant.
 -- Additive only: no existing table changes. Apply with:
---   docker exec -i mlearning-db-1 psql -U mlesprint -d mlesprint -1 -v ON_ERROR_STOP=1 < supabase/migrations/20261127000014_updown.sql
+--   docker exec -i mlearning-db-1 psql -U mlesprint -d mlesprint -1 -v ON_ERROR_STOP=1 < supabase/migrations/20261127000015_updown.sql
 
 -- 1-minute BTC/USD candles (Coinbase). The model's momentum and volatility features come from here.
 create table public.btc_candles_1m (

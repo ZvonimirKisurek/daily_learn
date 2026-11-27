@@ -49,6 +49,12 @@ export function WeeklyThemeCard({ weekly, today }: { weekly: WeeklyTheme; today:
             <ul className="mt-2 space-y-1 text-muted-foreground">
               {t.roadmap.milestones.map((m) => <li key={m} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-violet" />{m}</li>)}
             </ul>
+            {t.roadmap.quarter && (
+              <p className="mt-3 border-t border-violet/20 pt-2 text-xs text-muted-foreground">
+                <span className="font-mono uppercase tracking-widest text-violet">Quarter {t.roadmap.quarter.index} public deliverable</span> (week {t.roadmap.quarter.weeks[1]}): {t.roadmap.quarter.public_deliverable}
+              </p>
+            )}
+            {t.math_topics && t.math_topics.length > 0 && <p className="mt-2 text-xs text-muted-foreground"><span className="font-mono uppercase tracking-widest text-violet">Math drill</span> {t.math_topics.join(" · ")}</p>}
           </div>
         )}
         <ul className="space-y-1">

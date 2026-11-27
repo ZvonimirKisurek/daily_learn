@@ -121,7 +121,7 @@ async def test_roadmap_week_steers_prompt_and_is_exposed_by_the_api(client, db):
     dry = generators.generate_weekly_theme(week_start=date(2026, 10, 26), dry_run=True, embedder=FakeEmbedder(), settings=s)
     assert "<roadmap_week" in dry["user"] and "Retrieval engineering" in dry["user"] and "Roadmap mode" in dry["system"]
     assert "<roadmap_week" not in generators.generate_weekly_theme(
-        week_start=date(2026, 11, 30), dry_run=True, embedder=FakeEmbedder(), settings=s)["user"]  # past the 4 weeks => free mode
+        week_start=date(2027, 4, 12), dry_run=True, embedder=FakeEmbedder(), settings=s)["user"]  # past the 24 weeks => free mode
 
     seen = {}
 
@@ -139,4 +139,5 @@ async def test_roadmap_week_steers_prompt_and_is_exposed_by_the_api(client, db):
         c.execute("update weekly_themes set week_start = %s", (monday_of(today),))
     generators.generate_daily_briefing(day=today, llm=FakeLLM(), embedder=FakeEmbedder(), settings=Settings(min_candidates=10))
     body = (await client.get("/api/today")).json()
-    assert body["weekly_theme"]["theme"]["roadmap"]["index"] == 1 and body["weekly_theme"]["theme"]["roadmap"]["of"] == 4
+    assert body["weekly_theme"]["theme"]["roadmap"]["index"] == 1 and body["weekly_theme"]["theme"]["roadmap"]["of"] == 24
+    assert body["weekly_theme"]["theme"]["roadmap"]["quarter"]["index"] == 1 and body["weekly_theme"]["theme"]["math_topics"][0] == "dot-product"

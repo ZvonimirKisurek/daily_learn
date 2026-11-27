@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { ArrowLeft, Clock, Gauge, GraduationCap, Library, ScrollText } from "lucide-react";
+import { ArrowLeft, BookMarked, Clock, Gauge, GraduationCap, Library, ScrollText } from "lucide-react";
 import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { skillLabel } from "@/lib/skills";
 import { slugify } from "@/lib/slug";
 import { withTrack } from "@/lib/tracks";
-import type { TaskDetail } from "@/lib/types";
+import type { PrimarySource, TaskDetail } from "@/lib/types";
 import { ExternalLink } from "@/components/mission/task-bodies";
 import { Reveal } from "@/components/motion";
 import { ChapterQuiz } from "./chapter-quiz";
@@ -13,6 +13,22 @@ import { FinishChapter } from "./finish-chapter";
 import { ReadingProgress } from "./reading-progress";
 
 const LEVEL = ["", "From scratch", "Intermediate", "Advanced"];
+
+/** The human-written reading that goes with the chapter. Title, locator and link come from canon.yaml, never from the model. */
+function PrimarySourceCard({ s }: { s: PrimarySource }) {
+  return (
+    <div className="mt-4 rounded-2xl border border-violet/30 bg-violet/[0.05] p-5">
+      <div className="eyebrow mb-2 flex items-center gap-2 !text-violet"><BookMarked className="size-3.5" /> Primary source · {s.kind} · ~{s.minutes} min</div>
+      <p className="text-[17px] font-semibold leading-snug">
+        {s.url ? <ExternalLink href={s.url}>{s.title}</ExternalLink> : s.title}
+      </p>
+      <p className="mt-0.5 text-sm text-muted-foreground">{s.authors}, {s.year} · read: {s.locator}</p>
+      <p className="mt-3 text-[15px] leading-relaxed">{s.focus}</p>
+      <p className="mt-3 text-[15px]"><span className="eyebrow mr-2 !text-violet">Answer from memory afterwards</span>{s.guiding_question}</p>
+      <p className="mt-2 text-xs text-muted-foreground">The chapter is a summary written for you; this is where the idea comes from. The question above becomes a review card.</p>
+    </div>
+  );
+}
 
 /** The digital textbook page: a server-rendered chapter with a sticky table of contents. */
 export function ReadingView({ detail }: { detail: TaskDetail }) {
@@ -36,6 +52,7 @@ export function ReadingView({ detail }: { detail: TaskDetail }) {
             <div className="eyebrow mb-2">After this chapter you can</div>
             <ul className="list-disc space-y-1.5 pl-5 text-[15px] marker:text-primary">{r.learning_goals.map((g) => <li key={g}>{g}</li>)}</ul>
           </div>
+          {r.primary_source && <PrimarySourceCard s={r.primary_source} />}
         </header>
       </Reveal>
 

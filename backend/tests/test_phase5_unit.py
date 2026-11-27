@@ -74,10 +74,18 @@ def test_report_and_stats_are_readable():
 # ------------------------------------------------------------------ roadmap
 def test_real_roadmap_file_is_valid_and_complete():
     rm = load_roadmap("curriculum/roadmap.yaml")
-    assert [w.index for w in rm.weeks] == [1, 2, 3, 4]
+    assert [w.index for w in rm.weeks] == list(range(1, 25))  # 24 weeks = two quarters
+    from app.mastery.mathdrill import GENERATORS
+
+    known = {"pytorch", "classical-ml", "rag", "vector-db", "llm-finetuning", "mlops", "llm-evals", "math-foundations"}
     for w in rm.weeks:
         assert sorted(d.day for d in w.daily_outline) == list(range(1, 8)) and len(w.milestones) >= 5 and w.deliverable
+        assert 1 <= len(w.focus_skills) <= 3 and set(w.focus_skills) <= known and {d.skill for d in w.daily_outline} <= known
+        assert w.math_topics and set(w.math_topics) <= set(GENERATORS), w.index  # every week drills real math topics
     assert set(rm.weeks[0].focus_skills) == {"rag", "vector-db", "llm-evals"}
+    # every week belongs to exactly one quarter, and every quarter ends in something public
+    assert sorted(i for q in rm.quarters for i in range(q.weeks[0], q.weeks[1] + 1)) == list(range(1, 25))
+    assert all(q.public_deliverable and q.success_criteria for q in rm.quarters) and rm.beyond
 
 
 def test_week_for_maps_mondays_to_weeks():
@@ -85,7 +93,8 @@ def test_week_for_maps_mondays_to_weeks():
     start = date(2026, 11, 4)  # a Wednesday: the roadmap's week 1 is the week containing it
     assert week_for(rm, start, date(2026, 11, 2)).index == 1
     assert week_for(rm, start, date(2026, 11, 23)).index == 4
-    assert week_for(rm, start, date(2026, 10, 26)) is None and week_for(rm, start, date(2026, 11, 30)) is None
+    assert week_for(rm, start, date(2026, 10, 26)) is None and week_for(rm, start, date(2026, 11, 30)).index == 5
+    assert week_for(rm, start, date(2027, 4, 12)).index == 24 and week_for(rm, start, date(2027, 4, 19)) is None
 
 
 def test_roadmap_focus_is_enforced_by_validation():

@@ -54,7 +54,7 @@ Add this under `services:` in the server's `docker-compose.prod.yml`, next to `w
 ## First start (on the server)
 
 ```bash
-docker exec -i mlearning-db-1 psql -U mlesprint -d mlesprint -1 -v ON_ERROR_STOP=1 < supabase/migrations/20261127000014_updown.sql
+docker exec -i mlearning-db-1 psql -U mlesprint -d mlesprint -1 -v ON_ERROR_STOP=1 < supabase/migrations/20261127000015_updown.sql
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec api python -m app.cli updown-backfill --days 7
 docker compose -f docker-compose.prod.yml exec api python -m app.cli updown-train

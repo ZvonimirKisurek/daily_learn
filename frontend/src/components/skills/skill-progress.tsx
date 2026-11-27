@@ -28,16 +28,16 @@ export function SkillProgress({ skills, title = "Skill matrix", accent = "var(--
                 contentStyle={{ background: "rgba(10,12,18,0.92)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, fontSize: 12 }} itemStyle={{ color: "var(--foreground)" }} />
             </RadarChart>
           </ResponsiveContainer>
-          {empty && (
-            <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4, duration: 0.5 }}
-              className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-1">
-              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#07080c]/80 px-3.5 py-1.5 backdrop-blur-md">
-                <Sprout className="size-4 text-primary" />
-                <p className="text-xs"><span className="font-medium">Your journey starts here</span> <span className="text-muted-foreground">· pass a lab to grow this shape</span></p>
-              </div>
-            </motion.div>
-          )}
         </div>
+        {empty && (
+          <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4, duration: 0.5 }}
+            className="pointer-events-none mt-2 flex justify-center">
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#07080c]/80 px-3.5 py-1.5 backdrop-blur-md">
+              <Sprout className="size-4 text-primary" />
+              <p className="text-xs"><span className="font-medium">Your journey starts here</span> <span className="text-muted-foreground">· pass a lab to grow this shape</span></p>
+            </div>
+          </motion.div>
+        )}
         {/* The chart is a summary; this list carries the exact numbers (and is what screen readers use). */}
         <ul className="mt-3 space-y-3.5">
           {skills.map((s, i) => (

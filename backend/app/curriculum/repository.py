@@ -84,12 +84,16 @@ def save_briefing(day: date, theme_id: str | None, payload: dict, tasks: list[di
             (day, theme_id, Jsonb(payload), level, track),
         ).fetchone()["id"]
         for t in tasks:
-            conn.execute(
-                """insert into daily_tasks (briefing_id, kind, skill_slug, difficulty, title, reading_content, evaluation_rubric, quiz)
-                   values (%s,%s,%s,%s,%s,%s,%s,%s)""",
+            tid = conn.execute(
+                """insert into daily_tasks (briefing_id, kind, skill_slug, difficulty, title, reading_content, evaluation_rubric, quiz,
+                                            acceptance_tests, reference_solution)
+                   values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id""",
                 (bid, t["kind"], t["skill_slug"], t["difficulty"], t["title"], t.get("reading_content"),
-                 Jsonb(t["evaluation_rubric"]) if t.get("evaluation_rubric") else None, Jsonb(t["quiz"]) if t.get("quiz") else None),
-            )
+                 Jsonb(t["evaluation_rubric"]) if t.get("evaluation_rubric") else None, Jsonb(t["quiz"]) if t.get("quiz") else None,
+                 Jsonb(t["acceptance_tests"]) if t.get("acceptance_tests") else None,
+                 Jsonb(t["reference_solution"]) if t.get("reference_solution") else None),
+            ).fetchone()["id"]
+            _insert_cards(conn, [{**c, "task_id": tid} for c in t.get("cards", [])])
     return str(bid)
 
 
@@ -128,6 +132,49 @@ def set_level_embedding(level: int, vec: list[float], track: str = "ai") -> None
         conn.execute("insert into level_embeddings (level, track, embedding) values (%s, %s, %s) "
                      "on conflict (track, level) do update set embedding = excluded.embedding",
                      (level, track, np.asarray(vec, dtype=np.float32)))
+
+
+def _insert_cards(conn, cards: list[dict]) -> int:
+    """Idempotent: a card whose dedupe_key exists is skipped, so regenerating content never duplicates reviews.
+    A new card is never born overdue (lessons regenerated or backfilled for past days): it is due today at the earliest,
+    so it cannot trip the review gate before the learner has even seen it."""
+    n = 0
+    for c in cards:
+        n += conn.execute(
+            """insert into review_cards (source, dedupe_key, task_id, week_start, skill_slug, prompt, context, due_on)
+               values (%(source)s, %(dedupe_key)s, %(task_id)s, %(week_start)s, %(skill_slug)s, %(prompt)s, %(context)s,
+                       greatest(%(due_on)s::date, current_date))
+               on conflict (dedupe_key) do nothing""", c).rowcount
+    return n
+
+
+def save_cards(cards: list[dict]) -> int:
+    with get_pool().connection() as conn:
+        return _insert_cards(conn, cards)
+
+
+def used_source_ids(days: int = 60) -> set[str]:
+    """Primary sources assigned recently, so the planner is offered fresh ones first."""
+    since = date.today() - timedelta(days=days)
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            "select payload #>> '{morning_reading,primary_source,id}' as sid from daily_briefings where day >= %s", (since,)).fetchall()
+    return {r["sid"] for r in rows if r["sid"]}
+
+
+def learner_signals(before: date) -> dict:
+    """What the planner should know about the learner's memory and judgement (see prompts.render_learner_signals)."""
+    with get_pool().connection() as conn:
+        weak = conn.execute(
+            """select prompt, skill_slug, lapses from review_cards where lapses > 0 and not suspended
+               order by lapses desc, last_reviewed_at desc nulls last limit 5""").fetchall()
+        missed = conn.execute(
+            """select topic from math_attempts where not correct and day < %s and day >= %s
+               group by topic order by max(day) desc limit 4""", (before, before - timedelta(days=21))).fetchall()
+        retro = conn.execute("select reflection, decision from weekly_retros where week_start < %s order by week_start desc limit 1",
+                             (before,)).fetchone()
+    return {"weak_cards": [dict(r) for r in weak], "missed_math": [r["topic"] for r in missed],
+            "retro_decision": retro["decision"] if retro else None, "retro_reflection": retro["reflection"] if retro else None}
 
 
 def used_reading_ids(days: int = 30) -> set[str]:
