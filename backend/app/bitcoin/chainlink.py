@@ -4,6 +4,9 @@
     messages: {"topic", "type", "timestamp", "payload": {"symbol": "btc/usd", "data": [{"timestamp": ms, "value": usd}, ...]}}
               (the first carries the last ~minute; single updates may come as payload {"symbol", "timestamp", "value"})
     keep-alive: send "PING" every few seconds.
+    Re-sending the subscribe message on the same connection returns a fresh snapshot (newest tick ~1-2 s old). Observed
+    behind some proxies: after the first snapshot no updates arrive. So whenever no new tick has come for RESUB_S seconds,
+    the feed simply subscribes again; where updates do stream, it never needs to.
 
 Exchanges differ from Chainlink by tens of dollars, which decides a 5-minute market, so the live loop prefers this
 feed for "price now" and "price to beat", and falls back to Coinbase (corrected by the measured gap) if it is down.
@@ -21,6 +24,7 @@ from bisect import bisect_right
 log = logging.getLogger(__name__)
 URL = "wss://ws-live-data.polymarket.com"
 STALE_S = 15
+RESUB_S = 5
 
 
 class Feed:
@@ -93,17 +97,22 @@ class Feed:
             try:
                 async with websockets.connect(URL, open_timeout=15, ping_interval=None) as ws:
                     await ws.send(sub)
-                    self.connected, backoff, last_ping = True, 1, time.time()
+                    self.connected, backoff = True, 1
+                    last_ping = last_new = last_sub = time.time()
                     while not self._stop.is_set():
-                        if time.time() - last_ping >= 5:
+                        now = time.time()
+                        if now - last_new >= RESUB_S and now - last_sub >= RESUB_S:
+                            await ws.send(sub)  # no fresh ticks: ask for a new snapshot
+                            last_sub = now
+                        elif now - last_ping >= 5:
                             await ws.send("PING")
-                            last_ping = time.time()
+                            last_ping = now
                         try:
-                            raw = await asyncio.wait_for(ws.recv(), 5)
+                            raw = await asyncio.wait_for(ws.recv(), 2)
                         except asyncio.TimeoutError:
                             continue
-                        if isinstance(raw, str) and raw.lstrip().startswith("{"):
-                            self.ingest(json.loads(raw))
+                        if isinstance(raw, str) and raw.lstrip().startswith("{") and self.ingest(json.loads(raw)):
+                            last_new = time.time()
             except Exception as exc:  # noqa: BLE001 - reconnect on anything
                 log.warning("chainlink feed disconnected: %r (retrying in %ss)", exc, backoff)
             self.connected = False
