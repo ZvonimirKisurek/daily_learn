@@ -85,6 +85,23 @@ def generate_bitcoin_daily_insight(self, trigger: str = "beat", run_id: str | No
     return generate_prediction(trigger=trigger, run_id=run_id)
 
 
+@app.task(name="app.tasks.updown_train", soft_time_limit=1800)
+def updown_train_task() -> dict:
+    """Every few hours: fetch any finished windows the live loop missed, retrain, and promote the model only if it beats
+    the current one on the newest windows. Once a day, Claude writes a short review of the champion."""
+    from app.updown import live, model, review
+
+    try:
+        live.backfill(hours=12)
+    except Exception as exc:  # noqa: BLE001 - training on what we have is still useful
+        log.warning("updown gap backfill failed: %r", exc)
+    r = model.train()
+    if r.get("status") == "trained":
+        review.maybe_review()
+    live.prune()
+    return {k: r.get(k) for k in ("status", "version", "kind", "promoted", "proven", "note")}
+
+
 @app.task(name="app.tasks.prune_old_data")
 def prune_old_data_task() -> dict:
     from app.maintenance import prune

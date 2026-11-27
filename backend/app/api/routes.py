@@ -280,6 +280,18 @@ async def bitcoin_generate(pool: Pool, cfg: Cfg, enqueue: Annotated[Callable[...
     return QueueOut(queued=True, run_id=run_id)
 
 
+@router.get("/bitcoin/updown")
+async def bitcoin_updown(cfg: Cfg):
+    """The 5m/15m Up/Down markets: current windows, the model's report card, recent signals, the daily plan."""
+    from app.updown import live as updown
+
+    try:
+        return await run_in_threadpool(updown.status, cfg)
+    except psycopg.errors.UndefinedTable:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "The Up/Down tables are missing. Apply supabase/migrations/20261127000014_updown.sql, then reload.") from None
+
+
 @router.post("/bitcoin/pulse", response_model=BitcoinPulseOut)
 async def bitcoin_pulse(cfg: Cfg, enqueue: Annotated[Callable[..., None], Depends(get_enqueue)]):
     """Called by the Bitcoin page on open and about once a minute while its tab is visible: refresh the price and the

@@ -40,6 +40,8 @@ app.conf.update(
         # The 06:00 general ingestion has finished by then; the Bitcoin task fetches its own feeds anyway.
         # The price at every full hour, so yesterday's bet advice can be scored against the price at settlement.
         "bitcoin-hourly-price": {"task": "app.tasks.record_bitcoin_price", "schedule": crontab(minute=0)},
+        # The short-term model keeps learning: new windows resolve every 5 minutes, so retrain every 3 hours.
+        "updown-train": {"task": "app.tasks.updown_train", "schedule": crontab(minute=25, hour="*/3")},
         "bitcoin-daily-insight": {"task": "app.tasks.generate_bitcoin_daily_insight", "schedule": crontab(minute=0, hour=9)},
     },
 )

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { withTrack, type Track } from "./tracks";
-import type { BetAdvice, BetCheck, BetInput, BetOverview, BitcoinLatest, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, FeedPage, FeedQuery, Progress, QuizResult, Skill, SubmissionResult, TaskDetail, Today } from "./types";
+import type { UpDownStatus, BetAdvice, BetCheck, BetInput, BetOverview, BitcoinLatest, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, FeedPage, FeedQuery, Progress, QuizResult, Skill, SubmissionResult, TaskDetail, Today } from "./types";
 
 /**
  * Server-side client for the FastAPI backend.
@@ -73,6 +73,8 @@ export const getBitcoinLatest = () => request<BitcoinLatest>("/api/bitcoin/lates
 export const queueBitcoin = () => request<{ queued: boolean; reason: string | null; run_id: string | null }>("/api/bitcoin/generate", { method: "POST" });
 /** Live mode heartbeat: refresh price + news, start a forecast if fresh Bitcoin headlines arrived. Fetches feeds: longer timeout. */
 export const pulseBitcoin = () => request<BitcoinPulse>("/api/bitcoin/pulse", { method: "POST" }, 60_000);
+/** The 5m/15m Up/Down markets: current windows, the model's report card, signals and the daily plan. */
+export const getBitcoinUpDown = () => request<UpDownStatus>("/api/bitcoin/updown");
 /** Bet advisor: bankroll state, the latest recommendation and recent history. */
 export const getBitcoinBet = () => request<BetOverview>("/api/bitcoin/bet");
 /** The daily check-in. Fetches a live price server-side, so it gets a longer timeout. */

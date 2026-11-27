@@ -1,0 +1,42 @@
+[
+ {
+  "id": "1463434",
+  "slug": "btc-updown-15m-1795781700",
+  "title": "Bitcoin Up or Down - November 27, 7:15AM-7:30AM ET",
+  "startDate": "2026-11-26T12:22:37.95247Z",
+  "endDate": "2026-11-27T12:30:00Z",
+  "closed": true,
+  "markets": [
+   {
+    "slug": "btc-updown-15m-1795781700",
+    "question": "Bitcoin Up or Down - November 27, 7:15AM-7:30AM ET",
+    "outcomes": "[\"Up\", \"Down\"]",
+    "outcomePrices": "[\"0\", \"1\"]",
+    "clobTokenIds": "[\"102106663585236936263839210417381215131701831561897957647019610723138507413056\", \"40108738399129718693746485051452597233937903558484237558386333382102712742567\"]",
+    "bestAsk": 0.001,
+    "lastTradePrice": 0.01,
+    "eventStartTime": "2026-11-27T12:15:00Z",
+    "endDate": "2026-11-27T12:30:00Z",
+    "closed": true,
+    "cryptoMarketConfig": {
+     "id": "btc-15m-twap-60",
+     "asset": "btc",
+     "duration": "15m",
+     "twapEnabled": true,
+     "twapLookbackSeconds": 60
+    },
+    "feeSchedule": {
+     "exponent": 1,
+     "rate": 0.05,
+     "takerOnly": true,
+     "rebateRate": 0.2
+    },
+    "feesEnabled": true,
+    "orderMinSize": 5,
+    "orderPriceMinTickSize": 0.001,
+    "groupItemThreshold": "0",
+    "acceptingOrders": false
+   }
+  ]
+ }
+]

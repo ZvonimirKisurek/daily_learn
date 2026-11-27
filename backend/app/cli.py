@@ -42,6 +42,42 @@ def _regenerate_lessons(args) -> int:
     return 1 if r["failed"] else 0
 
 
+def _updown(args) -> int:
+    import json
+
+    from app import assistant, polymarket as pm
+    from app.updown import daily, live, model
+
+    s = get_settings()
+    if args.cmd == "updown-live":
+        if args.once:
+            with pm.client(s) as http:
+                print(json.dumps(live.Live(s, http).tick(), indent=2, default=str))
+            return 0
+        live.run_forever(s)
+        return 0
+    if args.cmd == "updown-backfill":
+        print(live.backfill(s, hours=args.days * 24))
+        return 0
+    if args.cmd == "updown-train":
+        r = model.train(s)
+        print(json.dumps(r, indent=2, default=str))
+        if r.get("status") == "trained":
+            print("\n" + model.describe(r))
+        return 0
+    if args.cmd == "updown-daily":
+        with pm.client(s) as http:
+            print(daily.text(s, daily.refresh(s, http)))
+        return 0
+    bot = assistant.from_settings(s)
+    if not bot or not s.telegram_chat_id:
+        print("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env first (the bot tells you the chat id when you message it).")
+        return 1
+    bot.notify(args.text)
+    print("sent")
+    return 0
+
+
 def _dry_run(only: list[str] | None, track: str | None = None) -> int:
     """Fetch + parse every source without touching the DB or OpenAI. Doubles as a source-liveness check."""
     from app.ingestion.pipeline import fetch_all
@@ -111,6 +147,14 @@ def main() -> int:
     btc = sub.add_parser("bitcoin", help="Phase 11: fetch BTC price + news and generate the AI forecast")
     btc.add_argument("--ingest-only", action="store_true", help="fetch price + news only; no LLM call")
     btc.add_argument("--dry-run", action="store_true", help="fetch data and print the exact prompt; no LLM call, nothing stored")
+    ud = sub.add_parser("updown-live", help="the always-on 5m/15m Up/Down loop + Telegram assistant + morning plan (its own container)")
+    ud.add_argument("--once", action="store_true", help="one tick, printed, then exit (a quick check)")
+    bf = sub.add_parser("updown-backfill", help="download finished 5m/15m windows (result + minute prices) for training")
+    bf.add_argument("--days", type=float, default=7, help="how far back (default 7 days, ~10 minutes to download)")
+    sub.add_parser("updown-train", help="train the 5m/15m model now and print its validation report")
+    sub.add_parser("updown-daily", help="print today's daily plan (the morning message) without sending it")
+    tg = sub.add_parser("telegram-test", help="send a test message to your Telegram chat")
+    tg.add_argument("--text", default="Test from MLE-Sprint: the assistant can reach you.")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -223,6 +267,8 @@ def main() -> int:
         return 0
     if args.cmd == "regenerate-lessons":
         return _regenerate_lessons(args)
+    if args.cmd.startswith("updown-") or args.cmd == "telegram-test":
+        return _updown(args)
     if args.cmd in ("generate-weekly", "generate-daily"):
         import json
         from datetime import date

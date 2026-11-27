@@ -12,7 +12,9 @@ from zoneinfo import ZoneInfo
 
 from psycopg.types.json import Jsonb
 
-from app.bitcoin import accuracy, betting, ingest
+import psycopg
+
+from app.bitcoin import accuracy, bankroll, betting, ingest
 from app.config import Settings
 from app.db import get_pool
 
@@ -136,7 +138,7 @@ def advise(s: Settings, *, balance: float, up_x: float, down_x: float, strike: f
     if min_bet is not None:
         p = replace(p, min_trade=min_bet)
 
-    prev = None if reset else latest_state()
+    prev = None if reset else bankroll.latest()  # one ledger with the Telegram assistant
     if prev is None:  # first check-in (or a reset): everything is active, nothing vaulted, the peak is where you start
         active, vault, peak, swept, pnl = round(balance, 2), 0.0, round(balance, 2), 0.0, None
     else:
@@ -181,6 +183,11 @@ def advise(s: Settings, *, balance: float, up_x: float, down_x: float, strike: f
             """insert into bitcoin_bets (prediction_id, balance, active, vault, peak, swept, pnl, is_reset, action, detail)
                values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id, created_at""",
             (model["prediction_id"], round(balance, 2), active, vault, peak, swept, pnl, reset or prev is None, rec["action"], Jsonb(detail))).fetchone()
+    try:
+        bankroll.store({"balance": round(balance, 2), "active": active, "vault": vault, "peak": peak, "swept": swept, "pnl": pnl,
+                        "is_reset": reset or prev is None}, source="web", note="website check-in")
+    except psycopg.errors.UndefinedTable:
+        pass  # migration 14 not applied yet
     log.info("btc bet advice %s: %s stake=%.2f p_yes=%.3f active=%.2f vault=%.2f", row["id"], rec["action"], rec["cost"],
              model["p_yes"], active, vault)
     return {"id": row["id"], "created_at": row["created_at"], **detail}
@@ -233,7 +240,7 @@ def overview(s: Settings, history: int = 14) -> dict:
             log.exception("bet advisor: live re-evaluation failed")
     return {
         "live": live,
-        "state": None if last is None else {k: float(last[k]) for k in ("balance", "active", "vault", "peak")} | {"updated_at": last["created_at"]},
+        "state": (lambda b: None if b is None else {k: b[k] for k in ("balance", "active", "vault", "peak")} | {"updated_at": b["created_at"]})(bankroll.latest()),
         "last": None if last is None else {"id": last["id"], "created_at": last["created_at"], **last["detail"]},
         "open_position": open_position,
         "history": [{"id": r["id"], "created_at": r["created_at"], "balance": float(r["balance"]), "vault": float(r["vault"]),

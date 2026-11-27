@@ -149,6 +149,18 @@ class Settings(BaseSettings):
     bitcoin_bet_calibration_days: int = 30  # track-record window used to calibrate the forecast's confidence
     temp_bitcoin: float = 0.4  # the confluence rules are arithmetic now: less sampling noise, fewer repair round-trips
 
+    # --- Short-term Up/Down markets (Polymarket 5m / 15m) and the Telegram assistant (app/updown, app/assistant) ---
+    updown_tick_seconds: int = 10  # the live loop looks at both markets this often
+    updown_alert_prob: float = 0.90  # ping only when the model gives one side at least this...
+    updown_min_edge: float = 0.03  # ...and that beats the share price (fee included) by at least this
+    updown_alert_min_secs: int = 45  # never ping with less time left than this (you need time to place the bet)
+    updown_min_bet: float = 1.0  # the smallest bet you place (USD)
+    updown_trust_min_bets: int = 20  # a model is "proven" once its backtest has at least this many bets...
+    updown_train_days: int = 30  # ...on a validation slice taken from this much history
+    updown_daily_hour: int = 9  # the morning message, in bitcoin_bet_timezone
+    telegram_bot_token: str = ""  # from @BotFather; empty = no Telegram
+    telegram_chat_id: str = ""  # only this chat may talk to the bot (the bot tells you the id the first time you write)
+
 
     @property
     def cors_origin_list(self) -> list[str]:

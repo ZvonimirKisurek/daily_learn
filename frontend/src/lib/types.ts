@@ -224,3 +224,25 @@ export interface BitcoinPulse {
   reason: string | null; run_id: string | null;
 }
 export interface BetInput { balance: number; up_x: number; down_x: number; strike?: number; min_bet?: number; hours_to_settle?: number; reset?: boolean }
+
+// ------------------------------------------------------------------------------------------------ 5m / 15m Up/Down
+export interface UpDownWindow {
+  slug: string; minutes: number; label: string; start_at: string; end_at: string; price_to_beat: number | null; at: string;
+  btc: number; up_price: number; up_ask: number | null; down_ask: number | null; p_model: number | null;
+}
+export interface UpDownSignal {
+  id: number; created_at: string; slug: string; side: "up" | "down"; p_model: number; price: number; stake: number; proven: boolean;
+  outcome: "up" | "down" | null; minutes: number; detail: { label?: string };
+}
+export interface DailyPick {
+  date: string; error?: string; settle_at?: string; spot?: number; hours?: number; updated_at?: string;
+  forecast?: { stated_up_1d: number; calibrated_up_1d: number; note: string };
+  best?: { strike: number; side: "yes" | "no"; edge: number; cost: number; p_win: number; stake: number; multiplier: number; advice: string } | null;
+}
+export interface UpDownStatus {
+  running: boolean; last_tick: string | null; telegram: boolean; windows: UpDownWindow[];
+  model: { version: string; kind: string; created_at: string; proven: boolean; summary: string; review: string | null } | null;
+  data: { windows_resolved: number; windows_total: number };
+  signals: UpDownSignal[]; record: { settled: number; wins: number; pnl_per_dollar: number };
+  daily: DailyPick | null; rule: { prob: number; min_edge: number; min_secs: number };
+}
