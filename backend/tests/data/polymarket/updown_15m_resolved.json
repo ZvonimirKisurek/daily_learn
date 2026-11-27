@@ -37,6 +37,10 @@
     "groupItemThreshold": "0",
     "acceptingOrders": false
    }
-  ]
+  ],
+  "eventMetadata": {
+   "finalPrice": 61509.518716282124,
+   "priceToBeat": 61573.49671062156
+  }
  }
 ]

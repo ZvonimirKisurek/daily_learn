@@ -88,6 +88,18 @@ async def fetch_today(conn: AsyncConnection, day: date, track: str = "ai", weeke
     }
 
 
+async def fetch_next(conn: AsyncConnection, today: date, track: str = "ai", weekend_lessons: bool = False) -> dict:
+    """The lesson to do next, in order: the OLDEST unfinished lesson up to today. When every lesson is finished it is
+    today's (or the weekend rest day). `mode` says which: 'continue' (an earlier day) or 'today'."""
+    r = await (await conn.execute("select day from daily_briefings where completed_at is null and track=%s and day <= %s order by day limit 1",
+                                  (track, today))).fetchone()
+    day = r["day"] if r else today
+    out = await fetch_today(conn, day, track, weekend_lessons)
+    pending = await (await conn.execute("select count(*) as n from daily_briefings where completed_at is null and track=%s and day <= %s",
+                                        (track, today))).fetchone()
+    return out | {"today": today, "mode": "continue" if day < today else "today", "unfinished": pending["n"]}
+
+
 async def list_briefing_days(conn: AsyncConnection, track: str = "ai") -> list[date]:
     """Every day that has a stored lesson on this track, oldest first."""
     rows = await (await conn.execute("select day from daily_briefings where track=%s order by day", (track,))).fetchall()

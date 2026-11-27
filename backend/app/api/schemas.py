@@ -147,6 +147,13 @@ class TodayOut(BaseModel):
     skills: list[SkillOut]
 
 
+class NextOut(TodayOut):
+    """/api/next: the lesson to do next. `date` is that lesson's day; `today` is the real date."""
+    today: date
+    mode: Literal["today", "continue"] = Field(description="'continue' = an earlier day you have not finished")
+    unfinished: int = Field(description="unfinished lessons up to today, this one included")
+
+
 class SkillDelta(BaseModel):
     slug: str
     level: float

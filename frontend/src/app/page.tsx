@@ -7,53 +7,66 @@ import { CommandCenterSkeleton } from "@/components/mission/skeletons";
 import { WeeklyThemeCard } from "@/components/mission/weekly-theme-card";
 import { LevelCard } from "@/components/progress/level-card";
 import { SkillProgress } from "@/components/skills/skill-progress";
-import { TrackTabs } from "@/components/track-tabs";
-import { attempt, getProgress, getToday } from "@/lib/api";
-import { parseTrack, TRACK_SHORT, TRACKS, type Track } from "@/lib/tracks";
-import { longDate } from "@/lib/utils";
+import { attempt, getNext, getProgress } from "@/lib/api";
+import { TRACK_LABEL, TRACK_SHORT, TRACKS, type Track } from "@/lib/tracks";
+import type { NextLesson, Progress } from "@/lib/types";
+import { cn, longDate } from "@/lib/utils";
 
 /**
- * Server vs Client split on this page:
+ * The Command Center: BOTH tracks, each at the lesson where you stopped. Lessons go in order: the oldest unfinished
+ * day comes first, and today's lesson appears only once every earlier one is finished (/api/next).
  *   - This page and <CommandCenter> are Server Components: they call the API on the server (token stays secret,
  *     no client waterfall), and their output is HTML streamed to the browser.
- *   - <Suspense> lets the static shell paint immediately; the skeleton shows until /api/today resolves.
  *   - Only the pieces that need interactivity are Client Components: MissionBoard (optimistic checkboxes),
  *     PendingBriefing (polling), SkillProgress (Recharts). They receive server data as serialisable props.
  */
-type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-
-export default function Page({ searchParams }: { searchParams: SearchParams }) {
+export default function Page() {
   return (
     <Suspense fallback={<CommandCenterSkeleton />}>
-      <CommandCenter searchParams={searchParams} />
+      <CommandCenter />
     </Suspense>
   );
 }
 
-async function CommandCenter({ searchParams }: { searchParams: SearchParams }) {
-  const track: Track = parseTrack((await searchParams).track);
-  const [data, err] = await attempt(Promise.all([getToday(track), getProgress(track)])); // parallel, not sequential
+async function CommandCenter() {
+  // four requests in parallel, not one after another
+  const [data, err] = await attempt(Promise.all([getNext("ai"), getNext("management"), getProgress("ai"), getProgress("management")]));
   if (!data) return <ApiProblem error={err} />;
-  const [today, progress] = data;
+  const [ai, mgmt, pAi, pMgmt] = data;
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-      <div className="space-y-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{longDate(today.date)}</p>
-          <TrackTabs track={track} base="/" />
-        </div>
-        <LevelCard progress={progress} />
-        {today.state === "ready" && today.briefing ? <MissionBoard briefing={today.briefing} />
-          : today.state === "rest" ? <RestDay track={track} /> : <PendingBriefing track={track} />}
-        {today.weekly_theme && <WeeklyThemeCard weekly={today.weekly_theme} today={today.date} />}
+      <div className="space-y-12">
+        <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{longDate(ai.today)}</p>
+        <TrackLesson track="ai" next={ai} progress={pAi} />
+        <TrackLesson track="management" next={mgmt} progress={pMgmt} />
+        {ai.weekly_theme && <WeeklyThemeCard weekly={ai.weekly_theme} today={ai.today} />}
       </div>
-      {/* One skill graph per track; the track you are looking at comes first. */}
+      {/* One skill graph per track */}
       <aside className="space-y-6 lg:self-start">
-        {[track, ...TRACKS.filter((t) => t !== track)].map((t) => (
-          <SkillProgress key={t} skills={today.skills.filter((s) => s.track === t)} title={`${TRACK_SHORT[t]} skill matrix`}
+        {TRACKS.map((t) => (
+          <SkillProgress key={t} skills={ai.skills.filter((s) => s.track === t)} title={`${TRACK_SHORT[t]} skill matrix`}
             accent={t === "management" ? "#fbbf24" : "var(--primary)"} />
         ))}
       </aside>
     </div>
+  );
+}
+
+function TrackLesson({ track, next, progress }: { track: Track; next: NextLesson; progress: Progress }) {
+  const behind = next.unfinished - (next.mode === "today" ? 1 : 0);
+  return (
+    <section className="space-y-5" aria-label={TRACK_LABEL[track]}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/[0.07] pb-2">
+        <h2 className={cn("text-lg font-semibold tracking-tight", track === "management" ? "text-amber-200" : "text-primary")}>{TRACK_LABEL[track]}</h2>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {next.mode === "continue" ? `continuing where you stopped${behind > 1 ? ` · ${behind} lessons to catch up` : ""}` : "up to date"}
+        </span>
+      </div>
+      {/* the lesson first: it is what you came for; the level card (progress, exam) under it */}
+      {next.state === "ready" && next.briefing
+        ? <MissionBoard briefing={next.briefing} heading={next.mode === "continue" ? `Continue · ${longDate(next.date)}` : "Today's Lesson"} />
+        : next.state === "rest" ? <RestDay track={track} /> : <PendingBriefing track={track} />}
+      <LevelCard progress={progress} />
+    </section>
   );
 }

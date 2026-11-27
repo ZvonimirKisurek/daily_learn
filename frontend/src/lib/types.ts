@@ -64,6 +64,8 @@ export interface Skill {
 }
 
 export interface Today { date: string; track: Track; state: "ready" | "pending" | "rest"; briefing: Briefing | null; weekly_theme: WeeklyTheme | null; skills: Skill[] }
+/** /api/next: the lesson to do next. `date` is the lesson's day, `today` the real date; 'continue' = an earlier unfinished day. */
+export interface NextLesson extends Today { today: string; mode: "today" | "continue"; unfinished: number }
 
 export interface Completion {
   task: Task; skill: { slug: string; level: number; delta: number }; briefing_completed: boolean; already_completed: boolean; xp: number;
@@ -229,6 +231,8 @@ export interface BetInput { balance: number; up_x: number; down_x: number; strik
 export interface UpDownWindow {
   slug: string; minutes: number; label: string; start_at: string; end_at: string; price_to_beat: number | null; at: string;
   btc: number; up_price: number; up_ask: number | null; down_ask: number | null; p_model: number | null;
+  /** Coinbase + the measured gap to Chainlink at the window start: comparable with price_to_beat. */
+  btc_index: number; basis: number | null;
 }
 export interface UpDownSignal {
   id: number; created_at: string; slug: string; side: "up" | "down"; p_model: number; price: number; stake: number; proven: boolean;

@@ -34,6 +34,8 @@ def test_updown_markets_parse_including_fees_and_results():
     assert open15.fee_rate == 0.05 and open15.fee_exponent == 1 and open15.min_order_size == 5
     done = pm.parse_updown(load("updown_15m_resolved.json")[0])
     assert done.closed and done.outcome == "down"                       # outcomePrices ["0", "1"]
+    assert done.price_to_beat == pytest.approx(61573.50, abs=0.01) and done.final_price < done.price_to_beat   # Chainlink, official
+    assert open15.price_to_beat is None                                 # published only with the result
     assert pm.parse_updown(load("updown_5m_open.json")[0]).minutes == 5
     assert pm.outcome_of(["1", "0"], True) == "up" and pm.outcome_of(["0.6", "0.4"], True) is None and pm.outcome_of(["1", "0"], False) is None
 
@@ -142,8 +144,8 @@ def synthetic_history(conn, days: float = 1.5, seed: int = 1):
         start, end = t0 + k * 900, t0 + (k + 1) * 900
         K, final = s.close_at(start), s.close_at(end)
         slug = f"btc-updown-15m-{start}"
-        conn.execute("""insert into updown_windows (slug, minutes, start_at, end_at, up_token, down_token, fee_rate, price_to_beat, outcome)
-                        values (%s, 15, to_timestamp(%s), to_timestamp(%s), 'u', 'd', 0.05, %s, %s)""",
+        conn.execute("""insert into updown_windows (slug, minutes, start_at, end_at, up_token, down_token, fee_rate, price_to_beat, basis, outcome)
+                        values (%s, 15, to_timestamp(%s), to_timestamp(%s), 'u', 'd', 0.05, %s, 0, %s)""",
                      (slug, start, end, K, "up" if final >= K else "down"))
         for t in range(start + 30, end - 5, 60):
             price = s.close_at(t)
@@ -195,6 +197,8 @@ def test_live_tick_signal_placed_bet_resolution_and_the_vault(ud_db, monkeypatch
         m["closed"] = closed
         m["outcomePrices"] = json.dumps({"up": ["1", "0"], "down": ["0", "1"]}.get(outcome, ["0.9", "0.1"]))
         m["clobTokenIds"] = json.dumps([f"up{minutes}", f"down{minutes}"])
+        if start < now - minutes * 60 + 1:                                        # a finished window: official numbers published
+            e["eventMetadata"] = {"priceToBeat": 59_950.0, "finalPrice": 59_900.0}
         return e
 
     resolved: set[str] = set()
@@ -212,6 +216,8 @@ def test_live_tick_signal_placed_bet_resolution_and_the_vault(ud_db, monkeypatch
     snaps = lp.tick(now)
     by_min = {x["minutes"]: x for x in snaps}
     assert set(by_min) == {5, 15} and by_min[15]["p_model"] == pytest.approx(0.9707, abs=1e-3) and by_min[15]["secs_left"] == 300
+    assert by_min[15]["price_to_beat"] == 59_900.0                                      # the previous window's official final price
+    assert by_min[15]["btc_index"] == pytest.approx(60_000 + lp.windows[by_min[15]["slug"]]["basis"])   # Coinbase + basis
     sig = by_min[15]["signal"]
     assert sig and sig["side"] == "up" and sig["proven"] and sig["cost"] == pytest.approx(0.89 + 0.05 * 0.89 * 0.11, abs=1e-4)
     assert 0 < sig["stake"] <= 3.0 and sent and sent[0].startswith("BET UP")             # stake capped at 30% of $10
@@ -316,3 +322,55 @@ def test_daily_plan_prices_every_target_against_the_forecast(btc_db, monkeypatch
     text = daily.text(Settings(), p)
     assert "Daily plan for 2026-11-27" in text and "noon ET" in text and "Balance $20.00" in text
     assert daily.target_date(datetime(2026, 11, 27, 18, 0, tzinfo=timezone.utc)).isoformat() == "2026-11-28"   # after noon ET: tomorrow
+
+
+# ------------------------------------------------------------------ the live Chainlink feed
+def test_chainlink_feed_parses_snapshots_and_updates_and_answers_by_time():
+    from app.bitcoin.chainlink import Feed
+
+    f = Feed(keep_s=600)
+    snap = {"topic": "crypto_prices_chainlink", "type": "update", "timestamp": 0,         # the shape the socket really sends
+            "payload": {"symbol": "btc/usd", "data": [{"timestamp": (1_000 + i) * 1000, "value": 60_000.0 + i} for i in range(60)]}}
+    assert f.ingest(snap) == 60 and f.ingest(snap) == 0                                   # duplicates are not double-counted
+    assert f.ingest({"payload": {"symbol": "btc/usd", "timestamp": 1_060_000, "value": 61_000.0}}) == 1
+    assert f.ingest({"payload": {"symbol": "eth/usd", "timestamp": 1_061_000, "value": 1.0}}) == 0
+    assert f.at(1_030) == 60_030.0 and f.at(1_062) == 61_000.0 and f.at(1_064) is None    # older than 3 s: unknown
+    assert f.twap(1_059, 60) == pytest.approx(60_029.5) and f.twap(2_000, 60) is None      # a gap in the data: no average
+    assert f.latest(now=1_065) == 61_000.0 and f.latest(now=1_100) is None                 # stale after 15 s
+    f.ingest({"payload": {"symbol": "btc/usd", "timestamp": 2_000_000, "value": 1.0}})
+    assert f.at(1_030) is None                                                             # older than keep_s is dropped
+
+
+@pytest.mark.integration
+def test_live_loop_prefers_the_chainlink_feed(ud_db, monkeypatch):
+    from app.bitcoin import candles as cdl
+    from app.bitcoin.chainlink import Feed
+    from app.updown import live
+
+    now = float(int(datetime.now(timezone.utc).timestamp()) // 900 * 900 + 300)
+    with psycopg.connect(ud_db, autocommit=True) as conn:
+        synthetic_history(conn, days=0.3)
+    feed = Feed()
+    start15 = now - 300  # the 15m window started 5 minutes ago
+    feed.ingest({"payload": {"symbol": "btc/usd", "data": [{"timestamp": int(t) * 1000, "value": 60_100.0 if t > start15 - 60 else 59_000.0}
+                                                              for t in range(int(start15) - 120, int(now) + 1)]}})
+    e = load("updown_15m_open.json")[0]
+
+    def events(http, slugs):
+        out = []
+        for sl in slugs:
+            minutes, start = int(sl.split("-")[2][:-1]), int(sl.split("-")[3])
+            ev = json.loads(json.dumps(e))
+            ev["slug"], m = sl, ev["markets"][0]
+            m["cryptoMarketConfig"] = {"duration": f"{minutes}m"}
+            m["eventStartTime"] = datetime.fromtimestamp(start, timezone.utc).isoformat()
+            m["endDate"] = datetime.fromtimestamp(start + minutes * 60, timezone.utc).isoformat()
+            out.append(ev)
+        return out
+    monkeypatch.setattr(pm, "get_events", events)
+    monkeypatch.setattr(pm, "get_book", lambda http, token: (0.5, 0.51))
+    monkeypatch.setattr(cdl, "sync", lambda http, a, b: 0)
+    monkeypatch.setattr(cdl, "spot", lambda http: pytest.fail("Coinbase must not be needed while the feed is live"))
+    snaps = {x["minutes"]: x for x in live.Live(S, http=None, feed=feed).tick(now)}
+    assert snaps[15]["k_source"] == "chainlink" and snaps[15]["price_to_beat"] == pytest.approx(60_100.0)   # the 60 s before the start
+    assert snaps[15]["btc"] == 60_100.0 and snaps[15]["price_source"] == "chainlink"

@@ -13,7 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.api import queries
 from app.api.deps import Cfg, Conn, Pool, QueueUnavailable, get_enqueue, get_llm, require_token
-from app.api.schemas import (AnswersIn, BitcoinPulseOut, BetAdviceOut, BetCheckIn, BetCheckOut, BetIn, BetOverviewOut, BitcoinLatestOut, CompletionOut, ExamOut, ExamResultOut, ExamStartIn, NotesIn, NotesOut, FeedPage,
+from app.api.schemas import (AnswersIn, NextOut, BitcoinPulseOut, BetAdviceOut, BetCheckIn, BetCheckOut, BetIn, BetOverviewOut, BitcoinLatestOut, CompletionOut, ExamOut, ExamResultOut, ExamStartIn, NotesIn, NotesOut, FeedPage,
                              ProgressOut, QueueOut, QuizOut, SkillOut, SubmissionIn, SubmissionOut, TaskDetailOut, TodayOut)
 from app.bitcoin import advisor, live
 from app.curriculum import levels
@@ -37,6 +37,12 @@ async def today(conn: Conn, cfg: Cfg, track: Track = "ai"):
     """Everything the Command Center needs in one round trip. `state="pending"` (briefing null) is a normal,
     expected response before 06:30 or if generation failed - it is NOT an error, so it is a 200."""
     return await queries.fetch_today(conn, _today(cfg), track, cfg.weekend_lessons)
+
+
+@router.get("/next", response_model=NextOut)
+async def next_lesson(conn: Conn, cfg: Cfg, track: Track = "ai"):
+    """The Command Center's lesson: where you stopped (the oldest unfinished day), so lessons are done in order."""
+    return await queries.fetch_next(conn, _today(cfg), track, cfg.weekend_lessons)
 
 
 @router.get("/briefings/history", response_model=list[date])

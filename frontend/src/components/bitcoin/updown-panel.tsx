@@ -96,7 +96,7 @@ function WindowCard({ minutes, w }: { minutes: number; w?: UpDownWindow }) {
   if (!w) return (
     <div className="rounded-lg border border-dashed border-white/10 p-3 text-[13px] text-muted-foreground">{minutes}-minute market: no live data yet.</div>
   );
-  const gap = w.price_to_beat ? w.btc - w.price_to_beat : null;
+  const gap = w.price_to_beat ? w.btc_index - w.price_to_beat : null;
   return (
     <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
       <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -104,8 +104,8 @@ function WindowCard({ minutes, w }: { minutes: number; w?: UpDownWindow }) {
         <span className="shrink-0 font-mono text-[10px] text-muted-foreground">ends {hm(w.end_at)}</span>
       </div>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
-        <Stat label="Price to beat" value={w.price_to_beat ? usd(w.price_to_beat) : "—"} />
-        <Stat label="BTC now" value={<>{usd(w.btc)}{gap != null && <span className={cn("ml-1 text-[11px]", gap >= 0 ? "text-emerald-300" : "text-rose-300")}>{gap >= 0 ? "+" : ""}{gap.toFixed(0)}</span>}</>} />
+        <Stat label="Price to beat" value={w.price_to_beat ? usd(w.price_to_beat) : "waiting"} />
+        <Stat label="BTC now (Chainlink est.)" value={<>{usd(w.btc_index)}{gap != null && <span className={cn("ml-1 text-[11px]", gap >= 0 ? "text-emerald-300" : "text-rose-300")}>{gap >= 0 ? "+" : ""}{gap.toFixed(0)}</span>}</>} />
         <Stat label="Market: Up" value={pc(w.up_price)} />
         <Stat label="Model: Up" value={pc(w.p_model)} valueClassName={w.p_model == null ? "text-muted-foreground" : w.p_model >= 0.5 ? "text-emerald-300" : "text-rose-300"} />
       </dl>

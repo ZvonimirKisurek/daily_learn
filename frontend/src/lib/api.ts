@@ -1,7 +1,7 @@
 import "server-only";
 
 import { withTrack, type Track } from "./tracks";
-import type { UpDownStatus, BetAdvice, BetCheck, BetInput, BetOverview, BitcoinLatest, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, FeedPage, FeedQuery, Progress, QuizResult, Skill, SubmissionResult, TaskDetail, Today } from "./types";
+import type { NextLesson, UpDownStatus, BetAdvice, BetCheck, BetInput, BetOverview, BitcoinLatest, BitcoinPulse, Completion, Exam, ExamKind, ExamResult, FeedPage, FeedQuery, Progress, QuizResult, Skill, SubmissionResult, TaskDetail, Today } from "./types";
 
 /**
  * Server-side client for the FastAPI backend.
@@ -44,6 +44,8 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = 15_0
 }
 
 export const getToday = (track: Track = "ai") => request<Today>(withTrack("/api/today", track));
+/** Where you stopped: the oldest unfinished lesson (lessons are done in order), or today's when all are done. */
+export const getNext = (track: Track = "ai") => request<NextLesson>(withTrack("/api/next", track));
 /** Every YYYY-MM-DD that has a stored briefing (oldest first). Drives which calendar cells are clickable. */
 export const getHistory = (track: Track = "ai") => request<string[]>(withTrack("/api/briefings/history", track));
 /** One day's briefing, same shape as getToday(). Rejects with ApiError(status 404) for a date with no stored briefing. */

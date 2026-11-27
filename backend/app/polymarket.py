@@ -9,6 +9,9 @@ Quirks worth knowing:
   * A resolved Up/Down market has closed = true and outcomePrices ["1", "0"] (Up won) or ["0", "1"] (Down won).
   * The CLOB book lists bids ascending and asks descending (best last). We take max/min instead of trusting the order.
   * Up/Down slugs are predictable: btc-updown-15m-<window start, unix seconds>; 5-minute windows use "5m".
+  * Once a window resolves, the event carries eventMetadata {priceToBeat, finalPrice}: Chainlink's official numbers.
+    A window's finalPrice is the next window's priceToBeat, so the live price to beat is known ~a minute after the
+    previous window ends. (Coinbase differs from Chainlink by tens of dollars, which decides a 5-minute market.)
   * Gamma accepts several `slug` parameters in one request (answer order not guaranteed), which makes backfills ~10x cheaper.
 """
 from __future__ import annotations
@@ -63,6 +66,8 @@ class UpDown:
     up_token: str
     down_token: str
     up_price: float | None      # Gamma's last outcome price for Up (a probability)
+    price_to_beat: float | None # Chainlink at the start, official; published with the result (eventMetadata)
+    final_price: float | None   # Chainlink at the end, official; it is also the NEXT window's price to beat
     closed: bool
     outcome: str | None         # 'up' / 'down' once resolved
     fee_rate: float
@@ -90,9 +95,12 @@ def parse_updown(event: dict) -> UpDown:
     tokens, prices = _list(m["clobTokenIds"]), _list(m.get("outcomePrices"))
     fees = m.get("feeSchedule") or {}
     closed = bool(m.get("closed") or event.get("closed"))
+    meta = event.get("eventMetadata") or {}
+    num = (lambda v: float(v) if v not in (None, "") else None)
     return UpDown(
         slug=event["slug"], minutes=minutes, start=_ts(m["eventStartTime"]), end=_ts(m["endDate"]),
         up_token=str(tokens[0]), down_token=str(tokens[1]), up_price=float(prices[0]) if prices else None,
+        price_to_beat=num(meta.get("priceToBeat")), final_price=num(meta.get("finalPrice")),
         closed=closed, outcome=outcome_of(prices, closed),
         fee_rate=float(fees.get("rate", 0)) if m.get("feesEnabled", True) else 0.0, fee_exponent=float(fees.get("exponent", 1)),
         min_order_size=float(m.get("orderMinSize") or 5),

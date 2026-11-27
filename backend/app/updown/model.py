@@ -57,7 +57,7 @@ def load_rows(days: int, until: datetime | None = None) -> list[dict]:
         return conn.execute(
             """select s.slug, extract(epoch from s.at) as at, s.btc, s.up_price, s.up_ask, s.down_ask, s.source,
                       w.minutes, extract(epoch from w.start_at) as start, extract(epoch from w.end_at) as end_,
-                      w.price_to_beat, w.outcome, w.fee_rate, w.fee_exponent
+                      w.price_to_beat, w.basis, w.outcome, w.fee_rate, w.fee_exponent
                from updown_snapshots s join updown_windows w using (slug)
                where w.outcome is not null and w.price_to_beat is not null and w.start_at >= %s and w.end_at <= %s
                  and s.at >= w.start_at and s.at < w.end_at - interval '2 seconds'
@@ -112,7 +112,7 @@ def backtest(p: np.ndarray, d: dict, s: Settings) -> dict:
             continue
         taken.add((d["window"][i], sig[0]))
         won = (sig[0] == "up") == (d["y"][i] == 1)
-        bets += 1; wins += won
+        bets += 1; wins += int(won)
         pnl += (1 / sig[2] - 1) if won else -1.0
     return {"bets": bets, "wins": wins, "hit_rate": round(wins / bets, 4) if bets else None, "pnl_per_dollar": round(pnl, 3),
             "roi": round(pnl / bets, 4) if bets else None}
@@ -208,8 +208,11 @@ def train(settings: Settings | None = None, *, min_windows: int = 60) -> dict:
 
 
 def _json(v):
+    """JSON for Postgres; numpy scalars (np.int64, np.float64) become plain numbers."""
+    import json
+
     from psycopg.types.json import Jsonb
-    return Jsonb(v)
+    return Jsonb(json.loads(json.dumps(v, default=lambda o: o.item() if hasattr(o, "item") else str(o))))
 
 
 def describe(metrics: dict) -> str:

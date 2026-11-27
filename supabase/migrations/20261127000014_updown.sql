@@ -23,7 +23,9 @@ create table public.updown_windows (
   fee_rate       numeric(8, 5) not null default 0,                   -- the market's taker fee schedule
   fee_exponent   numeric(6, 3) not null default 1,
   min_order_size numeric(10, 2) not null default 5,                  -- shares, for limit orders
-  price_to_beat  numeric(18, 2),                                     -- BTC at the window start (Coinbase approximation of Chainlink)
+  price_to_beat  numeric(18, 2),                                     -- Chainlink BTC at the start: Polymarket's official number
+  final_price    numeric(18, 2),                                     -- Chainlink BTC at the end (published on resolution)
+  basis          numeric(12, 2),                                     -- price_to_beat - Coinbase at the start: Coinbase + basis ~ Chainlink
   outcome        text check (outcome in ('up', 'down')),             -- set once Polymarket resolves the market
   resolved_at    timestamptz,
   created_at     timestamptz not null default now()
@@ -36,7 +38,7 @@ create table public.updown_snapshots (
   id            bigserial primary key,
   slug          text not null references public.updown_windows (slug) on delete cascade,
   at            timestamptz not null,
-  btc           numeric(18, 2) not null,
+  btc           numeric(18, 2) not null,                                   -- on the settlement basis: Chainlink (live) or Coinbase + basis (history)
   up_price      numeric(7, 5) not null check (up_price between 0 and 1),   -- the market's probability of Up (mid / last trade)
   up_ask        numeric(7, 5),                                             -- live only: what one Up share costs
   down_ask      numeric(7, 5),

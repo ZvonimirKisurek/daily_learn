@@ -661,3 +661,22 @@ async def test_feed_is_split_by_track(client, db):
     assert 0 < n_mgmt < 8 and len(mg["items"]) == n_mgmt and len(ai) == 8 - n_mgmt
     assert mg["for_level"]["title"] == "From maker to manager" and {i["skill_match"]["skill_slug"][:5] for i in mg["items"]} == {"mgmt-"}
     assert all(not i["skill_match"]["skill_slug"].startswith("mgmt-") for i in ai)
+
+
+async def test_next_lesson_is_the_oldest_unfinished_one_then_today(client, db):
+    """The Command Center goes in order: the oldest unfinished day first, today's lesson only when all are done."""
+    from datetime import timedelta
+
+    seed_articles()
+    s = Settings(timezone="UTC", min_candidates=10, prompt_article_count=20, weekend_lessons=True)
+    past = TODAY - timedelta(days=2)
+    for d in (past, TODAY):
+        generators.generate_daily_briefing(day=d, llm=FakeLLM(), embedder=FakeEmbedder(), settings=s)
+    body = (await client.get("/api/next")).json()
+    assert body["mode"] == "continue" and body["date"] == past.isoformat() and body["today"] == TODAY.isoformat() and body["unfinished"] == 2
+    with psycopg.connect(db, autocommit=True) as conn:
+        conn.execute("update daily_briefings set completed_at = now() where day = %s", (past,))
+    body = (await client.get("/api/next")).json()
+    assert body["mode"] == "today" and body["date"] == TODAY.isoformat() and body["unfinished"] == 1 and body["state"] == "ready"
+    mgmt = (await client.get("/api/next?track=management")).json()
+    assert mgmt["track"] == "management" and mgmt["state"] in ("pending", "rest") and mgmt["unfinished"] == 0

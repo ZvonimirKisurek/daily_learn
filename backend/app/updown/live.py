@@ -30,6 +30,7 @@ from app.updown import model as md
 
 log = logging.getLogger(__name__)
 ET = "America/New_York"
+K_FROM_TWAP = True  # price to beat from the live feed: the 60-second average before the start (Chainlink TWAP-60 stream)
 
 
 def _utc(ts: float) -> datetime:
@@ -47,24 +48,32 @@ def label(w: dict | pm.UpDown) -> str:
 
 
 # ----------------------------------------------------------------------------------------------- windows
-def upsert_window(w: pm.UpDown, price_to_beat: float | None) -> None:
+def upsert_window(w: pm.UpDown, price_to_beat: float | None = None, basis: float | None = None) -> None:
     with get_pool().connection() as conn:
         conn.execute(
             """insert into updown_windows (slug, minutes, start_at, end_at, up_token, down_token, fee_rate, fee_exponent, min_order_size,
-                                           price_to_beat, outcome, resolved_at)
-               values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, case when %s::text is null then null else now() end)
-               on conflict (slug) do update set price_to_beat = coalesce(updown_windows.price_to_beat, excluded.price_to_beat),
+                                           price_to_beat, final_price, basis, outcome, resolved_at)
+               values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, case when %s::text is null then null else now() end)
+               on conflict (slug) do update set price_to_beat = coalesce(excluded.price_to_beat, updown_windows.price_to_beat),
+                    final_price = coalesce(excluded.final_price, updown_windows.final_price),
+                    basis = coalesce(updown_windows.basis, excluded.basis),
                     outcome = coalesce(updown_windows.outcome, excluded.outcome),
                     resolved_at = coalesce(updown_windows.resolved_at, excluded.resolved_at)""",
             (w.slug, w.minutes, w.start, w.end, w.up_token, w.down_token, w.fee_rate, w.fee_exponent, w.min_order_size,
-             price_to_beat, w.outcome, w.outcome))
+             price_to_beat or w.price_to_beat, w.final_price, basis, w.outcome, w.outcome))
 
 
-def price_to_beat_from(series: cdl.Series, start: float) -> float | None:
-    """BTC at the window start: the close of the minute that ends exactly at the start (Coinbase, a close stand-in for
-    the Chainlink TWAP the market settles on)."""
-    i = series.last_closed(start)
-    return float(series.close[i]) if i >= 0 and series.t[i] == int(start) - 60 else None
+def coinbase_at(series: cdl.Series, ts: float) -> float | None:
+    """Coinbase BTC at exactly `ts` (a minute boundary): the close of the minute that ends there."""
+    i = series.last_closed(ts)
+    return float(series.close[i]) if i >= 0 and series.t[i] == int(ts) - 60 else None
+
+
+def basis_for(series: cdl.Series, start: float, price_to_beat: float | None) -> float | None:
+    """Chainlink minus Coinbase at the window start. Adding it to the live Coinbase price estimates the Chainlink price
+    the market settles on; without it a $30 gap between exchanges would decide 5-minute windows for the wrong reason."""
+    c = coinbase_at(series, start)
+    return round(price_to_beat - c, 2) if price_to_beat and c else None
 
 
 # ----------------------------------------------------------------------------------------------- backfill
@@ -94,14 +103,17 @@ def backfill(settings: Settings | None = None, *, hours: float = 24, http: httpx
                 if w.outcome is None:
                     stats["skipped_unresolved"] += 1
                     continue
-                k = price_to_beat_from(series, w.start.timestamp())
-                upsert_window(w, k)
+                if w.price_to_beat is None:
+                    stats["skipped_unresolved"] += 1
+                    continue
+                basis = basis_for(series, w.start.timestamp(), w.price_to_beat)
+                upsert_window(w, basis=basis)
                 hist = pm.price_history(http, w.up_token, int(w.start.timestamp()), int(w.end.timestamp()))
                 rows = []
                 for t, p in hist:
                     btc = series.close_at(t)
-                    if btc and w.start.timestamp() <= t < w.end.timestamp() and 0 <= p <= 1:
-                        rows.append((w.slug, _utc(t), btc, p))
+                    if btc and basis is not None and w.start.timestamp() <= t < w.end.timestamp() and 0 <= p <= 1:
+                        rows.append((w.slug, _utc(t), round(btc + basis, 2), p))  # Coinbase + gap ~ Chainlink
                 with get_pool().connection() as conn, conn.cursor() as cur:
                     cur.executemany("""insert into updown_snapshots (slug, at, btc, up_price, source) values (%s,%s,%s,%s,'backfill')
                                        on conflict (slug, at) do nothing""", rows)
@@ -117,8 +129,9 @@ def backfill(settings: Settings | None = None, *, hours: float = 24, http: httpx
 
 # ----------------------------------------------------------------------------------------------- the live loop
 class Live:
-    def __init__(self, settings: Settings, http: httpx.Client, notify=None, say=None) -> None:
+    def __init__(self, settings: Settings, http: httpx.Client, notify=None, say=None, feed=None) -> None:
         self.s, self.http = settings, http
+        self.feed = feed      # app.bitcoin.chainlink.Feed: the live Chainlink price (None = Coinbase + basis only)
         self.notify = notify  # callable(text, signal_payload): a signal ping (the assistant remembers it for "in")
         self.say = say        # callable(text): any other message (results of windows you bet on)
         self.windows: dict[str, dict] = {}
@@ -151,26 +164,41 @@ class Live:
             if u is None:
                 return None
             upsert_window(u, None)
-            w = {"slug": slug, "minutes": minutes, "start": start, "end": u.end.timestamp(), "u": u, "k": None}
+            w = {"slug": slug, "minutes": minutes, "start": start, "end": u.end.timestamp(), "u": u, "k": None, "k_source": None,
+                 "basis": None, "tried": 0.0}
             self.windows = {k: v for k, v in self.windows.items() if v["end"] > now - 3600} | {slug: w}
-        if w["k"] is None and self.series is not None:
-            k = price_to_beat_from(self.series, start)
-            if k:
-                w["k"] = k
+        if w["k"] is None and now - w["tried"] >= 15:
+            # Official numbers first (published only after a window ends, so usually not yet), then the live Chainlink
+            # feed's reading of the window start, which is what the market's page shows as "Price To Beat".
+            w["tried"] = now
+            prev = pm.get_updown(self.http, minutes, start - minutes * 60)
+            k, source = (w["u"].price_to_beat, "official") if w["u"].price_to_beat else \
+                        (prev.final_price, "official") if prev and prev.final_price else \
+                        (self.feed_price_to_beat(start), "chainlink")
+            if k and self.series is not None:
+                w["k"], w["k_source"], w["basis"] = round(k, 2), source, basis_for(self.series, start, k)
                 with get_pool().connection() as conn:
-                    conn.execute("update updown_windows set price_to_beat = %s where slug = %s and price_to_beat is null", (k, slug))
+                    conn.execute("update updown_windows set price_to_beat = %s, basis = coalesce(basis, %s) where slug = %s", (k, w["basis"], slug))
         return w
+
+    def feed_price_to_beat(self, start: float) -> float | None:
+        if not self.feed:
+            return None
+        return self.feed.twap(start, 60) if K_FROM_TWAP else self.feed.at(start)
 
     def tick(self, now: float | None = None) -> list[dict]:
         now = now or time.time()
         self.refresh(now)
-        spot = cdl.spot(self.http)
+        live = self.feed.latest(now) if self.feed else None
+        spot = live if live is not None else cdl.spot(self.http)
         out = []
         for minutes in pm.DURATIONS:
             try:
                 w = self.window(minutes, now)
                 if w:
-                    out.append(self.observe(w, spot, now))
+                    # Chainlink when the feed is live; otherwise Coinbase corrected by this window's measured gap
+                    price = spot if live is not None else (spot + w["basis"] if w["basis"] is not None else None)
+                    out.append(self.observe(w, price, now, "chainlink" if live is not None else "coinbase+basis"))
             except (httpx.HTTPError, ValueError, KeyError) as exc:
                 log.warning("updown %sm tick failed: %r", minutes, exc)
         if now - self._t_resolve >= 60:
@@ -178,21 +206,26 @@ class Live:
             self._t_resolve = now
         return out
 
-    def observe(self, w: dict, spot: float, now: float) -> dict:
+    def observe(self, w: dict, price: float | None, now: float, price_source: str = "chainlink") -> dict:
+        """`price`: BTC on the settlement basis (Chainlink, or Coinbase + basis); None until the price to beat is known."""
         u: pm.UpDown = w["u"]
         up_bid, up_ask = pm.get_book(self.http, u.up_token)
         down_bid, down_ask = pm.get_book(self.http, u.down_token)
         up_price = (up_bid + up_ask) / 2 if up_bid is not None and up_ask is not None else (u.up_price or 0.5)
-        snap = {"slug": w["slug"], "minutes": w["minutes"], "btc": spot, "price_to_beat": w["k"], "up_price": round(up_price, 4),
-                "up_ask": up_ask, "down_ask": down_ask, "secs_left": round(w["end"] - now), "p_model": None, "signal": None}
+        snap = {"slug": w["slug"], "minutes": w["minutes"], "btc": price and round(price, 2), "price_source": price_source,
+                "price_to_beat": w["k"], "k_source": w["k_source"], "up_price": round(up_price, 4), "up_ask": up_ask, "down_ask": down_ask,
+                "secs_left": round(w["end"] - now), "p_model": None, "signal": None}
+        if price is None:
+            return snap  # nothing comparable to the price to beat yet: no snapshot, no prediction
+        snap["btc_index"] = snap["btc"]
         if self.champ and w["k"] and self.series is not None and self.regime is not None:
-            x, _ = ft.build(at=now, start=w["start"], end=w["end"], minutes=w["minutes"], price=spot, price_to_beat=w["k"],
+            x, _ = ft.build(at=now, start=w["start"], end=w["end"], minutes=w["minutes"], price=price, price_to_beat=w["k"],
                             p_market=up_price, candles=self.series, regime=self.regime)
             snap["p_model"] = round(float(md.predict(self.champ["params"], x)[0]), 4)
         with get_pool().connection() as conn:
             conn.execute("""insert into updown_snapshots (slug, at, btc, up_price, up_ask, down_ask, source, p_model, model_version)
                             values (%s,%s,%s,%s,%s,%s,'live',%s,%s) on conflict (slug, at) do nothing""",
-                         (w["slug"], _utc(now), spot, up_price, up_ask, down_ask, snap["p_model"], self.champ["version"] if self.champ else None))
+                         (w["slug"], _utc(now), snap["btc"], up_price, up_ask, down_ask, snap["p_model"], self.champ["version"] if self.champ else None))
         if snap["p_model"] is not None:
             up_cost = md.side_cost(up_ask, u.fee_rate, u.fee_exponent)
             down_cost = md.side_cost(down_ask, u.fee_rate, u.fee_exponent)
@@ -209,7 +242,7 @@ class Live:
         params = replace(advisor.params(self.s), min_trade=self.s.updown_min_bet, min_edge=self.s.updown_min_edge)
         rec = betting.advise(snap["p_model"], 1 / up_cost if up_cost else 1.0001, 1 / down_cost if down_cost else 1.0001, active, params)
         stake = rec["cost"] if rec["action"] in ("BUY_YES", "BUY_NO") else 0.0
-        detail = {"label": label(w["u"]), "btc": snap["btc"], "price_to_beat": snap["price_to_beat"], "secs_left": snap["secs_left"],
+        detail = {"label": label(w["u"]), "btc": snap.get("btc_index", snap["btc"]), "price_to_beat": snap["price_to_beat"], "secs_left": snap["secs_left"],
                   "multiplier": round(1 / cost, 3), "edge": round(p_side - cost, 4), "active": active, "advice": rec["reason"],
                   "min_order_usd": round(w["u"].min_order_size * cost, 2), "model": self.champ["version"]}
         with get_pool().connection() as conn:
@@ -243,7 +276,9 @@ class Live:
                 continue
             if u.outcome:
                 with get_pool().connection() as conn:
-                    conn.execute("update updown_windows set outcome = %s, resolved_at = now() where slug = %s and outcome is null", (u.outcome, u.slug))
+                    conn.execute("""update updown_windows set outcome = %s, resolved_at = now(), final_price = %s,
+                                           price_to_beat = coalesce(%s, price_to_beat) where slug = %s and outcome is null""",
+                                 (u.outcome, u.final_price, u.price_to_beat, u.slug))
                 done.append({"slug": u.slug, "outcome": u.outcome, "label": label(u)})
                 if self.say:
                     try:
@@ -282,7 +317,9 @@ def run_forever(settings: Settings | None = None, stop: threading.Event | None =
     if bot:
         threading.Thread(target=assistant.poll_forever, args=(s, bot, stop), name="telegram", daemon=True).start()
         bot.notify("MLE-Sprint assistant is online. I will ping you about BTC 5m/15m signals and send the daily plan. Send /help.")
-    live = Live(s, http, notify=bot.notify_signal if bot else None, say=bot.notify if bot else None)
+    from app.bitcoin.chainlink import Feed
+
+    live = Live(s, http, notify=bot.notify_signal if bot else None, say=bot.notify if bot else None, feed=Feed().start())
     log.info("updown live loop started (tick %ss, telegram %s)", s.updown_tick_seconds, "on" if bot else "off")
     while not stop.is_set():
         t0 = time.time()
@@ -304,7 +341,8 @@ def status(settings: Settings | None = None) -> dict:
     s = settings or get_settings()
     with get_pool().connection() as conn:
         windows = conn.execute(
-            """select distinct on (w.minutes) w.slug, w.minutes, w.start_at, w.end_at, w.price_to_beat, s.at, s.btc, s.up_price, s.up_ask,
+            """select distinct on (w.minutes) w.slug, w.minutes, w.start_at, w.end_at, w.price_to_beat, w.basis, s.at, s.btc,
+                      s.btc as btc_index, s.up_price, s.up_ask,
                       s.down_ask, s.p_model
                from updown_windows w join updown_snapshots s using (slug)
                where s.source = 'live' and w.end_at > now() - interval '1 minute' order by w.minutes, s.at desc""").fetchall()
