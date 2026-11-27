@@ -73,9 +73,11 @@ class Feed:
             return self._v[i] if i >= 0 and ts - self._t[i] <= tolerance else None
 
     def twap(self, end: float, seconds: int = 60) -> float | None:
-        """Mean of the ticks in (end - seconds, end]; None unless most of that span was received."""
+        """Mean of the ticks in [end - seconds, end); None unless most of that span was received.
+        Checked against Polymarket's official price to beat (2026-11-27, window 16:50 UTC): this 60-second average was
+        $1.21 off, while the single price at the start was $24.74 off."""
         with self._lock:
-            lo, hi = bisect_right(self._t, int(end) - seconds), bisect_right(self._t, int(end))
+            lo, hi = bisect_right(self._t, int(end) - seconds - 1), bisect_right(self._t, int(end) - 1)
             vals = self._v[lo:hi]
         return sum(vals) / len(vals) if len(vals) >= seconds * 0.6 else None
 

@@ -335,7 +335,7 @@ def test_chainlink_feed_parses_snapshots_and_updates_and_answers_by_time():
     assert f.ingest({"payload": {"symbol": "btc/usd", "timestamp": 1_060_000, "value": 61_000.0}}) == 1
     assert f.ingest({"payload": {"symbol": "eth/usd", "timestamp": 1_061_000, "value": 1.0}}) == 0
     assert f.at(1_030) == 60_030.0 and f.at(1_062) == 61_000.0 and f.at(1_064) is None    # older than 3 s: unknown
-    assert f.twap(1_059, 60) == pytest.approx(60_029.5) and f.twap(2_000, 60) is None      # a gap in the data: no average
+    assert f.twap(1_060, 60) == pytest.approx(60_029.5) and f.twap(2_000, 60) is None      # [1000, 1060): a gap in the data: no average
     assert f.latest(now=1_065) == 61_000.0 and f.latest(now=1_100) is None                 # stale after 15 s
     f.ingest({"payload": {"symbol": "btc/usd", "timestamp": 2_000_000, "value": 1.0}})
     assert f.at(1_030) is None                                                             # older than keep_s is dropped
@@ -352,7 +352,7 @@ def test_live_loop_prefers_the_chainlink_feed(ud_db, monkeypatch):
         synthetic_history(conn, days=0.3)
     feed = Feed()
     start15 = now - 300  # the 15m window started 5 minutes ago
-    feed.ingest({"payload": {"symbol": "btc/usd", "data": [{"timestamp": int(t) * 1000, "value": 60_100.0 if t > start15 - 60 else 59_000.0}
+    feed.ingest({"payload": {"symbol": "btc/usd", "data": [{"timestamp": int(t) * 1000, "value": 60_100.0 if t >= start15 - 60 else 59_000.0}
                                                               for t in range(int(start15) - 120, int(now) + 1)]}})
     e = load("updown_15m_open.json")[0]
 

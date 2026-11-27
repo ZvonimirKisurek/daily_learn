@@ -30,7 +30,9 @@ from app.updown import model as md
 
 log = logging.getLogger(__name__)
 ET = "America/New_York"
-K_FROM_TWAP = True  # price to beat from the live feed: the 60-second average before the start (Chainlink TWAP-60 stream)
+# Price to beat from the live feed: the 60-second average BEFORE the start (the TWAP-60 stream the market names). Measured:
+# $1.21 from the official number, against $24.74 for the price at the start itself.
+K_FROM_TWAP = True
 
 
 def _utc(ts: float) -> datetime:
