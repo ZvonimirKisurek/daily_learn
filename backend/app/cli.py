@@ -161,6 +161,9 @@ def main() -> int:
     tg.add_argument("--text", default="Test from MLE-Sprint: the assistant can reach you.")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    from app.logsafe import install as _hide_secrets
+
+    _hide_secrets()  # the Telegram bot token travels in request URLs, which the HTTP client logs
 
     if args.cmd == "sync-sources":
         from app.ingestion import repository

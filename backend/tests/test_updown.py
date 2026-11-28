@@ -374,3 +374,16 @@ def test_live_loop_prefers_the_chainlink_feed(ud_db, monkeypatch):
     snaps = {x["minutes"]: x for x in live.Live(S, http=None, feed=feed).tick(now)}
     assert snaps[15]["k_source"] == "chainlink" and snaps[15]["price_to_beat"] == pytest.approx(60_100.0)   # the 60 s before the start
     assert snaps[15]["btc"] == 60_100.0 and snaps[15]["price_source"] == "chainlink"
+
+
+def test_the_telegram_bot_token_never_reaches_the_logs(caplog):
+    import logging
+
+    from app.logsafe import Redact, redact
+
+    fake = "123456:" + "x" * 35                       # a made-up token
+    url = f"GET https://api.telegram.org/bot{fake}/getUpdates?timeout=25"
+    assert redact(url) == "GET https://api.telegram.org/bot<redacted>/getUpdates?timeout=25"
+    caplog.handler.addFilter(Redact())
+    logging.getLogger("httpx").warning("HTTP Request: %s", url)
+    assert fake not in caplog.text and "bot<redacted>/getUpdates" in caplog.text
